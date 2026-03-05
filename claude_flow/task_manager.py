@@ -111,7 +111,10 @@ class TaskManager:
                 continue
             if "|" in line:
                 title, prompt = line.split("|", 1)
-                added.append(self.add(title.strip(), prompt.strip()))
+                title, prompt = title.strip(), prompt.strip()
+                if not title or not prompt:
+                    continue
+                added.append(self.add(title, prompt))
             else:
                 added.append(self.add(line, line))
         return added

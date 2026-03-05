@@ -3,10 +3,7 @@ from __future__ import annotations
 import logging
 import os
 import subprocess
-import sys
-from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
-from typing import Optional
 
 import click
 
