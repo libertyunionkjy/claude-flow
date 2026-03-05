@@ -11,3 +11,6 @@ build/
 # workflow tools
 .zcf/
 .spec-workflow/
+
+# Claude Code session data
+.claude/
