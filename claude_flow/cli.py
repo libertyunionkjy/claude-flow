@@ -188,7 +188,12 @@ def plan(ctx, task_id):
         click.echo(f"Planning: {t.id} - {t.title} ...")
         # Persist PLANNING status before calling subprocess
         tm.update_status(t.id, TaskStatus.PLANNING)
-        plan_file = planner.generate(t)
+        try:
+            plan_file = planner.generate(t)
+        except KeyboardInterrupt:
+            tm.update_status(t.id, TaskStatus.PENDING)
+            click.echo(f"\n  Interrupted, {t.id} rolled back to pending")
+            raise SystemExit(130)
         if plan_file:
             tm.update_status(t.id, TaskStatus.PLANNED)
             click.echo(f"  Plan saved to {plan_file}")
@@ -242,7 +247,12 @@ def plan_review(ctx):
             feedback = click.prompt("Your feedback", default="")
             click.echo(f"  Regenerating plan with feedback...")
             tm.update_status(t.id, TaskStatus.PLANNING)
-            new_plan = planner.generate_interactive(t, feedback=feedback)
+            try:
+                new_plan = planner.generate_interactive(t, feedback=feedback)
+            except KeyboardInterrupt:
+                tm.update_status(t.id, TaskStatus.PLANNED)
+                click.echo(f"\n  Interrupted, {t.id} rolled back to planned")
+                raise SystemExit(130)
             if new_plan:
                 tm.update_status(t.id, TaskStatus.PLANNED)
                 click.echo(f"  New plan saved to {new_plan}")

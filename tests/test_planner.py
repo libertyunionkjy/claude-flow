@@ -12,11 +12,12 @@ class TestPlanner:
         cfg = Config()
         return Planner(tmp_path, plans_dir, cfg)
 
-    @patch("claude_flow.planner.subprocess.run")
-    def test_generate_plan(self, mock_run, tmp_path):
-        mock_run.return_value = MagicMock(
-            returncode=0, stdout="# Plan\n1. Step one\n2. Step two"
-        )
+    @patch("claude_flow.planner.subprocess.Popen")
+    def test_generate_plan(self, mock_popen, tmp_path):
+        mock_proc = MagicMock()
+        mock_proc.communicate.return_value = ("# Plan\n1. Step one\n2. Step two", "")
+        mock_proc.returncode = 0
+        mock_popen.return_value = mock_proc
         planner = self._make_planner(tmp_path)
         task = Task(title="Test", prompt="Implement feature X")
         plan_file = planner.generate(task)
@@ -25,9 +26,12 @@ class TestPlanner:
         assert task.status == TaskStatus.PLANNED
         assert task.plan_file == str(plan_file)
 
-    @patch("claude_flow.planner.subprocess.run")
-    def test_generate_plan_failure(self, mock_run, tmp_path):
-        mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="error")
+    @patch("claude_flow.planner.subprocess.Popen")
+    def test_generate_plan_failure(self, mock_popen, tmp_path):
+        mock_proc = MagicMock()
+        mock_proc.communicate.return_value = ("", "error")
+        mock_proc.returncode = 1
+        mock_popen.return_value = mock_proc
         planner = self._make_planner(tmp_path)
         task = Task(title="Test", prompt="Bad task")
         plan_file = planner.generate(task)

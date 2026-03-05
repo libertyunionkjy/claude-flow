@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import signal
 import subprocess
 from datetime import datetime
 from pathlib import Path
@@ -27,6 +28,42 @@ class Planner:
         self._task_manager = task_manager
 
     # ------------------------------------------------------------------
+    # 子进程执行（支持 Ctrl+C 中断）
+    # ------------------------------------------------------------------
+
+    def _run_claude(self, cmd: list[str]) -> subprocess.CompletedProcess:
+        """Run claude CLI with proper Ctrl+C (SIGINT) handling.
+
+        Uses Popen so that KeyboardInterrupt immediately terminates the
+        child process instead of blocking until pipe EOF.
+
+        Raises:
+            KeyboardInterrupt: re-raised after child is terminated.
+            subprocess.TimeoutExpired: if task_timeout is exceeded.
+            OSError: if the command cannot be started.
+        """
+        proc = subprocess.Popen(
+            cmd, cwd=str(self._root),
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        try:
+            stdout, stderr = proc.communicate(timeout=self._config.task_timeout)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()
+            raise
+        except KeyboardInterrupt:
+            # Terminate child immediately on Ctrl+C
+            proc.terminate()
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait()
+            raise
+        return subprocess.CompletedProcess(cmd, proc.returncode, stdout, stderr)
+
+    # ------------------------------------------------------------------
     # 原有方法（保持签名不变）
     # ------------------------------------------------------------------
 
@@ -39,10 +76,7 @@ class Planner:
             cmd.append("--dangerously-skip-permissions")
 
         try:
-            result = subprocess.run(
-                cmd, cwd=str(self._root),
-                capture_output=True, text=True, timeout=self._config.task_timeout,
-            )
+            result = self._run_claude(cmd)
         except subprocess.TimeoutExpired:
             task.status = TaskStatus.FAILED
             task.error = f"Plan generation timed out after {self._config.task_timeout}s"
@@ -117,10 +151,7 @@ class Planner:
             cmd.append("--dangerously-skip-permissions")
 
         try:
-            result = subprocess.run(
-                cmd, cwd=str(self._root),
-                capture_output=True, text=True, timeout=self._config.task_timeout,
-            )
+            result = self._run_claude(cmd)
         except subprocess.TimeoutExpired:
             task.status = TaskStatus.FAILED
             task.error = f"Plan generation timed out after {self._config.task_timeout}s"
