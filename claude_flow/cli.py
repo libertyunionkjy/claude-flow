@@ -15,6 +15,18 @@ from .worker import Worker
 from .worktree import WorktreeManager
 
 
+def _worker_entry(args: tuple) -> int:
+    """Module-level worker entry point (must be picklable for multiprocessing)."""
+    wid, root, worktree_dir, cfg_dict, daemon = args
+    cfg = Config(**cfg_dict)
+    tm = TaskManager(root)
+    wt = WorktreeManager(root, root / worktree_dir)
+    w = Worker(wid, root, tm, wt, cfg)
+    if daemon:
+        return w.run_daemon()
+    return w.run_loop()
+
+
 def _get_root() -> Path:
     env_root = os.environ.get("CF_PROJECT_ROOT")
     if env_root:
@@ -68,8 +80,9 @@ def task():
 @click.argument("title")
 @click.option("-p", "--prompt", default=None, help="Task prompt for Claude Code")
 @click.option("-f", "--file", "filepath", default=None, type=click.Path(exists=True), help="Import tasks from file")
+@click.option("-P", "--priority", default=0, type=int, help="Task priority (higher = more important)")
 @click.pass_context
-def task_add(ctx, title, prompt, filepath):
+def task_add(ctx, title, prompt, filepath, priority):
     """Add a new task."""
     root = ctx.obj["root"]
     tm = TaskManager(root)
@@ -82,8 +95,8 @@ def task_add(ctx, title, prompt, filepath):
         if not prompt:
             click.echo("Aborted: no prompt provided")
             return
-    t = tm.add(title, prompt)
-    click.echo(f"Added: {t.id} - {t.title}")
+    t = tm.add(title, prompt, priority=priority)
+    click.echo(f"Added: {t.id} - {t.title} (priority: {priority})")
 
 
 @task.command("list")
@@ -96,11 +109,14 @@ def task_list(ctx):
     if not tasks:
         click.echo("No tasks")
         return
+    # 按优先级降序排序显示
+    tasks.sort(key=lambda t: t.priority, reverse=True)
     for t in tasks:
         status_icon = {"pending": "○", "planning": "⟳", "planned": "◉", "approved": "✓",
                        "running": "▶", "merging": "⇄", "done": "●", "failed": "✗"}
         icon = status_icon.get(t.status.value, "?")
-        click.echo(f"  {icon} {t.id}  {t.status.value:<10}  {t.title}")
+        pri = f"P{t.priority}" if t.priority > 0 else ""
+        click.echo(f"  {icon} {t.id}  {t.status.value:<10}  {pri:>3}  {t.title}")
 
 
 @task.command("show")
@@ -114,14 +130,17 @@ def task_show(ctx, task_id):
     if not t:
         click.echo(f"Task {task_id} not found")
         return
-    click.echo(f"ID:      {t.id}")
-    click.echo(f"Title:   {t.title}")
-    click.echo(f"Status:  {t.status.value}")
-    click.echo(f"Branch:  {t.branch or '-'}")
-    click.echo(f"Worker:  {t.worker_id or '-'}")
-    click.echo(f"Created: {t.created_at}")
+    click.echo(f"ID:       {t.id}")
+    click.echo(f"Title:    {t.title}")
+    click.echo(f"Status:   {t.status.value}")
+    click.echo(f"Priority: {t.priority}")
+    click.echo(f"Branch:   {t.branch or '-'}")
+    click.echo(f"Worker:   {t.worker_id or '-'}")
+    click.echo(f"Created:  {t.created_at}")
+    if t.progress:
+        click.echo(f"Progress: {t.progress}")
     if t.error:
-        click.echo(f"Error:   {t.error}")
+        click.echo(f"Error:    {t.error}")
     click.echo(f"\nPrompt:\n{t.prompt}")
 
 
@@ -141,7 +160,7 @@ def task_remove(ctx, task_id):
 # -- Plan commands ----------------------------------------------------------
 
 @main.group(invoke_without_command=True)
-@click.argument("task_id", required=False)
+@click.option("-t", "--task-id", "task_id", default=None, help="Plan a specific task by ID")
 @click.pass_context
 def plan(ctx, task_id):
     """Generate plans for pending tasks."""
@@ -151,7 +170,7 @@ def plan(ctx, task_id):
     cfg = Config.load(root)
     tm = TaskManager(root)
     plans_dir = root / ".claude-flow" / "plans"
-    planner = Planner(root, plans_dir, cfg)
+    planner = Planner(root, plans_dir, cfg, task_manager=tm)
 
     if task_id:
         tasks = [tm.get(task_id)]
@@ -167,6 +186,8 @@ def plan(ctx, task_id):
 
     for t in tasks:
         click.echo(f"Planning: {t.id} - {t.title} ...")
+        # Persist PLANNING status before calling subprocess
+        tm.update_status(t.id, TaskStatus.PLANNING)
         plan_file = planner.generate(t)
         if plan_file:
             tm.update_status(t.id, TaskStatus.PLANNED)
@@ -184,7 +205,7 @@ def plan_review(ctx):
     cfg = Config.load(root)
     tm = TaskManager(root)
     plans_dir = root / ".claude-flow" / "plans"
-    planner = Planner(root, plans_dir, cfg)
+    planner = Planner(root, plans_dir, cfg, task_manager=tm)
 
     tasks = tm.list_tasks(status=TaskStatus.PLANNED)
     if not tasks:
@@ -203,7 +224,10 @@ def plan_review(ctx):
         click.echo(planner.read_plan(plan_path))
         click.echo(f"{'─' * 50}")
 
-        action = click.prompt("[a]pprove  [r]eject  [s]kip  [e]dit  [q]uit", type=str, default="s")
+        action = click.prompt(
+            "[a]pprove  [r]eject  [s]kip  [e]dit  [f]eedback  [q]uit",
+            type=str, default="s"
+        )
         if action == "a":
             planner.approve(t)
             tm.update_status(t.id, TaskStatus.APPROVED)
@@ -213,6 +237,18 @@ def plan_review(ctx):
             planner.reject(t, reason)
             tm.update_status(t.id, TaskStatus.PENDING)
             click.echo(f"  {t.id} rejected, back to pending")
+        elif action == "f":
+            # 多轮对话：提供反馈后重新生成
+            feedback = click.prompt("Your feedback", default="")
+            click.echo(f"  Regenerating plan with feedback...")
+            tm.update_status(t.id, TaskStatus.PLANNING)
+            new_plan = planner.generate_interactive(t, feedback=feedback)
+            if new_plan:
+                tm.update_status(t.id, TaskStatus.PLANNED)
+                click.echo(f"  New plan saved to {new_plan}")
+            else:
+                tm.update_status(t.id, TaskStatus.FAILED, t.error)
+                click.echo(f"  Regeneration failed: {t.error}")
         elif action == "e":
             editor = os.environ.get("EDITOR", "vi")
             subprocess.run([editor, str(plan_path)])
@@ -254,9 +290,10 @@ def plan_approve(ctx, task_id, approve_all):
 
 @main.command()
 @click.option("-n", "--num-workers", default=1, type=int, help="Number of parallel workers")
+@click.option("-d", "--daemon", is_flag=True, help="Run in daemon mode (continuous polling)")
 @click.argument("task_id", required=False)
 @click.pass_context
-def run(ctx, num_workers, task_id):
+def run(ctx, num_workers, daemon, task_id):
     """Start workers to execute approved tasks."""
     root = ctx.obj["root"]
     cfg = Config.load(root)
@@ -280,20 +317,102 @@ def run(ctx, num_workers, task_id):
 
     if num_workers == 1:
         worker = Worker(0, root, tm, wt, cfg)
-        count = worker.run_loop()
+        if daemon:
+            click.echo("Starting daemon mode (Ctrl+C to stop)...")
+            count = worker.run_daemon()
+        else:
+            count = worker.run_loop()
         click.echo(f"Completed {count} tasks")
     else:
         # Multi-worker: spawn subprocesses
         import multiprocessing
+        from dataclasses import asdict
 
-        def _worker_entry(wid):
-            w = Worker(wid, root, tm, wt, cfg)
-            return w.run_loop()
-
+        worker_args = [
+            (wid, root, cfg.worktree_dir, asdict(cfg), daemon)
+            for wid in range(num_workers)
+        ]
         with multiprocessing.Pool(num_workers) as pool:
-            results = pool.map(_worker_entry, range(num_workers))
+            results = pool.map(_worker_entry, worker_args)
         total = sum(results)
         click.echo(f"Completed {total} tasks across {num_workers} workers")
+
+
+# -- Watch command ----------------------------------------------------------
+
+@main.command()
+@click.option("--interval", default=2, type=int, help="Refresh interval in seconds")
+@click.pass_context
+def watch(ctx, interval):
+    """Watch real-time worker activity (stream-json monitor)."""
+    import json
+    import time
+
+    root = ctx.obj["root"]
+    status_dir = root / ".claude-flow" / "worker-status"
+
+    click.echo("Watching worker status (Ctrl+C to stop)...")
+    try:
+        while True:
+            click.clear()
+            click.echo("=== Claude Flow Worker Monitor ===\n")
+
+            if not status_dir.exists():
+                click.echo("No worker status data yet.")
+            else:
+                for status_file in sorted(status_dir.glob("worker-*.json")):
+                    try:
+                        data = json.loads(status_file.read_text())
+                        wid = data.get("worker_id", "?")
+                        tid = data.get("task_id", "-")
+                        last = data.get("last_event", "-")
+                        events = data.get("event_count", 0)
+                        tools = data.get("tool_use_count", 0)
+                        errors = data.get("error_count", 0)
+                        updated = data.get("updated_at", "-")
+                        click.echo(f"  Worker-{wid}  task={tid}  events={events}  tools={tools}  errors={errors}")
+                        click.echo(f"    Last: {last}")
+                        click.echo(f"    Updated: {updated}")
+                        click.echo()
+                    except (json.JSONDecodeError, KeyError):
+                        continue
+
+            # 同时显示任务状态概览
+            tm = TaskManager(root)
+            tasks = tm.list_tasks()
+            counts = {}
+            for t in tasks:
+                counts[t.status.value] = counts.get(t.status.value, 0) + 1
+            click.echo(f"--- Tasks: {len(tasks)} total ---")
+            for s, c in sorted(counts.items()):
+                click.echo(f"  {s}: {c}")
+
+            time.sleep(interval)
+    except KeyboardInterrupt:
+        click.echo("\nStopped watching.")
+
+
+# -- Web command ------------------------------------------------------------
+
+@main.command()
+@click.option("--port", default=None, type=int, help="Web server port (default from config)")
+@click.pass_context
+def web(ctx, port):
+    """Start the web manager kanban interface."""
+    root = ctx.obj["root"]
+    cfg = Config.load(root)
+    web_port = port or cfg.web_port
+
+    try:
+        from .web import create_app
+    except ImportError:
+        click.echo("Error: Flask is required for the web manager.")
+        click.echo("Install it with: pip install flask")
+        return
+
+    app = create_app(root, cfg)
+    click.echo(f"Starting web manager on http://0.0.0.0:{web_port}")
+    app.run(host="0.0.0.0", port=web_port, debug=False)
 
 
 # -- Status / Log / Clean / Reset / Retry -----------------------------------
@@ -311,6 +430,21 @@ def status(ctx):
     click.echo(f"Total tasks: {len(tasks)}")
     for s, c in sorted(counts.items()):
         click.echo(f"  {s}: {c}")
+
+    # 显示活跃 worker 状态
+    cfg = Config.load(root)
+    status_dir = root / ".claude-flow" / "worker-status"
+    if status_dir.exists():
+        import json
+        click.echo(f"\nActive workers:")
+        for sf in sorted(status_dir.glob("worker-*.json")):
+            try:
+                data = json.loads(sf.read_text())
+                click.echo(f"  Worker-{data.get('worker_id', '?')}: "
+                          f"task={data.get('task_id', '-')} "
+                          f"events={data.get('event_count', 0)}")
+            except (json.JSONDecodeError, KeyError):
+                continue
 
 
 @main.command()
@@ -363,3 +497,18 @@ def retry(ctx):
         tm.update_status(t.id, TaskStatus.APPROVED)
         click.echo(f"  {t.id} -> approved")
     click.echo(f"Retrying {len(failed)} tasks")
+
+
+# -- Progress command -------------------------------------------------------
+
+@main.command()
+@click.pass_context
+def progress(ctx):
+    """Show PROGRESS.md experience log."""
+    root = ctx.obj["root"]
+    cfg = Config.load(root)
+    progress_file = root / cfg.progress_file
+    if progress_file.exists():
+        click.echo(progress_file.read_text())
+    else:
+        click.echo("No progress log yet.")
