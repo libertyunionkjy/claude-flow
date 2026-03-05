@@ -217,56 +217,60 @@ def plan_review(ctx):
         click.echo("No plans to review")
         return
 
-    for t in tasks:
-        plan_path = Path(t.plan_file) if t.plan_file else plans_dir / f"{t.id}.md"
-        if not plan_path.exists():
-            click.echo(f"Plan file missing for {t.id}, skipping")
-            continue
+    try:
+        for t in tasks:
+            plan_path = Path(t.plan_file) if t.plan_file else plans_dir / f"{t.id}.md"
+            if not plan_path.exists():
+                click.echo(f"Plan file missing for {t.id}, skipping")
+                continue
 
-        click.echo(f"\n{'─' * 50}")
-        click.echo(f"Task:   {t.id} - {t.title}")
-        click.echo(f"{'─' * 50}")
-        click.echo(planner.read_plan(plan_path))
-        click.echo(f"{'─' * 50}")
+            click.echo(f"\n{'─' * 50}")
+            click.echo(f"Task:   {t.id} - {t.title}")
+            click.echo(f"{'─' * 50}")
+            click.echo(planner.read_plan(plan_path))
+            click.echo(f"{'─' * 50}")
 
-        action = click.prompt(
-            "[a]pprove  [r]eject  [s]kip  [e]dit  [f]eedback  [q]uit",
-            type=str, default="s"
-        )
-        if action == "a":
-            planner.approve(t)
-            tm.update_status(t.id, TaskStatus.APPROVED)
-            click.echo(f"  {t.id} approved")
-        elif action == "r":
-            reason = click.prompt("Rejection reason", default="")
-            planner.reject(t, reason)
-            tm.update_status(t.id, TaskStatus.PENDING)
-            click.echo(f"  {t.id} rejected, back to pending")
-        elif action == "f":
-            # 多轮对话：提供反馈后重新生成
-            feedback = click.prompt("Your feedback", default="")
-            click.echo(f"  Regenerating plan with feedback...")
-            tm.update_status(t.id, TaskStatus.PLANNING)
-            try:
-                new_plan = planner.generate_interactive(t, feedback=feedback)
-            except KeyboardInterrupt:
-                tm.update_status(t.id, TaskStatus.PLANNED)
-                click.echo(f"\n  Interrupted, {t.id} rolled back to planned")
-                raise SystemExit(130)
-            if new_plan:
-                tm.update_status(t.id, TaskStatus.PLANNED)
-                click.echo(f"  New plan saved to {new_plan}")
-            else:
-                tm.update_status(t.id, TaskStatus.FAILED, t.error)
-                click.echo(f"  Regeneration failed: {t.error}")
-        elif action == "e":
-            editor = os.environ.get("EDITOR", "vi")
-            subprocess.run([editor, str(plan_path)])
-            planner.approve(t)
-            tm.update_status(t.id, TaskStatus.APPROVED)
-            click.echo(f"  {t.id} edited and approved")
-        elif action == "q":
-            break
+            action = click.prompt(
+                "[a]pprove  [r]eject  [s]kip  [e]dit  [f]eedback  [q]uit",
+                type=str, default="s"
+            )
+            if action == "a":
+                planner.approve(t)
+                tm.update_status(t.id, TaskStatus.APPROVED)
+                click.echo(f"  {t.id} approved")
+            elif action == "r":
+                reason = click.prompt("Rejection reason", default="")
+                planner.reject(t, reason)
+                tm.update_status(t.id, TaskStatus.PENDING)
+                click.echo(f"  {t.id} rejected, back to pending")
+            elif action == "f":
+                # 多轮对话：提供反馈后重新生成
+                feedback = click.prompt("Your feedback", default="")
+                click.echo(f"  Regenerating plan with feedback...")
+                tm.update_status(t.id, TaskStatus.PLANNING)
+                try:
+                    new_plan = planner.generate_interactive(t, feedback=feedback)
+                except KeyboardInterrupt:
+                    tm.update_status(t.id, TaskStatus.PLANNED)
+                    click.echo(f"\n  Interrupted, {t.id} rolled back to planned")
+                    return
+                if new_plan:
+                    tm.update_status(t.id, TaskStatus.PLANNED)
+                    click.echo(f"  New plan saved to {new_plan}")
+                else:
+                    tm.update_status(t.id, TaskStatus.FAILED, t.error)
+                    click.echo(f"  Regeneration failed: {t.error}")
+            elif action == "e":
+                editor = os.environ.get("EDITOR", "vi")
+                subprocess.run([editor, str(plan_path)])
+                planner.approve(t)
+                tm.update_status(t.id, TaskStatus.APPROVED)
+                click.echo(f"  {t.id} edited and approved")
+            elif action == "q":
+                break
+    except (KeyboardInterrupt, click.Abort):
+        click.echo("\nReview interrupted.")
+        return
 
 
 @plan.command("approve")
