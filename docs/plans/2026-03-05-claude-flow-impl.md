@@ -13,20 +13,20 @@
 ### Task 1: Project Scaffolding + Models
 
 **Files:**
-- Create: `claude-flow/pyproject.toml`
-- Create: `claude-flow/claude_flow/__init__.py`
-- Create: `claude-flow/claude_flow/models.py`
-- Create: `claude-flow/tests/__init__.py`
-- Create: `claude-flow/tests/test_models.py`
+- Create: `pyproject.toml`
+- Create: `claude_flow/__init__.py`
+- Create: `claude_flow/models.py`
+- Create: `tests/__init__.py`
+- Create: `tests/test_models.py`
 
 **Step 1: Create project directory and pyproject.toml**
 
 ```bash
-mkdir -p claude-flow/claude_flow claude-flow/tests
+mkdir -p claude_flow tests
 ```
 
 ```toml
-# claude-flow/pyproject.toml
+# pyproject.toml
 [build-system]
 requires = ["setuptools>=64", "setuptools-scm"]
 build-backend = "setuptools.backends._legacy:_Backend"
@@ -48,7 +48,7 @@ dev = ["pytest>=7.0", "pytest-cov"]
 **Step 2: Write failing tests for models**
 
 ```python
-# claude-flow/tests/test_models.py
+# tests/test_models.py
 import json
 from datetime import datetime
 from claude_flow.models import Task, TaskStatus
@@ -127,7 +127,7 @@ class TestTask:
 **Step 3: Run tests to verify they fail**
 
 ```bash
-cd claude-flow && pip install -e ".[dev]" && pytest tests/test_models.py -v
+pip install -e ".[dev]" && pytest tests/test_models.py -v
 ```
 
 Expected: FAIL (module not found)
@@ -135,13 +135,13 @@ Expected: FAIL (module not found)
 **Step 4: Implement models**
 
 ```python
-# claude-flow/claude_flow/__init__.py
+# claude_flow/__init__.py
 """Claude Flow - Multi-instance Claude Code workflow manager."""
 __version__ = "0.1.0"
 ```
 
 ```python
-# claude-flow/claude_flow/models.py
+# claude_flow/models.py
 from __future__ import annotations
 
 import uuid
@@ -232,13 +232,13 @@ git add -A && git commit -m "feat: project scaffolding and Task/TaskStatus model
 ### Task 2: Config Module
 
 **Files:**
-- Create: `claude-flow/claude_flow/config.py`
-- Create: `claude-flow/tests/test_config.py`
+- Create: `claude_flow/config.py`
+- Create: `tests/test_config.py`
 
 **Step 1: Write failing tests**
 
 ```python
-# claude-flow/tests/test_config.py
+# tests/test_config.py
 import json
 import os
 from pathlib import Path
@@ -292,7 +292,7 @@ pytest tests/test_config.py -v
 **Step 3: Implement config**
 
 ```python
-# claude-flow/claude_flow/config.py
+# claude_flow/config.py
 from __future__ import annotations
 
 import json
@@ -368,13 +368,13 @@ git add -A && git commit -m "feat: config module with load/save and defaults"
 ### Task 3: TaskManager (CRUD + File Lock)
 
 **Files:**
-- Create: `claude-flow/claude_flow/task_manager.py`
-- Create: `claude-flow/tests/test_task_manager.py`
+- Create: `claude_flow/task_manager.py`
+- Create: `tests/test_task_manager.py`
 
 **Step 1: Write failing tests**
 
 ```python
-# claude-flow/tests/test_task_manager.py
+# tests/test_task_manager.py
 import json
 from pathlib import Path
 from claude_flow.task_manager import TaskManager
@@ -463,7 +463,7 @@ pytest tests/test_task_manager.py -v
 **Step 3: Implement TaskManager**
 
 ```python
-# claude-flow/claude_flow/task_manager.py
+# claude_flow/task_manager.py
 from __future__ import annotations
 
 import fcntl
@@ -602,13 +602,13 @@ git add -A && git commit -m "feat: TaskManager with CRUD, file locking, and batc
 ### Task 4: Worktree Module
 
 **Files:**
-- Create: `claude-flow/claude_flow/worktree.py`
-- Create: `claude-flow/tests/test_worktree.py`
+- Create: `claude_flow/worktree.py`
+- Create: `tests/test_worktree.py`
 
 **Step 1: Write failing tests**
 
 ```python
-# claude-flow/tests/test_worktree.py
+# tests/test_worktree.py
 import subprocess
 from pathlib import Path
 from claude_flow.worktree import WorktreeManager
@@ -689,7 +689,7 @@ pytest tests/test_worktree.py -v
 **Step 3: Implement WorktreeManager**
 
 ```python
-# claude-flow/claude_flow/worktree.py
+# claude_flow/worktree.py
 from __future__ import annotations
 
 import subprocess
@@ -762,13 +762,13 @@ git add -A && git commit -m "feat: WorktreeManager with create/remove/merge/clea
 ### Task 5: Planner Module (Plan Mode)
 
 **Files:**
-- Create: `claude-flow/claude_flow/planner.py`
-- Create: `claude-flow/tests/test_planner.py`
+- Create: `claude_flow/planner.py`
+- Create: `tests/test_planner.py`
 
 **Step 1: Write failing tests**
 
 ```python
-# claude-flow/tests/test_planner.py
+# tests/test_planner.py
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 from claude_flow.planner import Planner
@@ -837,7 +837,7 @@ pytest tests/test_planner.py -v
 **Step 3: Implement Planner**
 
 ```python
-# claude-flow/claude_flow/planner.py
+# claude_flow/planner.py
 from __future__ import annotations
 
 import subprocess
@@ -908,13 +908,13 @@ git add -A && git commit -m "feat: Planner module with generate/approve/reject w
 ### Task 6: Worker Module
 
 **Files:**
-- Create: `claude-flow/claude_flow/worker.py`
-- Create: `claude-flow/tests/test_worker.py`
+- Create: `claude_flow/worker.py`
+- Create: `tests/test_worker.py`
 
 **Step 1: Write failing tests**
 
 ```python
-# claude-flow/tests/test_worker.py
+# tests/test_worker.py
 import subprocess
 from pathlib import Path
 from unittest.mock import patch, MagicMock
@@ -988,7 +988,7 @@ pytest tests/test_worker.py -v
 **Step 3: Implement Worker**
 
 ```python
-# claude-flow/claude_flow/worker.py
+# claude_flow/worker.py
 from __future__ import annotations
 
 import logging
@@ -1107,13 +1107,13 @@ git add -A && git commit -m "feat: Worker with execute/merge/cleanup loop"
 ### Task 7: CLI Entry Point (Click)
 
 **Files:**
-- Create: `claude-flow/claude_flow/cli.py`
-- Create: `claude-flow/tests/test_cli.py`
+- Create: `claude_flow/cli.py`
+- Create: `tests/test_cli.py`
 
 **Step 1: Write failing tests**
 
 ```python
-# claude-flow/tests/test_cli.py
+# tests/test_cli.py
 import subprocess
 from pathlib import Path
 from click.testing import CliRunner
@@ -1180,7 +1180,7 @@ pytest tests/test_cli.py -v
 **Step 3: Implement CLI**
 
 ```python
-# claude-flow/claude_flow/cli.py
+# claude_flow/cli.py
 from __future__ import annotations
 
 import logging
@@ -1571,10 +1571,9 @@ Expected: All tests pass
 **Step 6: Install and smoke test**
 
 ```bash
-cd claude-flow
 pip install -e .
 # Test in a temp git repo
-cd /tmp && mkdir cf-test && cd cf-test && git init && git commit --allow-empty -m "init"
+cd /tmp && mkdir cf-test && cd cf-test && git init && git config user.name "test" && git config user.email "test@test.com" && git commit --allow-empty -m "init"
 cf init
 cf task add -p "Create a hello world Python script" "Hello World"
 cf task list
@@ -1584,7 +1583,6 @@ cf status
 **Step 7: Commit**
 
 ```bash
-cd /path/to/claude-flow
 git add -A && git commit -m "feat: complete CLI with all commands (init, task, plan, run, status, clean, reset, retry)"
 ```
 
