@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# claude-flow runtime
+.claude-flow/
+
+# workflow tools
+.zcf/
+.spec-workflow/
