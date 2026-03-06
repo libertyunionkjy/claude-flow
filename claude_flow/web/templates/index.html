@@ -586,6 +586,237 @@
             margin-top: 4px;
         }
 
+        /* -- 工作流指南页面 ---------------------------------------------------- */
+        .guide-page {
+            display: none;
+            padding: 24px;
+            max-width: 860px;
+            margin: 0 auto;
+            min-height: calc(100vh - 60px);
+        }
+
+        .guide-page.active {
+            display: block;
+        }
+
+        .guide-header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .guide-header h2 {
+            font-size: 24px;
+            color: #00d4ff;
+            margin-bottom: 8px;
+        }
+
+        .guide-header p {
+            color: #8888aa;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        /* Stepper timeline */
+        .guide-stepper {
+            position: relative;
+            padding-left: 36px;
+        }
+
+        .guide-stepper::before {
+            content: '';
+            position: absolute;
+            left: 15px;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: linear-gradient(to bottom, #6c5ce7, #a29bfe, #74b9ff, #00cec9, #fdcb6e, #e17055, #00b894, #ff6b6b);
+        }
+
+        .guide-step {
+            position: relative;
+            margin-bottom: 12px;
+            border-radius: 10px;
+            background: #12122a;
+            border: 1px solid #2a2a4a;
+            overflow: hidden;
+            transition: border-color 0.2s ease;
+        }
+
+        .guide-step:hover {
+            border-color: #3a3a6a;
+        }
+
+        .guide-step.expanded {
+            border-color: #00d4ff;
+        }
+
+        .guide-step-dot {
+            position: absolute;
+            left: -29px;
+            top: 18px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            border: 2px solid #0f0f23;
+            z-index: 1;
+        }
+
+        .guide-step-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 16px;
+            cursor: pointer;
+            user-select: none;
+            transition: background 0.2s ease;
+        }
+
+        .guide-step-header:hover {
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .guide-step-num {
+            font-size: 11px;
+            font-weight: 700;
+            color: #0f0f23;
+            width: 24px;
+            height: 24px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .guide-step-title {
+            flex: 1;
+            font-size: 15px;
+            font-weight: 600;
+            color: #e0e0e0;
+        }
+
+        .guide-step-tag {
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 500;
+            flex-shrink: 0;
+        }
+
+        .guide-step-arrow {
+            font-size: 12px;
+            color: #6c7a9a;
+            transition: transform 0.2s ease;
+            flex-shrink: 0;
+        }
+
+        .guide-step.expanded .guide-step-arrow {
+            transform: rotate(180deg);
+        }
+
+        .guide-step-body {
+            display: none;
+            padding: 0 16px 16px 52px;
+            font-size: 13px;
+            line-height: 1.7;
+            color: #b0b0d0;
+        }
+
+        .guide-step.expanded .guide-step-body {
+            display: block;
+        }
+
+        .guide-step-body p {
+            margin-bottom: 10px;
+        }
+
+        .guide-step-body strong {
+            color: #ffffff;
+        }
+
+        .guide-cmd-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin: 10px 0;
+        }
+
+        .guide-cmd-box {
+            background: #0f0f23;
+            border: 1px solid #2a2a4a;
+            border-radius: 6px;
+            padding: 10px 12px;
+        }
+
+        .guide-cmd-box .cmd-label {
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 6px;
+            display: block;
+        }
+
+        .guide-cmd-box .cmd-label.cli {
+            color: #00d4ff;
+        }
+
+        .guide-cmd-box .cmd-label.web {
+            color: #00b894;
+        }
+
+        .guide-cmd-box code {
+            font-family: "SF Mono", "Fira Code", monospace;
+            font-size: 12px;
+            color: #ff9f43;
+            background: #1a1a3e;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+
+        .guide-cmd-box .cmd-text {
+            font-size: 12px;
+            color: #b0b0d0;
+        }
+
+        .guide-tip {
+            margin-top: 10px;
+            padding: 8px 12px;
+            background: rgba(0, 212, 255, 0.06);
+            border-left: 3px solid #00d4ff;
+            border-radius: 0 6px 6px 0;
+            font-size: 12px;
+            color: #8888aa;
+        }
+
+        .guide-tip strong {
+            color: #00d4ff;
+        }
+
+        .guide-role-tag {
+            display: inline-block;
+            font-size: 10px;
+            padding: 1px 6px;
+            border-radius: 3px;
+            font-weight: 600;
+            margin-left: 4px;
+        }
+
+        .guide-role-auto {
+            background: rgba(108, 92, 231, 0.2);
+            color: #a29bfe;
+        }
+
+        .guide-role-human {
+            background: rgba(0, 206, 201, 0.2);
+            color: #00cec9;
+        }
+
+        .guide-expand-all {
+            text-align: center;
+            margin-top: 16px;
+        }
+
         /* -- 移动端 Tab 导航栏 ------------------------------------------------ */
         .mobile-tabs {
             display: none;
@@ -701,6 +932,42 @@
                 width: 95%;
                 padding: 18px;
             }
+
+            .guide-page {
+                padding: 16px;
+            }
+
+            .guide-stepper {
+                padding-left: 28px;
+            }
+
+            .guide-stepper::before {
+                left: 11px;
+            }
+
+            .guide-step-dot {
+                left: -23px;
+                width: 10px;
+                height: 10px;
+                top: 16px;
+            }
+
+            .guide-cmd-row {
+                grid-template-columns: 1fr;
+            }
+
+            .guide-step-body {
+                padding: 0 12px 12px 36px;
+            }
+
+            .guide-step-header {
+                padding: 12px;
+                gap: 8px;
+            }
+
+            .guide-header h2 {
+                font-size: 20px;
+            }
         }
     </style>
 </head>
@@ -714,6 +981,7 @@
             <button class="btn btn-outline btn-small" onclick="approveAllTasks()" title="Approve All Planned">Approve All</button>
             <button class="btn btn-outline btn-small" onclick="runAllTasks()" title="Run All Approved">Run All</button>
             <button class="btn btn-outline btn-small" onclick="retryAllTasks()" title="Retry All Failed">Retry All</button>
+            <button class="btn btn-outline btn-small" id="guideToggleBtn" onclick="toggleGuidePage()">Guide</button>
             <button class="btn btn-primary" onclick="openNewTaskModal()">+ New Task</button>
         </div>
     </div>
@@ -797,6 +1065,234 @@
                 Failed <span class="count" id="count-failed">0</span>
             </div>
             <div class="column-body" id="col-failed"></div>
+        </div>
+    </div>
+
+    <!-- 工作流指南页面 -->
+    <div class="guide-page" id="guidePage">
+        <div class="guide-header">
+            <h2>Claude Flow Workflow Guide</h2>
+            <p>Claude Flow uses a task queue + Git Worktree isolation model for multi-instance parallel development.<br>
+            Below is the complete lifecycle of a task — click each step to expand details.</p>
+        </div>
+
+        <div class="guide-stepper">
+            <!-- Step 1: Init -->
+            <div class="guide-step" onclick="toggleGuideStep(this)">
+                <div class="guide-step-dot" style="background: #6c5ce7;"></div>
+                <div class="guide-step-header">
+                    <span class="guide-step-num" style="background: #6c5ce7;">1</span>
+                    <span class="guide-step-title">Initialize Project</span>
+                    <span class="guide-step-tag" style="background: rgba(108,92,231,0.2); color: #a29bfe;">Setup</span>
+                    <span class="guide-step-arrow">&#9660;</span>
+                </div>
+                <div class="guide-step-body">
+                    <p>First, initialize Claude Flow in your Git project root. This creates a <code>.claude-flow/</code> directory containing configuration and task data.</p>
+                    <div class="guide-cmd-row">
+                        <div class="guide-cmd-box">
+                            <span class="cmd-label cli">CLI</span>
+                            <code>cf init</code>
+                        </div>
+                        <div class="guide-cmd-box">
+                            <span class="cmd-label web">Web</span>
+                            <span class="cmd-text">Auto-initialized when Web Manager starts</span>
+                        </div>
+                    </div>
+                    <div class="guide-tip"><strong>Tip: </strong>Run <code>cf init</code> once per project. It creates <code>tasks.json</code>, <code>config.json</code>, and a <code>worktrees/</code> directory.</div>
+                </div>
+            </div>
+
+            <!-- Step 2: Add Task -->
+            <div class="guide-step" onclick="toggleGuideStep(this)">
+                <div class="guide-step-dot" style="background: #6c5ce7;"></div>
+                <div class="guide-step-header">
+                    <span class="guide-step-num" style="background: #6c5ce7;">2</span>
+                    <span class="guide-step-title">Add Tasks</span>
+                    <span class="guide-step-tag" style="background: rgba(108,92,231,0.2); color: #a29bfe;">Pending</span>
+                    <span class="guide-step-arrow">&#9660;</span>
+                </div>
+                <div class="guide-step-body">
+                    <p>Create one or more tasks with a title and a prompt. The prompt is what Claude Code will receive as instructions. Tasks start in <strong>Pending</strong> status.</p>
+                    <div class="guide-cmd-row">
+                        <div class="guide-cmd-box">
+                            <span class="cmd-label cli">CLI</span>
+                            <code>cf task add -p "prompt" "title"</code>
+                        </div>
+                        <div class="guide-cmd-box">
+                            <span class="cmd-label web">Web</span>
+                            <span class="cmd-text">Click <strong>+ New Task</strong> button in the header</span>
+                        </div>
+                    </div>
+                    <div class="guide-tip"><strong>Tip: </strong>Use <code>-f tasks.txt</code> to batch-add from a file, one task per line. Set priority with the <code>-P</code> flag (0-3).</div>
+                </div>
+            </div>
+
+            <!-- Step 3: Plan -->
+            <div class="guide-step" onclick="toggleGuideStep(this)">
+                <div class="guide-step-dot" style="background: #a29bfe;"></div>
+                <div class="guide-step-header">
+                    <span class="guide-step-num" style="background: #a29bfe;">3</span>
+                    <span class="guide-step-title">Generate Plans</span>
+                    <span class="guide-step-tag" style="background: rgba(162,155,254,0.2); color: #a29bfe;">Planning</span>
+                    <span class="guide-role-tag guide-role-auto">AUTO</span>
+                    <span class="guide-step-arrow">&#9660;</span>
+                </div>
+                <div class="guide-step-body">
+                    <p>Claude Code analyzes each task in <strong>Plan Mode</strong> and generates a detailed implementation plan. During this phase, the task status is <strong>Planning</strong>.</p>
+                    <div class="guide-cmd-row">
+                        <div class="guide-cmd-box">
+                            <span class="cmd-label cli">CLI</span>
+                            <code>cf plan</code>
+                        </div>
+                        <div class="guide-cmd-box">
+                            <span class="cmd-label web">Web</span>
+                            <span class="cmd-text">Click <strong>Plan All</strong> or card's <strong>Plan</strong> button</span>
+                        </div>
+                    </div>
+                    <p>Once complete, the task moves to <strong>Planned</strong> status. Plans are saved as Markdown files in <code>.claude-flow/plans/</code>.</p>
+                </div>
+            </div>
+
+            <!-- Step 4: Review -->
+            <div class="guide-step" onclick="toggleGuideStep(this)">
+                <div class="guide-step-dot" style="background: #74b9ff;"></div>
+                <div class="guide-step-header">
+                    <span class="guide-step-num" style="background: #74b9ff;">4</span>
+                    <span class="guide-step-title">Review & Approve Plans</span>
+                    <span class="guide-step-tag" style="background: rgba(116,185,255,0.2); color: #74b9ff;">Planned</span>
+                    <span class="guide-role-tag guide-role-human">HUMAN</span>
+                    <span class="guide-step-arrow">&#9660;</span>
+                </div>
+                <div class="guide-step-body">
+                    <p>This is the <strong>human-in-the-loop</strong> gate. Review each plan to ensure correctness and safety before approving execution.</p>
+                    <div class="guide-cmd-row">
+                        <div class="guide-cmd-box">
+                            <span class="cmd-label cli">CLI</span>
+                            <code>cf plan review</code><br>
+                            <code>cf plan approve --all</code>
+                        </div>
+                        <div class="guide-cmd-box">
+                            <span class="cmd-label web">Web</span>
+                            <span class="cmd-text">Click <strong>View Plan</strong> to read, then <strong>Approve</strong> or <strong>Feedback</strong></span>
+                        </div>
+                    </div>
+                    <div class="guide-tip"><strong>Feedback: </strong>If a plan needs revision, submit feedback and Claude Code will regenerate the plan incorporating your comments. The task returns to <strong>Planning</strong>.</div>
+                </div>
+            </div>
+
+            <!-- Step 5: Execute -->
+            <div class="guide-step" onclick="toggleGuideStep(this)">
+                <div class="guide-step-dot" style="background: #00cec9;"></div>
+                <div class="guide-step-header">
+                    <span class="guide-step-num" style="background: #00cec9;">5</span>
+                    <span class="guide-step-title">Execute Tasks</span>
+                    <span class="guide-step-tag" style="background: rgba(0,206,201,0.2); color: #00cec9;">Approved</span>
+                    <span class="guide-role-tag guide-role-auto">AUTO</span>
+                    <span class="guide-step-arrow">&#9660;</span>
+                </div>
+                <div class="guide-step-body">
+                    <p>Workers pick up approved tasks and execute them. Each task gets its own <strong>Git Worktree</strong> (isolated branch <code>cf/task-XXXXXX</code>) so multiple tasks can run in parallel without conflicts.</p>
+                    <div class="guide-cmd-row">
+                        <div class="guide-cmd-box">
+                            <span class="cmd-label cli">CLI</span>
+                            <code>cf run</code> &nbsp;or&nbsp; <code>cf run -n 3</code>
+                        </div>
+                        <div class="guide-cmd-box">
+                            <span class="cmd-label web">Web</span>
+                            <span class="cmd-text">Click <strong>Run All</strong> or card's <strong>Run</strong> button</span>
+                        </div>
+                    </div>
+                    <p>The worker calls <code>claude -p "prompt"</code> inside the worktree. The task moves to <strong>Running</strong>.</p>
+                </div>
+            </div>
+
+            <!-- Step 6: Running / Needs Input -->
+            <div class="guide-step" onclick="toggleGuideStep(this)">
+                <div class="guide-step-dot" style="background: #fdcb6e;"></div>
+                <div class="guide-step-header">
+                    <span class="guide-step-num" style="background: #fdcb6e; color: #0f0f23;">6</span>
+                    <span class="guide-step-title">Running & Needs Input</span>
+                    <span class="guide-step-tag" style="background: rgba(253,203,110,0.2); color: #fdcb6e;">Running</span>
+                    <span class="guide-step-arrow">&#9660;</span>
+                </div>
+                <div class="guide-step-body">
+                    <p>While running, Claude Code writes code in the isolated worktree. Monitor progress via logs.</p>
+                    <p>If Claude Code needs clarification, the task enters <strong>Needs Input</strong> status. You can provide additional context and the task will resume.</p>
+                    <div class="guide-cmd-row">
+                        <div class="guide-cmd-box">
+                            <span class="cmd-label cli">CLI</span>
+                            <code>cf log &lt;task_id&gt;</code><br>
+                            <code>cf status</code>
+                        </div>
+                        <div class="guide-cmd-box">
+                            <span class="cmd-label web">Web</span>
+                            <span class="cmd-text">Click <strong>View Log</strong> on running cards, or <strong>Respond</strong> for Needs Input cards</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 7: Done / Merge -->
+            <div class="guide-step" onclick="toggleGuideStep(this)">
+                <div class="guide-step-dot" style="background: #00b894;"></div>
+                <div class="guide-step-header">
+                    <span class="guide-step-num" style="background: #00b894;">7</span>
+                    <span class="guide-step-title">Merge & Done</span>
+                    <span class="guide-step-tag" style="background: rgba(0,184,148,0.2); color: #00b894;">Done</span>
+                    <span class="guide-role-tag guide-role-auto">AUTO</span>
+                    <span class="guide-step-arrow">&#9660;</span>
+                </div>
+                <div class="guide-step-body">
+                    <p>After execution completes, the worker automatically <strong>merges</strong> the worktree branch back to the main branch (configurable via <code>auto_merge</code>). The worktree is then cleaned up.</p>
+                    <div class="guide-cmd-row">
+                        <div class="guide-cmd-box">
+                            <span class="cmd-label cli">CLI</span>
+                            <code>cf clean</code>
+                        </div>
+                        <div class="guide-cmd-box">
+                            <span class="cmd-label web">Web</span>
+                            <span class="cmd-text">Task card moves to <strong>Done</strong> column automatically</span>
+                        </div>
+                    </div>
+                    <div class="guide-tip"><strong>Config: </strong>Set <code>auto_merge: false</code> in config.json to merge manually. Merge strategy defaults to <code>--no-ff</code>.</div>
+                </div>
+            </div>
+
+            <!-- Step 8: Failed / Retry -->
+            <div class="guide-step" onclick="toggleGuideStep(this)">
+                <div class="guide-step-dot" style="background: #ff6b6b;"></div>
+                <div class="guide-step-header">
+                    <span class="guide-step-num" style="background: #ff6b6b;">8</span>
+                    <span class="guide-step-title">Handle Failures</span>
+                    <span class="guide-step-tag" style="background: rgba(255,107,107,0.2); color: #ff6b6b;">Failed</span>
+                    <span class="guide-role-tag guide-role-human">HUMAN</span>
+                    <span class="guide-step-arrow">&#9660;</span>
+                </div>
+                <div class="guide-step-body">
+                    <p>If a task fails (timeout, Claude error, merge conflict), it enters <strong>Failed</strong> status with an error message. You can:</p>
+                    <ul style="margin: 8px 0; padding-left: 20px;">
+                        <li><strong>Retry</strong> — re-queue the task as Approved</li>
+                        <li><strong>Reset</strong> — send it back to Pending (start from scratch)</li>
+                        <li><strong>View Log</strong> — inspect what went wrong</li>
+                        <li><strong>Delete</strong> — remove the task entirely</li>
+                    </ul>
+                    <div class="guide-cmd-row">
+                        <div class="guide-cmd-box">
+                            <span class="cmd-label cli">CLI</span>
+                            <code>cf retry</code><br>
+                            <code>cf reset &lt;task_id&gt;</code>
+                        </div>
+                        <div class="guide-cmd-box">
+                            <span class="cmd-label web">Web</span>
+                            <span class="cmd-text">Use <strong>Retry</strong>, <strong>Reset</strong>, or <strong>Delete</strong> buttons on failed cards</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="guide-expand-all">
+            <button class="btn btn-outline btn-small" onclick="toggleAllGuideSteps()">Expand / Collapse All</button>
         </div>
     </div>
 
@@ -1558,6 +2054,49 @@
             toast.textContent = message;
             toast.className = 'toast show' + (isError ? ' error' : '');
             setTimeout(() => { toast.className = 'toast'; }, 3000);
+        }
+
+        /* -- 工作流指南页面 ---------------------------------------------------- */
+        let guideVisible = false;
+
+        function toggleGuidePage() {
+            guideVisible = !guideVisible;
+            const guidePage = document.getElementById('guidePage');
+            const board = document.getElementById('board');
+            const mobileTabs = document.getElementById('mobileTabs');
+            const btn = document.getElementById('guideToggleBtn');
+
+            if (guideVisible) {
+                guidePage.classList.add('active');
+                board.style.display = 'none';
+                mobileTabs.style.display = 'none';
+                btn.textContent = 'Board';
+                btn.classList.remove('btn-outline');
+                btn.classList.add('btn-info');
+            } else {
+                guidePage.classList.remove('active');
+                board.style.display = '';
+                mobileTabs.style.display = '';
+                btn.textContent = 'Guide';
+                btn.classList.remove('btn-info');
+                btn.classList.add('btn-outline');
+            }
+        }
+
+        function toggleGuideStep(stepEl) {
+            stepEl.classList.toggle('expanded');
+        }
+
+        function toggleAllGuideSteps() {
+            const steps = document.querySelectorAll('.guide-step');
+            const allExpanded = Array.from(steps).every(function(s) { return s.classList.contains('expanded'); });
+            steps.forEach(function(s) {
+                if (allExpanded) {
+                    s.classList.remove('expanded');
+                } else {
+                    s.classList.add('expanded');
+                }
+            });
         }
 
         /* -- 自动刷新（每 3 秒）----------------------------------------------- */
