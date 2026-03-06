@@ -1078,8 +1078,8 @@
 
         async function rejectFromPlan() {
             if (!viewingPlanTaskId) return;
-            closePlanModal();
             rejectingTaskId = viewingPlanTaskId;
+            closePlanModal();
             document.getElementById('rejectReason').value = '';
             document.getElementById('rejectModal').classList.add('active');
         }

@@ -177,7 +177,17 @@ def reject_task(task_id: str):
     reason = data.get("reason", "未提供原因")
 
     planner.reject(task, reason)
-    tm.update_status(task_id, TaskStatus.PENDING)
+
+    # planner.reject() 修改了内存中 task.prompt，需要同步持久化
+    def _do():
+        tasks = tm._load()
+        for t in tasks:
+            if t.id == task_id:
+                t.prompt = task.prompt
+                t.status = TaskStatus.PENDING
+                tm._save(tasks)
+                return
+    tm._with_lock(_do)
 
     updated = tm.get(task_id)
     return _ok(updated.to_dict())

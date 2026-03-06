@@ -132,6 +132,21 @@ class TestApproveReject:
         assert data["ok"] is True
         assert data["data"]["status"] == "pending"
 
+    def test_reject_task_persists_prompt(self, client, tm, web_app):
+        """Reject should persist the updated prompt (with rejection reason) to disk."""
+        task = tm.add("T1", "Original prompt")
+        tm.update_status(task.id, TaskStatus.PLANNED)
+        resp = client.post(
+            f"/api/tasks/{task.id}/reject",
+            json={"reason": "Needs more detail"},
+        )
+        data = resp.get_json()
+        assert data["ok"] is True
+        # Verify prompt was persisted with rejection reason
+        updated = tm.get(task.id)
+        assert "Needs more detail" in updated.prompt
+        assert "Original prompt" in updated.prompt
+
     def test_approve_all(self, client, tm, web_app):
         t1 = tm.add("T1", "P1")
         t2 = tm.add("T2", "P2")
