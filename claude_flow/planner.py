@@ -44,6 +44,7 @@ class Planner:
         """
         proc = subprocess.Popen(
             cmd, cwd=str(self._root),
+            stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
         )
         try:

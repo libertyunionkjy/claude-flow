@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import subprocess
+import sys
 from pathlib import Path
 
 import click
@@ -13,6 +15,35 @@ from .planner import Planner
 from .task_manager import TaskManager
 from .worker import Worker
 from .worktree import WorktreeManager
+
+
+# -- Terminal helpers -------------------------------------------------------
+
+def _strip_ansi(text: str) -> str:
+    """Strip ANSI escape sequences to prevent terminal state corruption."""
+    return re.sub(r"\x1b\[[0-9;?]*[a-zA-Z~]|\x1b\].*?\x07|\x1b[^[\]]", "", text)
+
+
+def _reset_terminal() -> None:
+    """Reset terminal to canonical mode (cooked mode) for interactive input.
+
+    Restores ICANON, ECHO, and ISIG flags so that Enter, Ctrl+C, etc. work
+    correctly after a subprocess may have altered terminal settings.
+    """
+    if not sys.stdin.isatty():
+        return
+    try:
+        import termios
+
+        fd = sys.stdin.fileno()
+        attrs = termios.tcgetattr(fd)
+        # Restore local flags: canonical mode, echo, signal processing
+        attrs[3] |= termios.ICANON | termios.ECHO | termios.ISIG
+        # Restore input flags: CR-to-NL translation
+        attrs[0] |= termios.ICRNL
+        termios.tcsetattr(fd, termios.TCSADRAIN, attrs)
+    except (ImportError, termios.error, ValueError, OSError):
+        pass
 
 
 def _worker_entry(args: tuple) -> int:
@@ -227,9 +258,10 @@ def plan_review(ctx):
             click.echo(f"\n{'─' * 50}")
             click.echo(f"Task:   {t.id} - {t.title}")
             click.echo(f"{'─' * 50}")
-            click.echo(planner.read_plan(plan_path))
+            click.echo(_strip_ansi(planner.read_plan(plan_path)))
             click.echo(f"{'─' * 50}")
 
+            _reset_terminal()
             action = click.prompt(
                 "[a]pprove  [r]eject  [s]kip  [e]dit  [f]eedback  [q]uit",
                 type=str, default="s"
@@ -239,12 +271,14 @@ def plan_review(ctx):
                 tm.update_status(t.id, TaskStatus.APPROVED)
                 click.echo(f"  {t.id} approved")
             elif action == "r":
+                _reset_terminal()
                 reason = click.prompt("Rejection reason", default="")
                 planner.reject(t, reason)
                 tm.update_status(t.id, TaskStatus.PENDING)
                 click.echo(f"  {t.id} rejected, back to pending")
             elif action == "f":
                 # 多轮对话：提供反馈后重新生成
+                _reset_terminal()
                 feedback = click.prompt("Your feedback", default="")
                 click.echo(f"  Regenerating plan with feedback...")
                 tm.update_status(t.id, TaskStatus.PLANNING)
