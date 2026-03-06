@@ -1,6 +1,9 @@
 from pathlib import Path
+from unittest.mock import patch, MagicMock
 from click.testing import CliRunner
 from claude_flow.cli import main
+from claude_flow.task_manager import TaskManager
+from claude_flow.models import TaskStatus
 
 
 class TestCLI:
@@ -38,3 +41,186 @@ class TestCLI:
             catch_exceptions=False, env={"CF_PROJECT_ROOT": str(git_repo)},
         )
         assert result.exit_code == 0
+
+
+class TestPlanBackground:
+    """Tests for background plan execution."""
+
+    def _add_task(self, git_repo):
+        """Add a pending task and return its ID."""
+        (git_repo / ".claude-flow").mkdir(exist_ok=True)
+        tm = TaskManager(git_repo)
+        t = tm.add("Test Task", "Do something")
+        return t.id
+
+    def test_plan_defaults_to_background(self, git_repo):
+        """cf plan (no flags) forks a background process."""
+        task_id = self._add_task(git_repo)
+        runner = CliRunner()
+
+        with patch("os.fork", return_value=12345):
+            result = runner.invoke(
+                main, ["plan"],
+                catch_exceptions=False,
+                env={"CF_PROJECT_ROOT": str(git_repo)},
+            )
+
+        assert result.exit_code == 0
+        assert "background" in result.output.lower()
+        assert "12345" in result.output
+
+        # Task should be set to PLANNING before fork returns
+        tm = TaskManager(git_repo)
+        t = tm.get(task_id)
+        assert t.status == TaskStatus.PLANNING
+
+    def test_plan_foreground_flag(self, git_repo):
+        """cf plan -F runs in foreground (blocking)."""
+        task_id = self._add_task(git_repo)
+        runner = CliRunner()
+
+        with patch("claude_flow.planner.subprocess.Popen") as mock_popen:
+            mock_proc = MagicMock()
+            mock_proc.communicate.return_value = ("# Plan\n1. Do X", "")
+            mock_proc.returncode = 0
+            mock_popen.return_value = mock_proc
+
+            result = runner.invoke(
+                main, ["plan", "-F"],
+                catch_exceptions=False,
+                env={"CF_PROJECT_ROOT": str(git_repo)},
+            )
+
+        assert result.exit_code == 0
+        assert "Plan saved to" in result.output
+
+        tm = TaskManager(git_repo)
+        t = tm.get(task_id)
+        assert t.status == TaskStatus.PLANNED
+
+    def test_plan_foreground_with_specific_task(self, git_repo):
+        """cf plan -F -t <task_id> plans a specific task in foreground."""
+        task_id = self._add_task(git_repo)
+        runner = CliRunner()
+
+        with patch("claude_flow.planner.subprocess.Popen") as mock_popen:
+            mock_proc = MagicMock()
+            mock_proc.communicate.return_value = ("# Plan\nStep 1", "")
+            mock_proc.returncode = 0
+            mock_popen.return_value = mock_proc
+
+            result = runner.invoke(
+                main, ["plan", "-F", "-t", task_id],
+                catch_exceptions=False,
+                env={"CF_PROJECT_ROOT": str(git_repo)},
+            )
+
+        assert result.exit_code == 0
+        assert "Plan saved to" in result.output
+
+    def test_plan_no_pending_tasks(self, git_repo):
+        """cf plan with no pending tasks shows message."""
+        (git_repo / ".claude-flow").mkdir(exist_ok=True)
+        runner = CliRunner()
+
+        result = runner.invoke(
+            main, ["plan"],
+            catch_exceptions=False,
+            env={"CF_PROJECT_ROOT": str(git_repo)},
+        )
+
+        assert result.exit_code == 0
+        assert "No pending tasks" in result.output
+
+    def test_plan_background_sets_planning_status(self, git_repo):
+        """Background mode sets all tasks to PLANNING before forking."""
+        (git_repo / ".claude-flow").mkdir(exist_ok=True)
+        tm = TaskManager(git_repo)
+        t1 = tm.add("Task 1", "Prompt 1")
+        t2 = tm.add("Task 2", "Prompt 2")
+
+        runner = CliRunner()
+        with patch("os.fork", return_value=99999):
+            result = runner.invoke(
+                main, ["plan"],
+                catch_exceptions=False,
+                env={"CF_PROJECT_ROOT": str(git_repo)},
+            )
+
+        assert result.exit_code == 0
+
+        tm2 = TaskManager(git_repo)
+        assert tm2.get(t1.id).status == TaskStatus.PLANNING
+        assert tm2.get(t2.id).status == TaskStatus.PLANNING
+
+
+class TestPlanStatus:
+    """Tests for cf plan status subcommand."""
+
+    def test_plan_status_empty(self, git_repo):
+        """plan status with no plans shows appropriate message."""
+        (git_repo / ".claude-flow").mkdir(exist_ok=True)
+        runner = CliRunner()
+
+        result = runner.invoke(
+            main, ["plan", "status"],
+            catch_exceptions=False,
+            env={"CF_PROJECT_ROOT": str(git_repo)},
+        )
+
+        assert result.exit_code == 0
+        assert "No plans in progress" in result.output
+
+    def test_plan_status_shows_planning(self, git_repo):
+        """plan status shows tasks in PLANNING state."""
+        (git_repo / ".claude-flow").mkdir(exist_ok=True)
+        tm = TaskManager(git_repo)
+        t = tm.add("Planning Task", "Prompt")
+        tm.update_status(t.id, TaskStatus.PLANNING)
+
+        runner = CliRunner()
+        result = runner.invoke(
+            main, ["plan", "status"],
+            catch_exceptions=False,
+            env={"CF_PROJECT_ROOT": str(git_repo)},
+        )
+
+        assert result.exit_code == 0
+        assert "In progress" in result.output
+        assert t.id in result.output
+
+    def test_plan_status_shows_planned(self, git_repo):
+        """plan status shows tasks in PLANNED state."""
+        (git_repo / ".claude-flow").mkdir(exist_ok=True)
+        tm = TaskManager(git_repo)
+        t = tm.add("Planned Task", "Prompt")
+        tm.update_status(t.id, TaskStatus.PLANNED)
+
+        runner = CliRunner()
+        result = runner.invoke(
+            main, ["plan", "status"],
+            catch_exceptions=False,
+            env={"CF_PROJECT_ROOT": str(git_repo)},
+        )
+
+        assert result.exit_code == 0
+        assert "Ready for review" in result.output
+        assert t.id in result.output
+
+    def test_plan_status_shows_log_tail(self, git_repo):
+        """plan status shows recent log lines if log file exists."""
+        (git_repo / ".claude-flow" / "logs").mkdir(parents=True, exist_ok=True)
+        log_file = git_repo / ".claude-flow" / "logs" / "plan-bg.log"
+        log_file.write_text("[2026-03-06T10:00:00] Background planning started\n"
+                           "[2026-03-06T10:00:01] Planning: task-abc123\n")
+
+        runner = CliRunner()
+        result = runner.invoke(
+            main, ["plan", "status"],
+            catch_exceptions=False,
+            env={"CF_PROJECT_ROOT": str(git_repo)},
+        )
+
+        assert result.exit_code == 0
+        assert "Recent log" in result.output
+        assert "Background planning started" in result.output

@@ -190,11 +190,101 @@ def task_remove(ctx, task_id):
 
 # -- Plan commands ----------------------------------------------------------
 
+def _plan_foreground(root, cfg, tm, planner, tasks):
+    """Run plan generation in foreground (blocking)."""
+    for t in tasks:
+        click.echo(f"Planning: {t.id} - {t.title} ...")
+        tm.update_status(t.id, TaskStatus.PLANNING)
+        try:
+            plan_file = planner.generate(t)
+        except KeyboardInterrupt:
+            tm.update_status(t.id, TaskStatus.PENDING)
+            click.echo(f"\n  Interrupted, {t.id} rolled back to pending")
+            raise SystemExit(130)
+        if plan_file:
+            tm.update_status(t.id, TaskStatus.PLANNED)
+            click.echo(f"  Plan saved to {plan_file}")
+        else:
+            tm.update_status(t.id, TaskStatus.FAILED, t.error)
+            click.echo(f"  Plan failed: {t.error}")
+
+
+def _plan_background(root, cfg, tm, tasks):
+    """Fork a detached background process for plan generation."""
+    from datetime import datetime
+
+    # Mark all tasks as PLANNING before forking
+    for t in tasks:
+        tm.update_status(t.id, TaskStatus.PLANNING)
+
+    log_file = root / ".claude-flow" / "logs" / "plan-bg.log"
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+
+    pid = os.fork()
+    if pid > 0:
+        # Parent: report and return immediately
+        click.echo(f"Started planning {len(tasks)} task(s) in background (PID: {pid})")
+        for t in tasks:
+            click.echo(f"  ⟳ {t.id} - {t.title}")
+        click.echo(f"\nCheck progress:  cf plan status")
+        click.echo(f"View log:        cf log plan-bg")
+        return
+
+    # -- Child process: detach from terminal and execute planning --
+    try:
+        os.setsid()
+
+        # Redirect stdio to log file
+        fd = os.open(str(log_file), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
+        os.dup2(fd, 1)
+        os.dup2(fd, 2)
+        os.close(fd)
+        devnull_fd = os.open(os.devnull, os.O_RDONLY)
+        os.dup2(devnull_fd, 0)
+        os.close(devnull_fd)
+
+        # Re-create objects in child to avoid shared file descriptor issues
+        tm_child = TaskManager(root)
+        plans_dir = root / ".claude-flow" / "plans"
+        planner = Planner(root, plans_dir, cfg, task_manager=tm_child)
+
+        def _now():
+            return datetime.now().replace(microsecond=0).isoformat()
+
+        print(f"\n[{_now()}] Background planning started for {len(tasks)} task(s)",
+              flush=True)
+
+        for t in tasks:
+            print(f"[{_now()}] Planning: {t.id} - {t.title}", flush=True)
+            try:
+                plan_file = planner.generate(t)
+            except Exception as e:
+                tm_child.update_status(t.id, TaskStatus.FAILED, str(e))
+                print(f"[{_now()}] Failed: {t.id} - {e}", flush=True)
+                continue
+            if plan_file:
+                tm_child.update_status(t.id, TaskStatus.PLANNED)
+                print(f"[{_now()}] Done: {t.id} -> {plan_file}", flush=True)
+            else:
+                tm_child.update_status(t.id, TaskStatus.FAILED, t.error)
+                print(f"[{_now()}] Failed: {t.id} - {t.error}", flush=True)
+
+        print(f"[{_now()}] Background planning completed", flush=True)
+    except Exception as e:
+        try:
+            print(f"Fatal error in background planning: {e}", flush=True)
+        except Exception:
+            pass
+    finally:
+        os._exit(0)
+
+
 @main.group(invoke_without_command=True)
 @click.option("-t", "--task-id", "task_id", default=None, help="Plan a specific task by ID")
+@click.option("-F", "--foreground", is_flag=True, help="Run in foreground (blocking mode)")
 @click.pass_context
-def plan(ctx, task_id):
-    """Generate plans for pending tasks."""
+def plan(ctx, task_id, foreground):
+    """Generate plans for pending tasks (background by default)."""
     if ctx.invoked_subcommand is not None:
         return
     root = ctx.obj["root"]
@@ -215,22 +305,43 @@ def plan(ctx, task_id):
         click.echo("No pending tasks to plan")
         return
 
-    for t in tasks:
-        click.echo(f"Planning: {t.id} - {t.title} ...")
-        # Persist PLANNING status before calling subprocess
-        tm.update_status(t.id, TaskStatus.PLANNING)
-        try:
-            plan_file = planner.generate(t)
-        except KeyboardInterrupt:
-            tm.update_status(t.id, TaskStatus.PENDING)
-            click.echo(f"\n  Interrupted, {t.id} rolled back to pending")
-            raise SystemExit(130)
-        if plan_file:
-            tm.update_status(t.id, TaskStatus.PLANNED)
-            click.echo(f"  Plan saved to {plan_file}")
-        else:
-            tm.update_status(t.id, TaskStatus.FAILED, t.error)
-            click.echo(f"  Plan failed: {t.error}")
+    if foreground:
+        _plan_foreground(root, cfg, tm, planner, tasks)
+    else:
+        _plan_background(root, cfg, tm, tasks)
+
+
+@plan.command("status")
+@click.pass_context
+def plan_status(ctx):
+    """Check planning progress."""
+    root = ctx.obj["root"]
+    tm = TaskManager(root)
+    planning = tm.list_tasks(status=TaskStatus.PLANNING)
+    planned = tm.list_tasks(status=TaskStatus.PLANNED)
+
+    if planning:
+        click.echo("In progress:")
+        for t in planning:
+            click.echo(f"  ⟳ {t.id} - {t.title}")
+        click.echo("  (If stuck, use 'cf reset <task_id>' to reset)")
+
+    if planned:
+        click.echo("Ready for review:")
+        for t in planned:
+            click.echo(f"  ◉ {t.id} - {t.title}")
+
+    if not planning and not planned:
+        click.echo("No plans in progress or ready for review")
+
+    # Show recent log tail
+    log_file = root / ".claude-flow" / "logs" / "plan-bg.log"
+    if log_file.exists():
+        lines = log_file.read_text().strip().splitlines()
+        if lines:
+            click.echo(f"\nRecent log:")
+            for line in lines[-5:]:
+                click.echo(f"  {line}")
 
 
 @plan.command("review")
