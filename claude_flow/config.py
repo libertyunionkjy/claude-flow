@@ -19,6 +19,26 @@ DEFAULT_CONFIG = {
     "plan_prompt_prefix": "请分析以下任务并输出实施计划，不要执行代码:",
     "task_prompt_prefix": "你的任务是:",
     "task_timeout": 600,
+    # Worktree symlink sharing
+    "shared_symlinks": [],
+    "forbidden_symlinks": ["PROGRESS.md"],
+    # Merge strategy
+    "merge_mode": "rebase",
+    "max_merge_retries": 5,
+    # Pre-merge testing
+    "pre_merge_commands": [],
+    "max_test_retries": 3,
+    # Remote push
+    "auto_push": False,
+    # PROGRESS.md experience logging
+    "enable_progress_log": True,
+    "progress_file": "PROGRESS.md",
+    # Worker port assignment
+    "base_port": 5200,
+    # Daemon mode
+    "daemon_poll_interval": 10,
+    # Web manager
+    "web_port": 8080,
 }
 
 
@@ -34,6 +54,26 @@ class Config:
     plan_prompt_prefix: str = "请分析以下任务并输出实施计划，不要执行代码:"
     task_prompt_prefix: str = "你的任务是:"
     task_timeout: int = 600
+    # Worktree symlink sharing
+    shared_symlinks: List[str] = field(default_factory=list)
+    forbidden_symlinks: List[str] = field(default_factory=lambda: ["PROGRESS.md"])
+    # Merge strategy
+    merge_mode: str = "rebase"
+    max_merge_retries: int = 5
+    # Pre-merge testing
+    pre_merge_commands: List[str] = field(default_factory=list)
+    max_test_retries: int = 3
+    # Remote push
+    auto_push: bool = False
+    # PROGRESS.md experience logging
+    enable_progress_log: bool = True
+    progress_file: str = "PROGRESS.md"
+    # Worker port assignment
+    base_port: int = 5200
+    # Daemon mode
+    daemon_poll_interval: int = 10
+    # Web manager
+    web_port: int = 8080
 
     @classmethod
     def load(cls, project_root: Path) -> Config:
