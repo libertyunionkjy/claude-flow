@@ -17,7 +17,7 @@ DEFAULT_CONFIG = {
     "worktree_dir": ".claude-flow/worktrees",
     "skip_permissions": True,
     "plan_prompt_prefix": "请分析以下任务并输出实施计划，不要执行代码:",
-    "task_prompt_prefix": "你的任务是:",
+    "task_prompt_prefix": "你的任务是（请直接实现，不要提问或等待确认，直接修改代码并完成任务）:",
     "task_timeout": 600,
     # Worktree symlink sharing
     "shared_symlinks": [],
@@ -52,7 +52,7 @@ class Config:
     worktree_dir: str = ".claude-flow/worktrees"
     skip_permissions: bool = True
     plan_prompt_prefix: str = "请分析以下任务并输出实施计划，不要执行代码:"
-    task_prompt_prefix: str = "你的任务是:"
+    task_prompt_prefix: str = "你的任务是（请直接实现，不要提问或等待确认，直接修改代码并完成任务）:"
     task_timeout: int = 600
     # Worktree symlink sharing
     shared_symlinks: List[str] = field(default_factory=list)

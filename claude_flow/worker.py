@@ -91,6 +91,18 @@ class Worker:
             self._wt.remove(task.id, task.branch)
             return False
 
+        # 自动提交 worktree 中的未提交变更
+        has_changes = self._auto_commit(task, wt_path)
+
+        # 检查分支上是否有新 commit（相对于 main）
+        if not has_changes and not self._has_new_commits(task.branch, wt_path):
+            error_msg = "No code changes produced"
+            logger.warning(f"{prefix} {error_msg}")
+            self._tm.update_status(task.id, TaskStatus.FAILED, error_msg)
+            self._log_progress(task, False, error_msg, wt_path)
+            self._wt.remove(task.id, task.branch)
+            return False
+
         # 合并前测试验证
         if self._cfg.pre_merge_commands:
             test_passed = self._run_pre_merge_tests(task, wt_path)
@@ -242,6 +254,57 @@ class Worker:
             pass  # monitor 模块不可用时静默跳过
         except Exception:
             pass  # 解析失败不影响主流程
+
+    def _extract_claude_result(self, stdout: str) -> Optional[str]:
+        """从 stream-json 输出中提取 Claude 的最终文本回复。"""
+        import json as _json
+        for line in reversed(stdout.splitlines()):
+            try:
+                obj = _json.loads(line)
+                if obj.get("type") == "result" and obj.get("result"):
+                    text = obj["result"]
+                    # 截断过长的回复（存入 error 字段）
+                    return text[:500] if len(text) > 500 else text
+            except (ValueError, KeyError):
+                continue
+        return None
+
+    def _auto_commit(self, task: Task, wt_path: Path) -> bool:
+        """检查 worktree 中是否有未提交的变更，如有则自动提交。
+
+        返回 True 表示有变更并已提交，False 表示无变更。
+        """
+        prefix = self._log_prefix()
+        # 检查是否有未跟踪或已修改的文件
+        status_result = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=str(wt_path), capture_output=True, text=True,
+        )
+        if not status_result.stdout.strip():
+            return False
+
+        logger.info(f"{prefix} Auto-committing uncommitted changes for {task.id}")
+        subprocess.run(
+            ["git", "add", "-A"],
+            cwd=str(wt_path), capture_output=True, text=True,
+        )
+        subprocess.run(
+            ["git", "commit", "-m", f"feat({task.id}): {task.title}",
+             "--no-verify"],
+            cwd=str(wt_path), capture_output=True, text=True,
+        )
+        return True
+
+    def _has_new_commits(self, branch: str, wt_path: Path) -> bool:
+        """检查分支相对于 main 是否有新 commit。"""
+        result = subprocess.run(
+            ["git", "rev-list", "--count", f"{self._cfg.main_branch}..{branch}"],
+            cwd=str(wt_path), capture_output=True, text=True,
+        )
+        try:
+            return int(result.stdout.strip()) > 0
+        except (ValueError, AttributeError):
+            return False
 
     def _log_progress(self, task: Task, success: bool, error: Optional[str], wt_path: Path) -> None:
         """记录任务经验到 PROGRESS.md。"""
