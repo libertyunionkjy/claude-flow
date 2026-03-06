@@ -40,10 +40,10 @@ class TaskManager:
             finally:
                 fcntl.flock(lock, fcntl.LOCK_UN)
 
-    def add(self, title: str, prompt: str) -> Task:
+    def add(self, title: str, prompt: str, priority: int = 0) -> Task:
         def _do():
             tasks = self._load()
-            task = Task(title=title, prompt=prompt)
+            task = Task(title=title, prompt=prompt, priority=priority)
             tasks.append(task)
             self._save(tasks)
             return task
@@ -92,12 +92,44 @@ class TaskManager:
     def claim_next(self, worker_id: int) -> Optional[Task]:
         def _do():
             tasks = self._load()
+            # 筛选所有已批准的任务
+            approved = [t for t in tasks if t.status == TaskStatus.APPROVED]
+            if not approved:
+                return None
+            # 按 priority 降序排序（数字越大优先级越高）
+            approved.sort(key=lambda t: t.priority, reverse=True)
+            target = approved[0]
+            # 在原 tasks 列表中找到对应任务并更新状态
             for t in tasks:
-                if t.status == TaskStatus.APPROVED:
+                if t.id == target.id:
                     t.status = TaskStatus.RUNNING
                     t.worker_id = worker_id
                     t.started_at = datetime.now()
                     t.branch = f"cf/{t.id}"
+                    self._save(tasks)
+                    return t
+            return None
+        return self._with_lock(_do)
+
+    def update_priority(self, task_id: str, priority: int) -> Optional[Task]:
+        """更新任务优先级（线程安全）。"""
+        def _do():
+            tasks = self._load()
+            for t in tasks:
+                if t.id == task_id:
+                    t.priority = priority
+                    self._save(tasks)
+                    return t
+            return None
+        return self._with_lock(_do)
+
+    def update_progress(self, task_id: str, progress: str) -> Optional[Task]:
+        """更新任务进度描述（线程安全）。"""
+        def _do():
+            tasks = self._load()
+            for t in tasks:
+                if t.id == task_id:
+                    t.progress = progress
                     self._save(tasks)
                     return t
             return None

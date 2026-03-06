@@ -36,6 +36,9 @@ class Task:
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     error: Optional[str] = None
+    priority: int = 0
+    progress: Optional[str] = None
+    retry_count: int = 0
 
     def to_dict(self) -> dict:
         return {
@@ -50,6 +53,9 @@ class Task:
             "started_at": self.started_at.isoformat() if self.started_at else None,
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,
             "error": self.error,
+            "priority": self.priority,
+            "progress": self.progress,
+            "retry_count": self.retry_count,
         }
 
     @classmethod
@@ -66,4 +72,7 @@ class Task:
             started_at=datetime.fromisoformat(d["started_at"]) if d.get("started_at") else None,
             completed_at=datetime.fromisoformat(d["completed_at"]) if d.get("completed_at") else None,
             error=d.get("error"),
+            priority=d.get("priority", 0),
+            progress=d.get("progress"),
+            retry_count=d.get("retry_count", 0),
         )
