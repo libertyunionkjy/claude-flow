@@ -1,7 +1,12 @@
 import subprocess
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any, List, Optional
+from unittest.mock import MagicMock
 
 import pytest
+
+from claude_flow.config import Config
 
 
 @pytest.fixture
@@ -15,3 +20,145 @@ def git_repo(tmp_path: Path) -> Path:
     subprocess.run(["git", "-C", str(repo), "add", "."], check=True, capture_output=True)
     subprocess.run(["git", "-C", str(repo), "commit", "-m", "init"], check=True, capture_output=True)
     return repo
+
+
+@pytest.fixture
+def cf_project(git_repo: Path) -> Path:
+    """Initialize a complete .claude-flow/ directory on top of git_repo."""
+    cf_dir = git_repo / ".claude-flow"
+    for sub in ["logs", "plans", "worktrees"]:
+        (cf_dir / sub).mkdir(parents=True, exist_ok=True)
+    cfg = Config()
+    cfg.save(git_repo)
+    return git_repo
+
+
+@dataclass
+class SubprocessCall:
+    """Record of a single subprocess invocation."""
+    args: list
+    kwargs: dict
+
+
+@dataclass
+class ClaudeSubprocessGuard:
+    """Mock guard that intercepts claude CLI subprocess calls and enforces stdin isolation.
+
+    Only claude CLI and shell commands (pre-merge tests) are mocked.
+    Git commands are passed through to real subprocess for worktree operations.
+
+    Usage:
+        guard.set_plan_output("# Plan content")
+        guard.set_task_output("task output")
+        # ... run code that calls subprocess ...
+        guard.assert_stdin_isolated()  # all claude calls must have stdin=DEVNULL
+    """
+    calls: List[SubprocessCall] = field(default_factory=list)
+    _plan_stdout: str = "# Plan\n1. Step one\n2. Step two"
+    _plan_returncode: int = 0
+    _task_stdout: str = '{"type":"result","result":"done"}'
+    _task_returncode: int = 0
+    _real_run: Any = field(default_factory=lambda: subprocess.run)
+    _real_popen: Any = field(default_factory=lambda: subprocess.Popen)
+
+    def set_plan_output(self, stdout: str, returncode: int = 0) -> None:
+        self._plan_stdout = stdout
+        self._plan_returncode = returncode
+
+    def set_task_output(self, stdout: str, returncode: int = 0) -> None:
+        self._task_stdout = stdout
+        self._task_returncode = returncode
+
+    def _is_claude_call(self, args: Any) -> bool:
+        """Check if the command is a claude CLI invocation."""
+        if isinstance(args, (list, tuple)) and len(args) > 0:
+            return str(args[0]) == "claude"
+        if isinstance(args, str):
+            return args.startswith("claude ")
+        return False
+
+    def _is_shell_call(self, kwargs: dict) -> bool:
+        """Check if this is a shell=True call (e.g. pre-merge test commands)."""
+        return kwargs.get("shell", False) is True
+
+    def _should_mock(self, cmd: Any, kwargs: dict) -> bool:
+        """Determine if a call should be mocked (True) or passed through (False)."""
+        return self._is_claude_call(cmd) or self._is_shell_call(kwargs)
+
+    def mock_popen(self, cmd: Any, **kwargs: Any) -> MagicMock:
+        """Replacement for subprocess.Popen.
+
+        Mocks claude CLI calls; passes git commands through to real Popen.
+        """
+        args_list = list(cmd) if not isinstance(cmd, list) else cmd
+        if not self._is_claude_call(cmd):
+            # Pass through non-claude calls (e.g. git commands) to real Popen
+            self.calls.append(SubprocessCall(args=args_list, kwargs=kwargs))
+            return self._real_popen(cmd, **kwargs)
+        self.calls.append(SubprocessCall(args=args_list, kwargs=kwargs))
+        proc = MagicMock()
+        proc.returncode = self._plan_returncode
+        proc.communicate.return_value = (self._plan_stdout, "" if self._plan_returncode == 0 else "error")
+        proc.wait.return_value = self._plan_returncode
+        return proc
+
+    def mock_run(self, cmd: Any, **kwargs: Any) -> Any:
+        """Replacement for subprocess.run.
+
+        Mocks claude CLI and shell calls; passes git commands through to real run.
+        """
+        args_list = list(cmd) if not isinstance(cmd, list) else cmd
+        self.calls.append(SubprocessCall(args=args_list, kwargs=kwargs))
+
+        if not self._should_mock(cmd, kwargs):
+            # Pass through to real subprocess.run (git operations, etc.)
+            return self._real_run(cmd, **kwargs)
+
+        if self._is_claude_call(cmd):
+            result = MagicMock()
+            result.returncode = self._task_returncode
+            result.stdout = self._task_stdout
+            result.stderr = "" if self._task_returncode == 0 else "error"
+            return result
+
+        # Shell commands (pre-merge tests): return success
+        result = MagicMock()
+        result.returncode = 0
+        result.stdout = ""
+        result.stderr = ""
+        return result
+
+    def get_claude_calls(self) -> List[SubprocessCall]:
+        """Return only the calls that invoked claude CLI."""
+        return [c for c in self.calls if self._is_claude_call(c.args)]
+
+    def get_non_git_calls(self) -> List[SubprocessCall]:
+        """Return calls that are not plain git commands (claude + shell calls)."""
+        return [c for c in self.calls if self._should_mock(c.args, c.kwargs)]
+
+    def assert_stdin_isolated(self) -> None:
+        """Assert ALL claude CLI calls used stdin=subprocess.DEVNULL."""
+        claude_calls = self.get_claude_calls()
+        assert len(claude_calls) > 0, "Expected at least one claude CLI call"
+        for i, call in enumerate(claude_calls):
+            stdin_val = call.kwargs.get("stdin")
+            assert stdin_val == subprocess.DEVNULL, (
+                f"Claude call #{i} missing stdin=subprocess.DEVNULL. "
+                f"cmd={call.args!r}, kwargs.stdin={stdin_val!r}"
+            )
+
+
+@pytest.fixture
+def claude_subprocess_guard(monkeypatch) -> ClaudeSubprocessGuard:
+    """Fixture providing a ClaudeSubprocessGuard that mocks subprocess calls.
+
+    Patches subprocess.Popen in planner and subprocess.run in worker.
+    Non-claude calls (git commands) are passed through to real subprocess.
+    """
+    # Capture real functions before patching
+    real_run = subprocess.run
+    real_popen = subprocess.Popen
+    guard = ClaudeSubprocessGuard(_real_run=real_run, _real_popen=real_popen)
+    monkeypatch.setattr("claude_flow.planner.subprocess.Popen", guard.mock_popen)
+    monkeypatch.setattr("claude_flow.worker.subprocess.run", guard.mock_run)
+    return guard
