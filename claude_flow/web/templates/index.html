@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Claude Flow - Web Manager</title>
+    <style>
+        /* -- 基础样式 -------------------------------------------------------- */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: #1a1a2e;
+            color: #e0e0e0;
+            min-height: 100vh;
+        }
+
+        /* -- 顶部导航栏 ------------------------------------------------------ */
+        .header {
+            background: #0f0f23;
+            border-bottom: 1px solid #2a2a4a;
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header h1 {
+            font-size: 18px;
+            font-weight: 600;
+            color: #00d4ff;
+            letter-spacing: 1px;
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .status-bar {
+            font-size: 13px;
+            color: #8888aa;
+        }
+
+        .status-bar span {
+            margin-left: 12px;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+        .btn-primary {
+            background: #00d4ff;
+            color: #0f0f23;
+        }
+
+        .btn-primary:hover {
+            background: #00b8e6;
+            transform: translateY(-1px);
+        }
+
+        .btn-success {
+            background: #00c853;
+            color: #0f0f23;
+        }
+
+        .btn-success:hover {
+            background: #00b248;
+        }
+
+        .btn-danger {
+            background: #ff4757;
+            color: #fff;
+        }
+
+        .btn-danger:hover {
+            background: #e0404f;
+        }
+
+        .btn-warning {
+            background: #ffa502;
+            color: #0f0f23;
+        }
+
+        .btn-warning:hover {
+            background: #e09400;
+        }
+
+        .btn-small {
+            padding: 4px 10px;
+            font-size: 12px;
+        }
+
+        /* -- 看板主体 -------------------------------------------------------- */
+        .board {
+            display: flex;
+            gap: 16px;
+            padding: 20px;
+            overflow-x: auto;
+            min-height: calc(100vh - 60px);
+            align-items: flex-start;
+        }
+
+        .column {
+            min-width: 260px;
+            max-width: 300px;
+            flex: 1;
+            background: #12122a;
+            border-radius: 10px;
+            display: flex;
+            flex-direction: column;
+            max-height: calc(100vh - 100px);
+        }
+
+        .column-header {
+            padding: 14px 16px;
+            font-size: 13px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            border-radius: 10px 10px 0 0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+        }
+
+        .column-header .count {
+            background: rgba(255, 255, 255, 0.15);
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 12px;
+        }
+
+        /* 各列颜色 */
+        .col-pending .column-header { background: #2d2d5e; border-bottom: 2px solid #6c5ce7; }
+        .col-planning .column-header { background: #2d3a5e; border-bottom: 2px solid #a29bfe; }
+        .col-planned .column-header { background: #1e3a5e; border-bottom: 2px solid #74b9ff; }
+        .col-approved .column-header { background: #1e4a3e; border-bottom: 2px solid #00cec9; }
+        .col-running .column-header { background: #3e3a1e; border-bottom: 2px solid #fdcb6e; }
+        .col-done .column-header { background: #1e4a2e; border-bottom: 2px solid #00b894; }
+        .col-failed .column-header { background: #4a1e2e; border-bottom: 2px solid #ff6b6b; }
+
+        .column-body {
+            padding: 8px;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        /* -- 任务卡片 -------------------------------------------------------- */
+        .card {
+            background: #16213e;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: 1px solid transparent;
+        }
+
+        .card:hover {
+            border-color: #2a3a6e;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .card-id {
+            font-family: "SF Mono", "Fira Code", monospace;
+            font-size: 11px;
+            color: #6c7a9a;
+            margin-bottom: 6px;
+        }
+
+        .card-title {
+            font-size: 14px;
+            font-weight: 500;
+            color: #d0d0e0;
+            margin-bottom: 8px;
+            word-break: break-word;
+        }
+
+        .card-meta {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .badge {
+            font-size: 11px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 500;
+        }
+
+        .badge-priority {
+            background: #2d2d5e;
+            color: #a29bfe;
+        }
+
+        .badge-worker {
+            background: #1e3a5e;
+            color: #74b9ff;
+        }
+
+        /* 卡片展开详情 */
+        .card-details {
+            display: none;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #2a2a4a;
+            font-size: 12px;
+            color: #8888aa;
+        }
+
+        .card-details.open {
+            display: block;
+        }
+
+        .card-details p {
+            margin-bottom: 6px;
+            word-break: break-word;
+        }
+
+        .card-details .label {
+            color: #6c7a9a;
+            font-weight: 500;
+        }
+
+        .card-details .error-text {
+            color: #ff6b6b;
+        }
+
+        .card-actions {
+            display: flex;
+            gap: 6px;
+            margin-top: 8px;
+        }
+
+        /* -- 模态框 ---------------------------------------------------------- */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 200;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: #16213e;
+            border-radius: 12px;
+            padding: 24px;
+            width: 90%;
+            max-width: 500px;
+            border: 1px solid #2a3a6e;
+        }
+
+        .modal h2 {
+            font-size: 18px;
+            margin-bottom: 16px;
+            color: #00d4ff;
+        }
+
+        .form-group {
+            margin-bottom: 14px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 13px;
+            color: #8888aa;
+            margin-bottom: 4px;
+        }
+
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 10px 12px;
+            background: #0f0f23;
+            border: 1px solid #2a2a4a;
+            border-radius: 6px;
+            color: #e0e0e0;
+            font-size: 14px;
+            font-family: inherit;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #00d4ff;
+        }
+
+        .form-group textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            margin-top: 16px;
+        }
+
+        .btn-cancel {
+            background: #2a2a4a;
+            color: #8888aa;
+        }
+
+        .btn-cancel:hover {
+            background: #3a3a5a;
+        }
+
+        /* -- 空状态提示 ------------------------------------------------------ */
+        .empty-hint {
+            text-align: center;
+            color: #4a4a6a;
+            font-size: 13px;
+            padding: 20px 10px;
+        }
+
+        /* -- 消息提示 -------------------------------------------------------- */
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #16213e;
+            color: #e0e0e0;
+            padding: 12px 20px;
+            border-radius: 8px;
+            border: 1px solid #2a3a6e;
+            font-size: 14px;
+            z-index: 300;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+
+        .toast.show {
+            opacity: 1;
+        }
+
+        .toast.error {
+            border-color: #ff4757;
+            color: #ff6b6b;
+        }
+
+        /* -- 响应式设计 ------------------------------------------------------ */
+        @media (max-width: 768px) {
+            .header {
+                padding: 10px 14px;
+                flex-wrap: wrap;
+                gap: 8px;
+            }
+
+            .header h1 {
+                font-size: 16px;
+            }
+
+            .board {
+                padding: 12px;
+                gap: 12px;
+            }
+
+            .column {
+                min-width: 240px;
+            }
+
+            .modal {
+                width: 95%;
+                padding: 18px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- 顶部导航 -->
+    <div class="header">
+        <h1>CLAUDE FLOW</h1>
+        <div class="header-actions">
+            <div class="status-bar" id="statusBar">加载中...</div>
+            <button class="btn btn-primary" onclick="openNewTaskModal()">+ 新建任务</button>
+        </div>
+    </div>
+
+    <!-- 看板主体 -->
+    <div class="board" id="board">
+        <div class="column col-pending" data-status="pending">
+            <div class="column-header">Pending <span class="count" id="count-pending">0</span></div>
+            <div class="column-body" id="col-pending"></div>
+        </div>
+        <div class="column col-planning" data-status="planning">
+            <div class="column-header">Planning <span class="count" id="count-planning">0</span></div>
+            <div class="column-body" id="col-planning"></div>
+        </div>
+        <div class="column col-planned" data-status="planned">
+            <div class="column-header">Planned <span class="count" id="count-planned">0</span></div>
+            <div class="column-body" id="col-planned"></div>
+        </div>
+        <div class="column col-approved" data-status="approved">
+            <div class="column-header">Approved <span class="count" id="count-approved">0</span></div>
+            <div class="column-body" id="col-approved"></div>
+        </div>
+        <div class="column col-running" data-status="running">
+            <div class="column-header">Running <span class="count" id="count-running">0</span></div>
+            <div class="column-body" id="col-running"></div>
+        </div>
+        <div class="column col-done" data-status="done">
+            <div class="column-header">Done <span class="count" id="count-done">0</span></div>
+            <div class="column-body" id="col-done"></div>
+        </div>
+        <div class="column col-failed" data-status="failed">
+            <div class="column-header">Failed <span class="count" id="count-failed">0</span></div>
+            <div class="column-body" id="col-failed"></div>
+        </div>
+    </div>
+
+    <!-- 新建任务模态框 -->
+    <div class="modal-overlay" id="newTaskModal">
+        <div class="modal">
+            <h2>新建任务</h2>
+            <div class="form-group">
+                <label for="taskTitle">标题</label>
+                <input type="text" id="taskTitle" placeholder="任务标题">
+            </div>
+            <div class="form-group">
+                <label for="taskPrompt">Prompt</label>
+                <textarea id="taskPrompt" placeholder="给 Claude Code 的 prompt..."></textarea>
+            </div>
+            <div class="form-group">
+                <label for="taskPriority">优先级</label>
+                <select id="taskPriority">
+                    <option value="0">普通 (0)</option>
+                    <option value="1">低 (1)</option>
+                    <option value="2">中 (2)</option>
+                    <option value="3">高 (3)</option>
+                </select>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-cancel" onclick="closeNewTaskModal()">取消</button>
+                <button class="btn btn-primary" onclick="createTask()">创建</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 拒绝原因模态框 -->
+    <div class="modal-overlay" id="rejectModal">
+        <div class="modal">
+            <h2>拒绝任务</h2>
+            <div class="form-group">
+                <label for="rejectReason">拒绝原因</label>
+                <textarea id="rejectReason" placeholder="请输入拒绝原因..."></textarea>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-cancel" onclick="closeRejectModal()">取消</button>
+                <button class="btn btn-danger" onclick="submitReject()">确认拒绝</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 消息提示 -->
+    <div class="toast" id="toast"></div>
+
+    <script>
+        /* -- 全局状态 -------------------------------------------------------- */
+        let allTasks = [];
+        let expandedCards = new Set();
+        let rejectingTaskId = null;
+        let refreshTimer = null;
+
+        /* -- API 调用 -------------------------------------------------------- */
+        async function api(path, options = {}) {
+            const url = '/api' + path;
+            const opts = {
+                headers: { 'Content-Type': 'application/json' },
+                ...options,
+            };
+            try {
+                const resp = await fetch(url, opts);
+                const data = await resp.json();
+                if (!data.ok) {
+                    showToast(data.error || '请求失败', true);
+                    return null;
+                }
+                return data.data;
+            } catch (err) {
+                showToast('网络错误: ' + err.message, true);
+                return null;
+            }
+        }
+
+        /* -- 数据获取 -------------------------------------------------------- */
+        async function fetchTasks() {
+            const data = await api('/tasks');
+            if (data !== null) {
+                allTasks = data;
+                renderBoard();
+            }
+        }
+
+        async function fetchStatus() {
+            const data = await api('/status');
+            if (data !== null) {
+                const bar = document.getElementById('statusBar');
+                const parts = [];
+                parts.push('共 ' + data.total + ' 个任务');
+                if (data.counts.running > 0) parts.push(data.counts.running + ' 运行中');
+                if (data.counts.done > 0) parts.push(data.counts.done + ' 已完成');
+                if (data.counts.failed > 0) parts.push(data.counts.failed + ' 失败');
+                bar.textContent = parts.join(' | ');
+            }
+        }
+
+        /* -- 看板渲染 -------------------------------------------------------- */
+        const STATUSES = ['pending', 'planning', 'planned', 'approved', 'running', 'done', 'failed'];
+
+        function renderBoard() {
+            // 按状态分组
+            const groups = {};
+            STATUSES.forEach(s => groups[s] = []);
+
+            allTasks.forEach(task => {
+                if (groups[task.status]) {
+                    groups[task.status].push(task);
+                }
+            });
+
+            // 渲染每列
+            STATUSES.forEach(status => {
+                const col = document.getElementById('col-' + status);
+                const count = document.getElementById('count-' + status);
+                const tasks = groups[status];
+
+                count.textContent = tasks.length;
+
+                if (tasks.length === 0) {
+                    col.innerHTML = '<div class="empty-hint">暂无任务</div>';
+                    return;
+                }
+
+                col.innerHTML = tasks.map(task => renderCard(task, status)).join('');
+            });
+
+            // 更新状态栏
+            fetchStatus();
+        }
+
+        function renderCard(task, status) {
+            const isExpanded = expandedCards.has(task.id);
+            const detailClass = isExpanded ? 'open' : '';
+
+            // 元信息 badges
+            let metaHtml = '';
+            if (task.priority > 0) {
+                const labels = ['', 'P1', 'P2', 'P3'];
+                metaHtml += '<span class="badge badge-priority">' + (labels[task.priority] || 'P' + task.priority) + '</span>';
+            }
+            if (task.worker_id !== null && task.worker_id !== undefined) {
+                metaHtml += '<span class="badge badge-worker">W' + task.worker_id + '</span>';
+            }
+
+            // 详情区域
+            let detailHtml = '';
+            detailHtml += '<p><span class="label">Prompt: </span>' + escapeHtml(task.prompt || '') + '</p>';
+            if (task.error) {
+                detailHtml += '<p><span class="label">错误: </span><span class="error-text">' + escapeHtml(task.error) + '</span></p>';
+            }
+            if (task.created_at) {
+                detailHtml += '<p><span class="label">创建时间: </span>' + formatTime(task.created_at) + '</p>';
+            }
+            if (task.started_at) {
+                detailHtml += '<p><span class="label">开始时间: </span>' + formatTime(task.started_at) + '</p>';
+            }
+            if (task.completed_at) {
+                detailHtml += '<p><span class="label">完成时间: </span>' + formatTime(task.completed_at) + '</p>';
+            }
+
+            // 操作按钮
+            let actionsHtml = '';
+            if (status === 'planned') {
+                actionsHtml = '<div class="card-actions">'
+                    + '<button class="btn btn-success btn-small" onclick="approveTask(event, \'' + task.id + '\')">Approve</button>'
+                    + '<button class="btn btn-danger btn-small" onclick="openRejectModal(event, \'' + task.id + '\')">Reject</button>'
+                    + '</div>';
+            } else if (status === 'failed') {
+                actionsHtml = '<div class="card-actions">'
+                    + '<button class="btn btn-warning btn-small" onclick="retryTask(event, \'' + task.id + '\')">Retry</button>'
+                    + '<button class="btn btn-danger btn-small" onclick="deleteTask(event, \'' + task.id + '\')">Delete</button>'
+                    + '</div>';
+            }
+
+            return '<div class="card" onclick="toggleCard(\'' + task.id + '\')">'
+                + '<div class="card-id">' + escapeHtml(task.id) + '</div>'
+                + '<div class="card-title">' + escapeHtml(task.title) + '</div>'
+                + '<div class="card-meta">' + metaHtml + '</div>'
+                + '<div class="card-details ' + detailClass + '">'
+                + detailHtml
+                + actionsHtml
+                + '</div>'
+                + '</div>';
+        }
+
+        /* -- 卡片交互 -------------------------------------------------------- */
+        function toggleCard(taskId) {
+            if (expandedCards.has(taskId)) {
+                expandedCards.delete(taskId);
+            } else {
+                expandedCards.add(taskId);
+            }
+            renderBoard();
+        }
+
+        /* -- 任务操作 -------------------------------------------------------- */
+        async function approveTask(event, taskId) {
+            event.stopPropagation();
+            const data = await api('/tasks/' + taskId + '/approve', { method: 'POST' });
+            if (data !== null) {
+                showToast('任务 ' + taskId + ' 已批准');
+                fetchTasks();
+            }
+        }
+
+        function openRejectModal(event, taskId) {
+            event.stopPropagation();
+            rejectingTaskId = taskId;
+            document.getElementById('rejectReason').value = '';
+            document.getElementById('rejectModal').classList.add('active');
+        }
+
+        function closeRejectModal() {
+            rejectingTaskId = null;
+            document.getElementById('rejectModal').classList.remove('active');
+        }
+
+        async function submitReject() {
+            if (!rejectingTaskId) return;
+            const reason = document.getElementById('rejectReason').value.trim() || '未提供原因';
+            const data = await api('/tasks/' + rejectingTaskId + '/reject', {
+                method: 'POST',
+                body: JSON.stringify({ reason: reason }),
+            });
+            if (data !== null) {
+                showToast('任务 ' + rejectingTaskId + ' 已拒绝');
+                closeRejectModal();
+                fetchTasks();
+            }
+        }
+
+        async function retryTask(event, taskId) {
+            event.stopPropagation();
+            const data = await api('/tasks/' + taskId, {
+                method: 'PATCH',
+                body: JSON.stringify({ status: 'approved' }),
+            });
+            if (data !== null) {
+                showToast('任务 ' + taskId + ' 已重置为 approved');
+                fetchTasks();
+            }
+        }
+
+        async function deleteTask(event, taskId) {
+            event.stopPropagation();
+            const data = await api('/tasks/' + taskId, { method: 'DELETE' });
+            if (data !== null) {
+                showToast('任务 ' + taskId + ' 已删除');
+                fetchTasks();
+            }
+        }
+
+        /* -- 新建任务 -------------------------------------------------------- */
+        function openNewTaskModal() {
+            document.getElementById('taskTitle').value = '';
+            document.getElementById('taskPrompt').value = '';
+            document.getElementById('taskPriority').value = '0';
+            document.getElementById('newTaskModal').classList.add('active');
+        }
+
+        function closeNewTaskModal() {
+            document.getElementById('newTaskModal').classList.remove('active');
+        }
+
+        async function createTask() {
+            const title = document.getElementById('taskTitle').value.trim();
+            const prompt = document.getElementById('taskPrompt').value.trim();
+            const priority = parseInt(document.getElementById('taskPriority').value, 10);
+
+            if (!title) {
+                showToast('请输入任务标题', true);
+                return;
+            }
+            if (!prompt) {
+                showToast('请输入任务 Prompt', true);
+                return;
+            }
+
+            const data = await api('/tasks', {
+                method: 'POST',
+                body: JSON.stringify({ title: title, prompt: prompt, priority: priority }),
+            });
+
+            if (data !== null) {
+                showToast('任务 ' + data.id + ' 创建成功');
+                closeNewTaskModal();
+                fetchTasks();
+            }
+        }
+
+        /* -- 工具函数 -------------------------------------------------------- */
+        function escapeHtml(text) {
+            const el = document.createElement('div');
+            el.textContent = text;
+            return el.innerHTML;
+        }
+
+        function formatTime(isoStr) {
+            if (!isoStr) return '-';
+            try {
+                const d = new Date(isoStr);
+                return d.toLocaleString('zh-CN', {
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                });
+            } catch {
+                return isoStr;
+            }
+        }
+
+        function showToast(message, isError) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = 'toast show' + (isError ? ' error' : '');
+            setTimeout(() => { toast.className = 'toast'; }, 3000);
+        }
+
+        /* -- 自动刷新（每 5 秒）----------------------------------------------- */
+        function startAutoRefresh() {
+            if (refreshTimer) clearInterval(refreshTimer);
+            refreshTimer = setInterval(fetchTasks, 5000);
+        }
+
+        /* -- 键盘快捷键 ------------------------------------------------------ */
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') {
+                closeNewTaskModal();
+                closeRejectModal();
+            }
+        });
+
+        /* -- 模态框外部点击关闭 ------------------------------------------------ */
+        document.getElementById('newTaskModal').addEventListener('click', function (e) {
+            if (e.target === this) closeNewTaskModal();
+        });
+        document.getElementById('rejectModal').addEventListener('click', function (e) {
+            if (e.target === this) closeRejectModal();
+        });
+
+        /* -- 初始化 ---------------------------------------------------------- */
+        fetchTasks();
+        startAutoRefresh();
+    </script>
+</body>
+</html>
