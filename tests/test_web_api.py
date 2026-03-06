@@ -1,0 +1,344 @@
+"""Web API endpoints tests."""
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from claude_flow.config import Config
+from claude_flow.models import Task, TaskStatus
+from claude_flow.task_manager import TaskManager
+
+
+@pytest.fixture
+def web_app(cf_project):
+    """Create a Flask test client with a real TaskManager."""
+    from claude_flow.web.app import create_app
+
+    cfg = Config.load(cf_project)
+    app = create_app(cf_project, cfg)
+    app.config["TESTING"] = True
+    return app
+
+
+@pytest.fixture
+def client(web_app):
+    """Flask test client."""
+    return web_app.test_client()
+
+
+@pytest.fixture
+def tm(web_app) -> TaskManager:
+    """Get the TaskManager from the app config."""
+    return web_app.config["TASK_MANAGER"]
+
+
+# -- Basic task CRUD ----------------------------------------------------------
+
+
+class TestTaskCRUD:
+    def test_list_tasks_empty(self, client):
+        resp = client.get("/api/tasks")
+        data = resp.get_json()
+        assert data["ok"] is True
+        assert data["data"] == []
+
+    def test_create_task(self, client):
+        resp = client.post(
+            "/api/tasks",
+            json={"title": "Test", "prompt": "Do something", "priority": 1},
+        )
+        data = resp.get_json()
+        assert resp.status_code == 201
+        assert data["ok"] is True
+        assert data["data"]["title"] == "Test"
+        assert data["data"]["status"] == "pending"
+        assert data["data"]["priority"] == 1
+
+    def test_create_task_missing_fields(self, client):
+        resp = client.post("/api/tasks", json={"title": "Test"})
+        assert resp.status_code == 400
+        data = resp.get_json()
+        assert data["ok"] is False
+
+    def test_get_task(self, client, tm):
+        task = tm.add("T1", "P1")
+        resp = client.get(f"/api/tasks/{task.id}")
+        data = resp.get_json()
+        assert data["ok"] is True
+        assert data["data"]["id"] == task.id
+
+    def test_get_task_not_found(self, client):
+        resp = client.get("/api/tasks/nonexistent")
+        data = resp.get_json()
+        assert data["ok"] is False
+
+    def test_delete_task(self, client, tm):
+        task = tm.add("T1", "P1")
+        resp = client.delete(f"/api/tasks/{task.id}")
+        data = resp.get_json()
+        assert data["ok"] is True
+        assert tm.get(task.id) is None
+
+    def test_update_task_status(self, client, tm):
+        task = tm.add("T1", "P1")
+        resp = client.patch(
+            f"/api/tasks/{task.id}",
+            json={"status": "approved"},
+        )
+        data = resp.get_json()
+        assert data["ok"] is True
+        assert data["data"]["status"] == "approved"
+
+    def test_update_task_priority(self, client, tm):
+        task = tm.add("T1", "P1")
+        resp = client.patch(
+            f"/api/tasks/{task.id}",
+            json={"priority": 5},
+        )
+        data = resp.get_json()
+        assert data["ok"] is True
+        assert data["data"]["priority"] == 5
+
+
+# -- Approve / Reject --------------------------------------------------------
+
+
+class TestApproveReject:
+    def test_approve_task(self, client, tm, web_app):
+        task = tm.add("T1", "P1")
+        tm.update_status(task.id, TaskStatus.PLANNED)
+        resp = client.post(f"/api/tasks/{task.id}/approve")
+        data = resp.get_json()
+        assert data["ok"] is True
+        assert data["data"]["status"] == "approved"
+
+    def test_approve_wrong_status(self, client, tm):
+        task = tm.add("T1", "P1")
+        resp = client.post(f"/api/tasks/{task.id}/approve")
+        data = resp.get_json()
+        assert data["ok"] is False
+
+    def test_reject_task(self, client, tm, web_app):
+        task = tm.add("T1", "P1")
+        tm.update_status(task.id, TaskStatus.PLANNED)
+        resp = client.post(
+            f"/api/tasks/{task.id}/reject",
+            json={"reason": "Bad plan"},
+        )
+        data = resp.get_json()
+        assert data["ok"] is True
+        assert data["data"]["status"] == "pending"
+
+    def test_approve_all(self, client, tm, web_app):
+        t1 = tm.add("T1", "P1")
+        t2 = tm.add("T2", "P2")
+        tm.update_status(t1.id, TaskStatus.PLANNED)
+        tm.update_status(t2.id, TaskStatus.PLANNED)
+        resp = client.post("/api/approve-all")
+        data = resp.get_json()
+        assert data["ok"] is True
+        assert data["data"]["approved"] == 2
+
+
+# -- Plan generation ---------------------------------------------------------
+
+
+class TestPlanAPI:
+    def test_plan_task_wrong_status(self, client, tm):
+        task = tm.add("T1", "P1")
+        tm.update_status(task.id, TaskStatus.APPROVED)
+        resp = client.post(f"/api/tasks/{task.id}/plan")
+        data = resp.get_json()
+        assert data["ok"] is False
+
+    def test_plan_task_starts_planning(self, client, tm):
+        """Plan task should set status to planning and return ok."""
+        task = tm.add("T1", "P1")
+
+        # Mock the planner.generate to avoid actually calling Claude
+        with patch.object(
+            client.application.config["PLANNER"], "generate", return_value=None
+        ):
+            resp = client.post(f"/api/tasks/{task.id}/plan")
+            data = resp.get_json()
+            assert data["ok"] is True
+            # Status should transition to planning
+            updated = tm.get(task.id)
+            assert updated.status == TaskStatus.PLANNING
+
+    def test_get_plan_not_found(self, client, tm):
+        task = tm.add("T1", "P1")
+        resp = client.get(f"/api/tasks/{task.id}/plan")
+        data = resp.get_json()
+        assert data["ok"] is False
+
+    def test_get_plan_content(self, client, tm, cf_project):
+        task = tm.add("T1", "P1")
+        plans_dir = cf_project / ".claude-flow" / "plans"
+        plans_dir.mkdir(parents=True, exist_ok=True)
+        plan_file = plans_dir / f"{task.id}.md"
+        plan_file.write_text("# Plan\n1. Step one\n2. Step two")
+        resp = client.get(f"/api/tasks/{task.id}/plan")
+        data = resp.get_json()
+        assert data["ok"] is True
+        assert "Step one" in data["data"]["content"]
+
+    def test_plan_all(self, client, tm):
+        t1 = tm.add("T1", "P1")
+        t2 = tm.add("T2", "P2")
+
+        with patch.object(
+            client.application.config["PLANNER"], "generate", return_value=None
+        ):
+            resp = client.post("/api/plan-all")
+            data = resp.get_json()
+            assert data["ok"] is True
+            assert data["data"]["planned"] == 2
+
+
+# -- Reset -------------------------------------------------------------------
+
+
+class TestReset:
+    def test_reset_failed_task(self, client, tm):
+        task = tm.add("T1", "P1")
+        tm.update_status(task.id, TaskStatus.FAILED, "Error")
+        resp = client.post(f"/api/tasks/{task.id}/reset")
+        data = resp.get_json()
+        assert data["ok"] is True
+        assert data["data"]["status"] == "pending"
+
+    def test_reset_needs_input_task(self, client, tm):
+        task = tm.add("T1", "P1")
+        tm.update_status(task.id, TaskStatus.NEEDS_INPUT)
+        resp = client.post(f"/api/tasks/{task.id}/reset")
+        data = resp.get_json()
+        assert data["ok"] is True
+        assert data["data"]["status"] == "pending"
+
+    def test_reset_wrong_status(self, client, tm):
+        task = tm.add("T1", "P1")
+        resp = client.post(f"/api/tasks/{task.id}/reset")
+        data = resp.get_json()
+        assert data["ok"] is False
+
+
+# -- Log ---------------------------------------------------------------------
+
+
+class TestLog:
+    def test_get_log_not_found(self, client, tm):
+        task = tm.add("T1", "P1")
+        resp = client.get(f"/api/tasks/{task.id}/log")
+        data = resp.get_json()
+        assert data["ok"] is True
+        assert data["data"]["exists"] is False
+
+    def test_get_log_content(self, client, tm, cf_project):
+        task = tm.add("T1", "P1")
+        logs_dir = cf_project / ".claude-flow" / "logs"
+        logs_dir.mkdir(parents=True, exist_ok=True)
+        log_file = logs_dir / f"{task.id}.log"
+        log_file.write_text("some log output here")
+        resp = client.get(f"/api/tasks/{task.id}/log")
+        data = resp.get_json()
+        assert data["ok"] is True
+        assert data["data"]["exists"] is True
+        assert "some log output" in data["data"]["content"]
+
+
+# -- Respond -----------------------------------------------------------------
+
+
+class TestRespond:
+    def test_respond_task(self, client, tm):
+        task = tm.add("T1", "P1")
+        tm.update_status(task.id, TaskStatus.NEEDS_INPUT)
+        resp = client.post(
+            f"/api/tasks/{task.id}/respond",
+            json={"message": "Here is more info"},
+        )
+        data = resp.get_json()
+        assert data["ok"] is True
+        assert data["data"]["status"] == "approved"
+
+    def test_respond_wrong_status(self, client, tm):
+        task = tm.add("T1", "P1")
+        resp = client.post(
+            f"/api/tasks/{task.id}/respond",
+            json={"message": "Info"},
+        )
+        data = resp.get_json()
+        assert data["ok"] is False
+
+    def test_respond_empty_message(self, client, tm):
+        task = tm.add("T1", "P1")
+        tm.update_status(task.id, TaskStatus.NEEDS_INPUT)
+        resp = client.post(
+            f"/api/tasks/{task.id}/respond",
+            json={"message": ""},
+        )
+        data = resp.get_json()
+        assert data["ok"] is False
+
+
+# -- Retry all ---------------------------------------------------------------
+
+
+class TestRetryAll:
+    def test_retry_all(self, client, tm):
+        t1 = tm.add("T1", "P1")
+        t2 = tm.add("T2", "P2")
+        tm.update_status(t1.id, TaskStatus.FAILED)
+        tm.update_status(t2.id, TaskStatus.FAILED)
+        resp = client.post("/api/retry-all")
+        data = resp.get_json()
+        assert data["ok"] is True
+        assert data["data"]["retried"] == 2
+        assert tm.get(t1.id).status == TaskStatus.APPROVED
+        assert tm.get(t2.id).status == TaskStatus.APPROVED
+
+    def test_retry_all_none_failed(self, client):
+        resp = client.post("/api/retry-all")
+        data = resp.get_json()
+        assert data["ok"] is True
+        assert data["data"]["retried"] == 0
+
+
+# -- Status / Workers --------------------------------------------------------
+
+
+class TestStatusWorkers:
+    def test_global_status(self, client, tm):
+        tm.add("T1", "P1")
+        tm.add("T2", "P2")
+        resp = client.get("/api/status")
+        data = resp.get_json()
+        assert data["ok"] is True
+        assert data["data"]["total"] == 2
+        assert data["data"]["counts"]["pending"] == 2
+
+    def test_workers(self, client):
+        resp = client.get("/api/workers")
+        data = resp.get_json()
+        assert data["ok"] is True
+
+
+# -- Run (basic validation only, no actual worker execution) ------------------
+
+
+class TestRunAPI:
+    def test_run_task_wrong_status(self, client, tm):
+        task = tm.add("T1", "P1")
+        resp = client.post(f"/api/tasks/{task.id}/run")
+        data = resp.get_json()
+        assert data["ok"] is False
+
+    def test_run_all_no_approved(self, client):
+        resp = client.post("/api/run", json={"num_workers": 1})
+        data = resp.get_json()
+        assert data["ok"] is True
+        assert data["data"]["started"] == 0

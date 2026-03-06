@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import json
+import threading
+from pathlib import Path
 
 try:
     from flask import Blueprint, current_app, jsonify, request
@@ -253,3 +255,269 @@ def worker_status():
                     "started_at": t.started_at.isoformat() if t.started_at else None,
                 })
         return _ok({"workers": workers})
+
+
+# -- Plan 生成 ----------------------------------------------------------------
+
+@api_bp.route("/tasks/<task_id>/plan", methods=["POST"])
+def plan_task(task_id: str):
+    """触发计划生成（异步）。仅对 pending 状态的任务有效。"""
+    tm = current_app.config["TASK_MANAGER"]
+    planner = current_app.config["PLANNER"]
+    task = tm.get(task_id)
+
+    if not task:
+        return _err(f"任务 {task_id} 不存在", 404)
+
+    if task.status != TaskStatus.PENDING:
+        return _err(f"任务 {task_id} 当前状态为 {task.status.value}，仅 pending 状态可生成计划")
+
+    # 先将状态改为 planning
+    tm.update_status(task_id, TaskStatus.PLANNING)
+
+    # 在后台线程执行计划生成（避免阻塞请求）
+    def _generate():
+        try:
+            plan_file = planner.generate(task)
+            if plan_file:
+                tm.update_status(task_id, TaskStatus.PLANNED)
+                # 持久化 plan_file 路径
+                _update_plan_file(tm, task_id, str(plan_file))
+            else:
+                tm.update_status(task_id, TaskStatus.FAILED, task.error or "Plan generation failed")
+        except Exception as e:
+            tm.update_status(task_id, TaskStatus.FAILED, str(e))
+
+    thread = threading.Thread(target=_generate, daemon=True)
+    thread.start()
+
+    updated = tm.get(task_id)
+    return _ok(updated.to_dict())
+
+
+@api_bp.route("/plan-all", methods=["POST"])
+def plan_all_tasks():
+    """为所有 pending 状态的任务批量触发计划生成。"""
+    tm = current_app.config["TASK_MANAGER"]
+    planner = current_app.config["PLANNER"]
+    pending = tm.list_tasks(status=TaskStatus.PENDING)
+
+    if not pending:
+        return _ok({"planned": 0, "message": "没有 pending 状态的任务"})
+
+    count = 0
+    for task in pending:
+        tm.update_status(task.id, TaskStatus.PLANNING)
+
+        def _generate(t=task):
+            try:
+                plan_file = planner.generate(t)
+                if plan_file:
+                    tm.update_status(t.id, TaskStatus.PLANNED)
+                    _update_plan_file(tm, t.id, str(plan_file))
+                else:
+                    tm.update_status(t.id, TaskStatus.FAILED, t.error or "Plan generation failed")
+            except Exception as e:
+                tm.update_status(t.id, TaskStatus.FAILED, str(e))
+
+        thread = threading.Thread(target=_generate, daemon=True)
+        thread.start()
+        count += 1
+
+    return _ok({"planned": count, "message": f"已为 {count} 个任务启动计划生成"})
+
+
+@api_bp.route("/tasks/<task_id>/plan", methods=["GET"])
+def get_plan(task_id: str):
+    """获取任务的计划内容。"""
+    tm = current_app.config["TASK_MANAGER"]
+    task = tm.get(task_id)
+
+    if not task:
+        return _err(f"任务 {task_id} 不存在", 404)
+
+    project_root = current_app.config["PROJECT_ROOT"]
+    plans_dir = project_root / ".claude-flow" / "plans"
+
+    # 优先使用 task 上记录的 plan_file
+    plan_path = None
+    if task.plan_file:
+        plan_path = Path(task.plan_file)
+    if not plan_path or not plan_path.exists():
+        plan_path = plans_dir / f"{task_id}.md"
+
+    if not plan_path.exists():
+        return _err(f"任务 {task_id} 的计划文件不存在", 404)
+
+    content = plan_path.read_text()
+    return _ok({"task_id": task_id, "content": content})
+
+
+# -- 批量审批 ------------------------------------------------------------------
+
+@api_bp.route("/approve-all", methods=["POST"])
+def approve_all_tasks():
+    """批准所有 planned 状态的任务。"""
+    tm = current_app.config["TASK_MANAGER"]
+    planner = current_app.config["PLANNER"]
+    planned = tm.list_tasks(status=TaskStatus.PLANNED)
+
+    count = 0
+    for task in planned:
+        planner.approve(task)
+        tm.update_status(task.id, TaskStatus.APPROVED)
+        count += 1
+
+    return _ok({"approved": count})
+
+
+# -- 任务执行 ------------------------------------------------------------------
+
+@api_bp.route("/tasks/<task_id>/run", methods=["POST"])
+def run_task(task_id: str):
+    """触发单个任务执行（异步）。将任务设为 approved 后在后台 worker 执行。"""
+    tm = current_app.config["TASK_MANAGER"]
+    task = tm.get(task_id)
+
+    if not task:
+        return _err(f"任务 {task_id} 不存在", 404)
+
+    if task.status not in (TaskStatus.APPROVED, TaskStatus.PLANNED):
+        return _err(f"任务 {task_id} 当前状态为 {task.status.value}，需要 approved 或 planned 状态")
+
+    # 如果是 planned 状态，先批准
+    if task.status == TaskStatus.PLANNED:
+        planner = current_app.config["PLANNER"]
+        planner.approve(task)
+        tm.update_status(task_id, TaskStatus.APPROVED)
+
+    # 在后台线程中执行
+    project_root = current_app.config["PROJECT_ROOT"]
+    cfg = current_app.config["CF_CONFIG"]
+
+    def _execute():
+        from ..worker import Worker
+        from ..worktree import WorktreeManager
+        from ..task_manager import TaskManager as TM
+
+        # 使用独立的 TaskManager 实例避免线程竞争
+        local_tm = TM(project_root)
+        wt = WorktreeManager(project_root, project_root / cfg.worktree_dir)
+        worker = Worker(0, project_root, local_tm, wt, cfg)
+        claimed = local_tm.claim_next(0)
+        if claimed:
+            worker.execute_task(claimed)
+
+    thread = threading.Thread(target=_execute, daemon=True)
+    thread.start()
+
+    updated = tm.get(task_id)
+    return _ok(updated.to_dict())
+
+
+@api_bp.route("/run", methods=["POST"])
+def run_all_tasks():
+    """启动 worker 执行所有 approved 任务（异步）。body: {num_workers, daemon}"""
+    tm = current_app.config["TASK_MANAGER"]
+    project_root = current_app.config["PROJECT_ROOT"]
+    cfg = current_app.config["CF_CONFIG"]
+
+    data = request.get_json(silent=True) or {}
+    num_workers = int(data.get("num_workers", 1))
+    daemon = bool(data.get("daemon", False))
+
+    approved = tm.list_tasks(status=TaskStatus.APPROVED)
+    if not approved and not daemon:
+        return _ok({"started": 0, "message": "没有 approved 状态的任务"})
+
+    def _run_workers():
+        import logging
+        logging.basicConfig(level=logging.INFO, format="%(message)s")
+
+        from ..worker import Worker
+        from ..worktree import WorktreeManager
+        from ..task_manager import TaskManager as TM
+
+        for wid in range(num_workers):
+            local_tm = TM(project_root)
+            wt = WorktreeManager(project_root, project_root / cfg.worktree_dir)
+            w = Worker(wid, project_root, local_tm, wt, cfg)
+            if daemon:
+                thread = threading.Thread(target=w.run_daemon, daemon=True)
+            else:
+                thread = threading.Thread(target=w.run_loop, daemon=True)
+            thread.start()
+
+    thread = threading.Thread(target=_run_workers, daemon=True)
+    thread.start()
+
+    return _ok({
+        "started": num_workers,
+        "daemon": daemon,
+        "pending_tasks": len(approved),
+        "message": f"已启动 {num_workers} 个 worker",
+    })
+
+
+# -- 任务重置 ------------------------------------------------------------------
+
+@api_bp.route("/tasks/<task_id>/reset", methods=["POST"])
+def reset_task(task_id: str):
+    """重置任务状态为 pending。适用于 failed 和 needs_input 状态。"""
+    tm = current_app.config["TASK_MANAGER"]
+    task = tm.get(task_id)
+
+    if not task:
+        return _err(f"任务 {task_id} 不存在", 404)
+
+    if task.status not in (TaskStatus.FAILED, TaskStatus.NEEDS_INPUT):
+        return _err(f"任务 {task_id} 当前状态为 {task.status.value}，仅 failed/needs_input 可重置")
+
+    tm.update_status(task_id, TaskStatus.PENDING)
+    updated = tm.get(task_id)
+    return _ok(updated.to_dict())
+
+
+# -- 任务日志 ------------------------------------------------------------------
+
+@api_bp.route("/tasks/<task_id>/log", methods=["GET"])
+def get_task_log(task_id: str):
+    """获取任务执行日志。"""
+    project_root = current_app.config["PROJECT_ROOT"]
+    log_file = project_root / ".claude-flow" / "logs" / f"{task_id}.log"
+
+    if not log_file.exists():
+        return _ok({"task_id": task_id, "content": "", "exists": False})
+
+    content = log_file.read_text()
+    return _ok({"task_id": task_id, "content": content, "exists": True})
+
+
+# -- 重试所有失败任务 -----------------------------------------------------------
+
+@api_bp.route("/retry-all", methods=["POST"])
+def retry_all_tasks():
+    """将所有 failed 任务重置为 approved 以便重试。"""
+    tm = current_app.config["TASK_MANAGER"]
+    failed = tm.list_tasks(status=TaskStatus.FAILED)
+
+    count = 0
+    for task in failed:
+        tm.update_status(task.id, TaskStatus.APPROVED)
+        count += 1
+
+    return _ok({"retried": count})
+
+
+# -- 辅助函数 ------------------------------------------------------------------
+
+def _update_plan_file(tm, task_id: str, plan_file_path: str):
+    """更新任务的 plan_file 字段（通过 _with_lock 保证安全）。"""
+    def _do():
+        tasks = tm._load()
+        for t in tasks:
+            if t.id == task_id:
+                t.plan_file = plan_file_path
+                tm._save(tasks)
+                return
+    tm._with_lock(_do)

@@ -42,19 +42,14 @@
         .header-actions {
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 8px;
+            flex-wrap: wrap;
         }
 
         .status-bar {
             font-size: 13px;
             color: #8888aa;
-        }
-
-        .status-bar span {
-            margin-left: 12px;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-size: 12px;
+            margin-right: 8px;
         }
 
         .btn {
@@ -67,12 +62,17 @@
             transition: all 0.2s ease;
         }
 
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
         .btn-primary {
             background: #00d4ff;
             color: #0f0f23;
         }
 
-        .btn-primary:hover {
+        .btn-primary:hover:not(:disabled) {
             background: #00b8e6;
             transform: translateY(-1px);
         }
@@ -82,7 +82,7 @@
             color: #0f0f23;
         }
 
-        .btn-success:hover {
+        .btn-success:hover:not(:disabled) {
             background: #00b248;
         }
 
@@ -91,7 +91,7 @@
             color: #fff;
         }
 
-        .btn-danger:hover {
+        .btn-danger:hover:not(:disabled) {
             background: #e0404f;
         }
 
@@ -100,8 +100,28 @@
             color: #0f0f23;
         }
 
-        .btn-warning:hover {
+        .btn-warning:hover:not(:disabled) {
             background: #e09400;
+        }
+
+        .btn-info {
+            background: #6c5ce7;
+            color: #fff;
+        }
+
+        .btn-info:hover:not(:disabled) {
+            background: #5a4bd6;
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 1px solid #2a2a4a;
+            color: #8888aa;
+        }
+
+        .btn-outline:hover:not(:disabled) {
+            border-color: #00d4ff;
+            color: #00d4ff;
         }
 
         .btn-small {
@@ -222,6 +242,17 @@
             color: #74b9ff;
         }
 
+        .badge-retry {
+            background: #4a3a1e;
+            color: #ffa502;
+        }
+
+        .badge-progress {
+            background: #1e4a3e;
+            color: #00cec9;
+            font-size: 10px;
+        }
+
         /* 卡片展开详情 */
         .card-details {
             display: none;
@@ -250,10 +281,23 @@
             color: #ff6b6b;
         }
 
+        .card-details .prompt-text {
+            max-height: 120px;
+            overflow-y: auto;
+            padding: 6px 8px;
+            background: #0f0f23;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            font-family: "SF Mono", "Fira Code", monospace;
+            font-size: 11px;
+            margin-top: 4px;
+        }
+
         .card-actions {
             display: flex;
             gap: 6px;
             margin-top: 8px;
+            flex-wrap: wrap;
         }
 
         /* -- 模态框 ---------------------------------------------------------- */
@@ -281,6 +325,12 @@
             width: 90%;
             max-width: 500px;
             border: 1px solid #2a3a6e;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-lg {
+            max-width: 700px;
         }
 
         .modal h2 {
@@ -341,6 +391,28 @@
             background: #3a3a5a;
         }
 
+        /* -- Plan / Log 查看区域 --------------------------------------------- */
+        .plan-content, .log-content {
+            background: #0f0f23;
+            border: 1px solid #2a2a4a;
+            border-radius: 8px;
+            padding: 16px;
+            font-family: "SF Mono", "Fira Code", monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            max-height: 500px;
+            overflow-y: auto;
+            color: #d0d0e0;
+        }
+
+        .log-content {
+            background: #0a0a16;
+            font-size: 12px;
+            line-height: 1.5;
+            color: #a0a0c0;
+        }
+
         /* -- 空状态提示 ------------------------------------------------------ */
         .empty-hint {
             text-align: center;
@@ -364,6 +436,7 @@
             opacity: 0;
             transition: opacity 0.3s ease;
             pointer-events: none;
+            max-width: 400px;
         }
 
         .toast.show {
@@ -373,6 +446,41 @@
         .toast.error {
             border-color: #ff4757;
             color: #ff6b6b;
+        }
+
+        /* -- Spinner --------------------------------------------------------- */
+        .spinner {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            vertical-align: middle;
+            margin-right: 4px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .planning-indicator {
+            color: #a29bfe;
+            font-size: 11px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            margin-top: 4px;
+        }
+
+        .running-indicator {
+            color: #fdcb6e;
+            font-size: 11px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            margin-top: 4px;
         }
 
         /* -- 响应式设计 ------------------------------------------------------ */
@@ -408,43 +516,63 @@
     <div class="header">
         <h1>CLAUDE FLOW</h1>
         <div class="header-actions">
-            <div class="status-bar" id="statusBar">加载中...</div>
-            <button class="btn btn-primary" onclick="openNewTaskModal()">+ 新建任务</button>
+            <div class="status-bar" id="statusBar">loading...</div>
+            <button class="btn btn-outline btn-small" onclick="planAllTasks()" title="Plan All Pending">Plan All</button>
+            <button class="btn btn-outline btn-small" onclick="approveAllTasks()" title="Approve All Planned">Approve All</button>
+            <button class="btn btn-outline btn-small" onclick="runAllTasks()" title="Run All Approved">Run All</button>
+            <button class="btn btn-outline btn-small" onclick="retryAllTasks()" title="Retry All Failed">Retry All</button>
+            <button class="btn btn-primary" onclick="openNewTaskModal()">+ New Task</button>
         </div>
     </div>
 
     <!-- 看板主体 -->
     <div class="board" id="board">
         <div class="column col-pending" data-status="pending">
-            <div class="column-header">Pending <span class="count" id="count-pending">0</span></div>
+            <div class="column-header">
+                Pending <span class="count" id="count-pending">0</span>
+            </div>
             <div class="column-body" id="col-pending"></div>
         </div>
         <div class="column col-planning" data-status="planning">
-            <div class="column-header">Planning <span class="count" id="count-planning">0</span></div>
+            <div class="column-header">
+                Planning <span class="count" id="count-planning">0</span>
+            </div>
             <div class="column-body" id="col-planning"></div>
         </div>
         <div class="column col-planned" data-status="planned">
-            <div class="column-header">Planned <span class="count" id="count-planned">0</span></div>
+            <div class="column-header">
+                Planned <span class="count" id="count-planned">0</span>
+            </div>
             <div class="column-body" id="col-planned"></div>
         </div>
         <div class="column col-approved" data-status="approved">
-            <div class="column-header">Approved <span class="count" id="count-approved">0</span></div>
+            <div class="column-header">
+                Approved <span class="count" id="count-approved">0</span>
+            </div>
             <div class="column-body" id="col-approved"></div>
         </div>
         <div class="column col-running" data-status="running">
-            <div class="column-header">Running <span class="count" id="count-running">0</span></div>
+            <div class="column-header">
+                Running <span class="count" id="count-running">0</span>
+            </div>
             <div class="column-body" id="col-running"></div>
         </div>
         <div class="column col-needs_input" data-status="needs_input">
-            <div class="column-header">Needs Input <span class="count" id="count-needs_input">0</span></div>
+            <div class="column-header">
+                Needs Input <span class="count" id="count-needs_input">0</span>
+            </div>
             <div class="column-body" id="col-needs_input"></div>
         </div>
         <div class="column col-done" data-status="done">
-            <div class="column-header">Done <span class="count" id="count-done">0</span></div>
+            <div class="column-header">
+                Done <span class="count" id="count-done">0</span>
+            </div>
             <div class="column-body" id="col-done"></div>
         </div>
         <div class="column col-failed" data-status="failed">
-            <div class="column-header">Failed <span class="count" id="count-failed">0</span></div>
+            <div class="column-header">
+                Failed <span class="count" id="count-failed">0</span>
+            </div>
             <div class="column-body" id="col-failed"></div>
         </div>
     </div>
@@ -452,27 +580,27 @@
     <!-- 新建任务模态框 -->
     <div class="modal-overlay" id="newTaskModal">
         <div class="modal">
-            <h2>新建任务</h2>
+            <h2>New Task</h2>
             <div class="form-group">
-                <label for="taskTitle">标题</label>
-                <input type="text" id="taskTitle" placeholder="任务标题">
+                <label for="taskTitle">Title</label>
+                <input type="text" id="taskTitle" placeholder="Task title">
             </div>
             <div class="form-group">
                 <label for="taskPrompt">Prompt</label>
-                <textarea id="taskPrompt" placeholder="给 Claude Code 的 prompt..."></textarea>
+                <textarea id="taskPrompt" placeholder="Prompt for Claude Code..."></textarea>
             </div>
             <div class="form-group">
-                <label for="taskPriority">优先级</label>
+                <label for="taskPriority">Priority</label>
                 <select id="taskPriority">
-                    <option value="0">普通 (0)</option>
-                    <option value="1">低 (1)</option>
-                    <option value="2">中 (2)</option>
-                    <option value="3">高 (3)</option>
+                    <option value="0">Normal (0)</option>
+                    <option value="1">Low (1)</option>
+                    <option value="2">Medium (2)</option>
+                    <option value="3">High (3)</option>
                 </select>
             </div>
             <div class="modal-actions">
-                <button class="btn btn-cancel" onclick="closeNewTaskModal()">取消</button>
-                <button class="btn btn-primary" onclick="createTask()">创建</button>
+                <button class="btn btn-cancel" onclick="closeNewTaskModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="createTask()">Create</button>
             </div>
         </div>
     </div>
@@ -480,14 +608,14 @@
     <!-- 拒绝原因模态框 -->
     <div class="modal-overlay" id="rejectModal">
         <div class="modal">
-            <h2>拒绝任务</h2>
+            <h2>Reject Task</h2>
             <div class="form-group">
-                <label for="rejectReason">拒绝原因</label>
-                <textarea id="rejectReason" placeholder="请输入拒绝原因..."></textarea>
+                <label for="rejectReason">Reason</label>
+                <textarea id="rejectReason" placeholder="Enter rejection reason..."></textarea>
             </div>
             <div class="modal-actions">
-                <button class="btn btn-cancel" onclick="closeRejectModal()">取消</button>
-                <button class="btn btn-danger" onclick="submitReject()">确认拒绝</button>
+                <button class="btn btn-cancel" onclick="closeRejectModal()">Cancel</button>
+                <button class="btn btn-danger" onclick="submitReject()">Reject</button>
             </div>
         </div>
     </div>
@@ -495,15 +623,40 @@
     <!-- 补充输入模态框 -->
     <div class="modal-overlay" id="respondModal">
         <div class="modal">
-            <h2>补充输入</h2>
+            <h2>Respond</h2>
             <div id="respondQuestion" style="margin-bottom:14px; padding:10px; background:#0f0f23; border-radius:6px; font-size:13px; color:#e17055; white-space:pre-wrap; max-height:200px; overflow-y:auto;"></div>
             <div class="form-group">
-                <label for="respondMessage">你的回复</label>
-                <textarea id="respondMessage" placeholder="补充信息给 Claude..."></textarea>
+                <label for="respondMessage">Your response</label>
+                <textarea id="respondMessage" placeholder="Additional info for Claude..."></textarea>
             </div>
             <div class="modal-actions">
-                <button class="btn btn-cancel" onclick="closeRespondModal()">取消</button>
-                <button class="btn btn-warning" onclick="submitRespond()">提交并重试</button>
+                <button class="btn btn-cancel" onclick="closeRespondModal()">Cancel</button>
+                <button class="btn btn-warning" onclick="submitRespond()">Submit & Retry</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Plan 查看模态框 -->
+    <div class="modal-overlay" id="planModal">
+        <div class="modal modal-lg">
+            <h2 id="planModalTitle">Plan</h2>
+            <div class="plan-content" id="planContent">Loading...</div>
+            <div class="modal-actions">
+                <button class="btn btn-cancel" onclick="closePlanModal()">Close</button>
+                <button class="btn btn-success" id="planApproveBtn" onclick="approveFromPlan()" style="display:none;">Approve</button>
+                <button class="btn btn-danger" id="planRejectBtn" onclick="rejectFromPlan()" style="display:none;">Reject</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Log 查看模态框 -->
+    <div class="modal-overlay" id="logModal">
+        <div class="modal modal-lg">
+            <h2 id="logModalTitle">Log</h2>
+            <div class="log-content" id="logContent">Loading...</div>
+            <div class="modal-actions">
+                <button class="btn btn-cancel" onclick="closeLogModal()">Close</button>
+                <button class="btn btn-outline btn-small" onclick="refreshLog()">Refresh</button>
             </div>
         </div>
     </div>
@@ -516,6 +669,9 @@
         let allTasks = [];
         let expandedCards = new Set();
         let rejectingTaskId = null;
+        let respondingTaskId = null;
+        let viewingPlanTaskId = null;
+        let viewingLogTaskId = null;
         let refreshTimer = null;
 
         /* -- API 调用 -------------------------------------------------------- */
@@ -529,12 +685,12 @@
                 const resp = await fetch(url, opts);
                 const data = await resp.json();
                 if (!data.ok) {
-                    showToast(data.error || '请求失败', true);
+                    showToast(data.error || 'Request failed', true);
                     return null;
                 }
                 return data.data;
             } catch (err) {
-                showToast('网络错误: ' + err.message, true);
+                showToast('Network error: ' + err.message, true);
                 return null;
             }
         }
@@ -552,11 +708,13 @@
             const data = await api('/status');
             if (data !== null) {
                 const bar = document.getElementById('statusBar');
-                const parts = [];
-                parts.push('共 ' + data.total + ' 个任务');
-                if (data.counts.running > 0) parts.push(data.counts.running + ' 运行中');
-                if (data.counts.done > 0) parts.push(data.counts.done + ' 已完成');
-                if (data.counts.failed > 0) parts.push(data.counts.failed + ' 失败');
+                const c = data.counts;
+                const parts = [data.total + ' tasks'];
+                if (c.running > 0) parts.push(c.running + ' running');
+                if (c.planning > 0) parts.push(c.planning + ' planning');
+                if (c.pending > 0) parts.push(c.pending + ' pending');
+                if (c.done > 0) parts.push(c.done + ' done');
+                if (c.failed > 0) parts.push(c.failed + ' failed');
                 bar.textContent = parts.join(' | ');
             }
         }
@@ -565,7 +723,6 @@
         const STATUSES = ['pending', 'planning', 'planned', 'approved', 'running', 'needs_input', 'done', 'failed'];
 
         function renderBoard() {
-            // 按状态分组
             const groups = {};
             STATUSES.forEach(s => groups[s] = []);
 
@@ -575,7 +732,6 @@
                 }
             });
 
-            // 渲染每列
             STATUSES.forEach(status => {
                 const col = document.getElementById('col-' + status);
                 const count = document.getElementById('count-' + status);
@@ -584,14 +740,15 @@
                 count.textContent = tasks.length;
 
                 if (tasks.length === 0) {
-                    col.innerHTML = '<div class="empty-hint">暂无任务</div>';
+                    col.innerHTML = '<div class="empty-hint">No tasks</div>';
                     return;
                 }
 
+                // 按优先级降序
+                tasks.sort((a, b) => (b.priority || 0) - (a.priority || 0));
                 col.innerHTML = tasks.map(task => renderCard(task, status)).join('');
             });
 
-            // 更新状态栏
             fetchStatus();
         }
 
@@ -599,60 +756,113 @@
             const isExpanded = expandedCards.has(task.id);
             const detailClass = isExpanded ? 'open' : '';
 
-            // 元信息 badges
+            // Meta badges
             let metaHtml = '';
             if (task.priority > 0) {
-                const labels = ['', 'P1', 'P2', 'P3'];
-                metaHtml += '<span class="badge badge-priority">' + (labels[task.priority] || 'P' + task.priority) + '</span>';
+                metaHtml += '<span class="badge badge-priority">P' + task.priority + '</span>';
             }
             if (task.worker_id !== null && task.worker_id !== undefined) {
                 metaHtml += '<span class="badge badge-worker">W' + task.worker_id + '</span>';
             }
+            if (task.retry_count > 0) {
+                metaHtml += '<span class="badge badge-retry">R' + task.retry_count + '</span>';
+            }
+            if (task.progress) {
+                metaHtml += '<span class="badge badge-progress">' + escapeHtml(task.progress) + '</span>';
+            }
 
-            // 详情区域
+            // Status indicators
+            let statusIndicator = '';
+            if (status === 'planning') {
+                statusIndicator = '<div class="planning-indicator"><span class="spinner"></span>Generating plan...</div>';
+            } else if (status === 'running') {
+                statusIndicator = '<div class="running-indicator"><span class="spinner"></span>Executing...</div>';
+            }
+
+            // Detail area
             let detailHtml = '';
-            detailHtml += '<p><span class="label">Prompt: </span>' + escapeHtml(task.prompt || '') + '</p>';
+            detailHtml += '<p><span class="label">Prompt:</span></p><div class="prompt-text">' + escapeHtml(task.prompt || '') + '</div>';
+            if (task.branch) {
+                detailHtml += '<p style="margin-top:6px;"><span class="label">Branch: </span>' + escapeHtml(task.branch) + '</p>';
+            }
             if (task.error) {
-                detailHtml += '<p><span class="label">错误: </span><span class="error-text">' + escapeHtml(task.error) + '</span></p>';
+                detailHtml += '<p><span class="label">Error: </span><span class="error-text">' + escapeHtml(task.error) + '</span></p>';
             }
             if (task.created_at) {
-                detailHtml += '<p><span class="label">创建时间: </span>' + formatTime(task.created_at) + '</p>';
+                detailHtml += '<p><span class="label">Created: </span>' + formatTime(task.created_at) + '</p>';
             }
             if (task.started_at) {
-                detailHtml += '<p><span class="label">开始时间: </span>' + formatTime(task.started_at) + '</p>';
+                detailHtml += '<p><span class="label">Started: </span>' + formatTime(task.started_at) + '</p>';
             }
             if (task.completed_at) {
-                detailHtml += '<p><span class="label">完成时间: </span>' + formatTime(task.completed_at) + '</p>';
+                detailHtml += '<p><span class="label">Completed: </span>' + formatTime(task.completed_at) + '</p>';
             }
 
-            // 操作按钮
-            let actionsHtml = '';
-            if (status === 'planned') {
-                actionsHtml = '<div class="card-actions">'
-                    + '<button class="btn btn-success btn-small" onclick="approveTask(event, \'' + task.id + '\')">Approve</button>'
-                    + '<button class="btn btn-danger btn-small" onclick="openRejectModal(event, \'' + task.id + '\')">Reject</button>'
-                    + '</div>';
-            } else if (status === 'needs_input') {
-                actionsHtml = '<div class="card-actions">'
-                    + '<button class="btn btn-warning btn-small" onclick="openRespondModal(event, \'' + task.id + '\')">Respond</button>'
-                    + '<button class="btn btn-danger btn-small" onclick="deleteTask(event, \'' + task.id + '\')">Delete</button>'
-                    + '</div>';
-            } else if (status === 'failed') {
-                actionsHtml = '<div class="card-actions">'
-                    + '<button class="btn btn-warning btn-small" onclick="retryTask(event, \'' + task.id + '\')">Retry</button>'
-                    + '<button class="btn btn-danger btn-small" onclick="deleteTask(event, \'' + task.id + '\')">Delete</button>'
-                    + '</div>';
-            }
+            // Action buttons per status
+            let actionsHtml = buildActions(task, status);
 
             return '<div class="card" onclick="toggleCard(\'' + task.id + '\')">'
                 + '<div class="card-id">' + escapeHtml(task.id) + '</div>'
                 + '<div class="card-title">' + escapeHtml(task.title) + '</div>'
                 + '<div class="card-meta">' + metaHtml + '</div>'
+                + statusIndicator
                 + '<div class="card-details ' + detailClass + '">'
                 + detailHtml
                 + actionsHtml
                 + '</div>'
                 + '</div>';
+        }
+
+        function buildActions(task, status) {
+            const id = task.id;
+            let btns = [];
+
+            switch (status) {
+                case 'pending':
+                    btns.push(actionBtn('Plan', 'info', 'planTask', id));
+                    btns.push(actionBtn('Delete', 'danger', 'deleteTask', id));
+                    break;
+
+                case 'planned':
+                    btns.push(actionBtn('View Plan', 'outline', 'viewPlan', id));
+                    btns.push(actionBtn('Approve', 'success', 'approveTask', id));
+                    btns.push(actionBtn('Reject', 'danger', 'openRejectModal', id));
+                    break;
+
+                case 'approved':
+                    btns.push(actionBtn('Run', 'warning', 'runTask', id));
+                    btns.push(actionBtn('Delete', 'danger', 'deleteTask', id));
+                    break;
+
+                case 'running':
+                    btns.push(actionBtn('View Log', 'outline', 'viewLog', id));
+                    break;
+
+                case 'needs_input':
+                    btns.push(actionBtn('Respond', 'warning', 'openRespondModal', id));
+                    btns.push(actionBtn('Reset', 'outline', 'resetTask', id));
+                    btns.push(actionBtn('Delete', 'danger', 'deleteTask', id));
+                    break;
+
+                case 'done':
+                    btns.push(actionBtn('View Log', 'outline', 'viewLog', id));
+                    btns.push(actionBtn('Delete', 'danger', 'deleteTask', id));
+                    break;
+
+                case 'failed':
+                    btns.push(actionBtn('View Log', 'outline', 'viewLog', id));
+                    btns.push(actionBtn('Retry', 'warning', 'retryTask', id));
+                    btns.push(actionBtn('Reset', 'outline', 'resetTask', id));
+                    btns.push(actionBtn('Delete', 'danger', 'deleteTask', id));
+                    break;
+            }
+
+            if (btns.length === 0) return '';
+            return '<div class="card-actions">' + btns.join('') + '</div>';
+        }
+
+        function actionBtn(label, variant, fn, id) {
+            return '<button class="btn btn-' + variant + ' btn-small" onclick="' + fn + '(event, \'' + id + '\')">' + label + '</button>';
         }
 
         /* -- 卡片交互 -------------------------------------------------------- */
@@ -665,12 +875,38 @@
             renderBoard();
         }
 
-        /* -- 任务操作 -------------------------------------------------------- */
+        /* -- 任务操作: Plan --------------------------------------------------- */
+        async function planTask(event, taskId) {
+            event.stopPropagation();
+            const data = await api('/tasks/' + taskId + '/plan', { method: 'POST' });
+            if (data !== null) {
+                showToast('Plan generation started for ' + taskId);
+                fetchTasks();
+            }
+        }
+
+        async function planAllTasks() {
+            const data = await api('/plan-all', { method: 'POST' });
+            if (data !== null) {
+                showToast(data.message);
+                fetchTasks();
+            }
+        }
+
+        /* -- 任务操作: Approve / Reject --------------------------------------- */
         async function approveTask(event, taskId) {
             event.stopPropagation();
             const data = await api('/tasks/' + taskId + '/approve', { method: 'POST' });
             if (data !== null) {
-                showToast('任务 ' + taskId + ' 已批准');
+                showToast('Task ' + taskId + ' approved');
+                fetchTasks();
+            }
+        }
+
+        async function approveAllTasks() {
+            const data = await api('/approve-all', { method: 'POST' });
+            if (data !== null) {
+                showToast(data.approved + ' tasks approved');
                 fetchTasks();
             }
         }
@@ -689,18 +925,40 @@
 
         async function submitReject() {
             if (!rejectingTaskId) return;
-            const reason = document.getElementById('rejectReason').value.trim() || '未提供原因';
+            const reason = document.getElementById('rejectReason').value.trim() || 'No reason provided';
             const data = await api('/tasks/' + rejectingTaskId + '/reject', {
                 method: 'POST',
                 body: JSON.stringify({ reason: reason }),
             });
             if (data !== null) {
-                showToast('任务 ' + rejectingTaskId + ' 已拒绝');
+                showToast('Task ' + rejectingTaskId + ' rejected');
                 closeRejectModal();
                 fetchTasks();
             }
         }
 
+        /* -- 任务操作: Run ---------------------------------------------------- */
+        async function runTask(event, taskId) {
+            event.stopPropagation();
+            const data = await api('/tasks/' + taskId + '/run', { method: 'POST' });
+            if (data !== null) {
+                showToast('Execution started for ' + taskId);
+                fetchTasks();
+            }
+        }
+
+        async function runAllTasks() {
+            const data = await api('/run', {
+                method: 'POST',
+                body: JSON.stringify({ num_workers: 1 }),
+            });
+            if (data !== null) {
+                showToast(data.message);
+                fetchTasks();
+            }
+        }
+
+        /* -- 任务操作: Retry / Reset ------------------------------------------ */
         async function retryTask(event, taskId) {
             event.stopPropagation();
             const data = await api('/tasks/' + taskId, {
@@ -708,23 +966,40 @@
                 body: JSON.stringify({ status: 'approved' }),
             });
             if (data !== null) {
-                showToast('任务 ' + taskId + ' 已重置为 approved');
+                showToast('Task ' + taskId + ' set to approved');
                 fetchTasks();
             }
         }
 
+        async function resetTask(event, taskId) {
+            event.stopPropagation();
+            const data = await api('/tasks/' + taskId + '/reset', { method: 'POST' });
+            if (data !== null) {
+                showToast('Task ' + taskId + ' reset to pending');
+                fetchTasks();
+            }
+        }
+
+        async function retryAllTasks() {
+            const data = await api('/retry-all', { method: 'POST' });
+            if (data !== null) {
+                showToast(data.retried + ' tasks retried');
+                fetchTasks();
+            }
+        }
+
+        /* -- 任务操作: Delete ------------------------------------------------- */
         async function deleteTask(event, taskId) {
             event.stopPropagation();
+            if (!confirm('Delete task ' + taskId + '?')) return;
             const data = await api('/tasks/' + taskId, { method: 'DELETE' });
             if (data !== null) {
-                showToast('任务 ' + taskId + ' 已删除');
+                showToast('Task ' + taskId + ' deleted');
                 fetchTasks();
             }
         }
 
         /* -- 补充输入 -------------------------------------------------------- */
-        let respondingTaskId = null;
-
         function openRespondModal(event, taskId) {
             event.stopPropagation();
             respondingTaskId = taskId;
@@ -749,7 +1024,7 @@
             if (!respondingTaskId) return;
             const message = document.getElementById('respondMessage').value.trim();
             if (!message) {
-                showToast('请输入补充信息', true);
+                showToast('Please enter a message', true);
                 return;
             }
             const data = await api('/tasks/' + respondingTaskId + '/respond', {
@@ -757,10 +1032,91 @@
                 body: JSON.stringify({ message: message }),
             });
             if (data !== null) {
-                showToast('已补充输入，任务 ' + respondingTaskId + ' 重新排队');
+                showToast('Response submitted, task ' + respondingTaskId + ' re-queued');
                 closeRespondModal();
                 fetchTasks();
             }
+        }
+
+        /* -- Plan 查看 ------------------------------------------------------- */
+        async function viewPlan(event, taskId) {
+            event.stopPropagation();
+            viewingPlanTaskId = taskId;
+            const task = allTasks.find(t => t.id === taskId);
+            document.getElementById('planModalTitle').textContent = 'Plan: ' + (task ? task.title : taskId);
+            document.getElementById('planContent').textContent = 'Loading...';
+
+            // 显示/隐藏 approve/reject 按钮
+            const isPlanned = task && task.status === 'planned';
+            document.getElementById('planApproveBtn').style.display = isPlanned ? 'inline-block' : 'none';
+            document.getElementById('planRejectBtn').style.display = isPlanned ? 'inline-block' : 'none';
+
+            document.getElementById('planModal').classList.add('active');
+
+            const data = await api('/tasks/' + taskId + '/plan');
+            if (data !== null) {
+                document.getElementById('planContent').textContent = data.content;
+            } else {
+                document.getElementById('planContent').textContent = 'Plan not found.';
+            }
+        }
+
+        function closePlanModal() {
+            viewingPlanTaskId = null;
+            document.getElementById('planModal').classList.remove('active');
+        }
+
+        async function approveFromPlan() {
+            if (!viewingPlanTaskId) return;
+            const data = await api('/tasks/' + viewingPlanTaskId + '/approve', { method: 'POST' });
+            if (data !== null) {
+                showToast('Task ' + viewingPlanTaskId + ' approved');
+                closePlanModal();
+                fetchTasks();
+            }
+        }
+
+        async function rejectFromPlan() {
+            if (!viewingPlanTaskId) return;
+            closePlanModal();
+            rejectingTaskId = viewingPlanTaskId;
+            document.getElementById('rejectReason').value = '';
+            document.getElementById('rejectModal').classList.add('active');
+        }
+
+        /* -- Log 查看 -------------------------------------------------------- */
+        async function viewLog(event, taskId) {
+            event.stopPropagation();
+            viewingLogTaskId = taskId;
+            const task = allTasks.find(t => t.id === taskId);
+            document.getElementById('logModalTitle').textContent = 'Log: ' + (task ? task.title : taskId);
+            document.getElementById('logContent').textContent = 'Loading...';
+            document.getElementById('logModal').classList.add('active');
+
+            await loadLog(taskId);
+        }
+
+        async function loadLog(taskId) {
+            const data = await api('/tasks/' + taskId + '/log');
+            if (data !== null) {
+                if (data.exists && data.content) {
+                    document.getElementById('logContent').textContent = data.content;
+                } else {
+                    document.getElementById('logContent').textContent = 'No log data available.';
+                }
+            }
+        }
+
+        async function refreshLog() {
+            if (viewingLogTaskId) {
+                await loadLog(viewingLogTaskId);
+                showToast('Log refreshed');
+            }
+        }
+
+        function closeLogModal() {
+            viewingLogTaskId = null;
+            document.getElementById('logModal').classList.remove('active');
         }
 
         /* -- 新建任务 -------------------------------------------------------- */
@@ -769,6 +1125,7 @@
             document.getElementById('taskPrompt').value = '';
             document.getElementById('taskPriority').value = '0';
             document.getElementById('newTaskModal').classList.add('active');
+            document.getElementById('taskTitle').focus();
         }
 
         function closeNewTaskModal() {
@@ -781,11 +1138,11 @@
             const priority = parseInt(document.getElementById('taskPriority').value, 10);
 
             if (!title) {
-                showToast('请输入任务标题', true);
+                showToast('Please enter a title', true);
                 return;
             }
             if (!prompt) {
-                showToast('请输入任务 Prompt', true);
+                showToast('Please enter a prompt', true);
                 return;
             }
 
@@ -795,7 +1152,7 @@
             });
 
             if (data !== null) {
-                showToast('任务 ' + data.id + ' 创建成功');
+                showToast('Task ' + data.id + ' created');
                 closeNewTaskModal();
                 fetchTasks();
             }
@@ -831,10 +1188,10 @@
             setTimeout(() => { toast.className = 'toast'; }, 3000);
         }
 
-        /* -- 自动刷新（每 5 秒）----------------------------------------------- */
+        /* -- 自动刷新（每 3 秒）----------------------------------------------- */
         function startAutoRefresh() {
             if (refreshTimer) clearInterval(refreshTimer);
-            refreshTimer = setInterval(fetchTasks, 5000);
+            refreshTimer = setInterval(fetchTasks, 3000);
         }
 
         /* -- 键盘快捷键 ------------------------------------------------------ */
@@ -843,18 +1200,23 @@
                 closeNewTaskModal();
                 closeRejectModal();
                 closeRespondModal();
+                closePlanModal();
+                closeLogModal();
+            }
+            // Ctrl+N: New task
+            if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+                e.preventDefault();
+                openNewTaskModal();
             }
         });
 
         /* -- 模态框外部点击关闭 ------------------------------------------------ */
-        document.getElementById('newTaskModal').addEventListener('click', function (e) {
-            if (e.target === this) closeNewTaskModal();
-        });
-        document.getElementById('rejectModal').addEventListener('click', function (e) {
-            if (e.target === this) closeRejectModal();
-        });
-        document.getElementById('respondModal').addEventListener('click', function (e) {
-            if (e.target === this) closeRespondModal();
+        ['newTaskModal', 'rejectModal', 'respondModal', 'planModal', 'logModal'].forEach(function(id) {
+            document.getElementById(id).addEventListener('click', function(e) {
+                if (e.target === this) {
+                    this.classList.remove('active');
+                }
+            });
         });
 
         /* -- 初始化 ---------------------------------------------------------- */
