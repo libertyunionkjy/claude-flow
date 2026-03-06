@@ -483,6 +483,76 @@
             margin-top: 4px;
         }
 
+        /* -- 移动端 Tab 导航栏 ------------------------------------------------ */
+        .mobile-tabs {
+            display: none;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            background: #0f0f23;
+            border-bottom: 1px solid #2a2a4a;
+            padding: 0;
+            scrollbar-width: none;
+        }
+
+        .mobile-tabs::-webkit-scrollbar {
+            display: none;
+        }
+
+        .mobile-tabs-inner {
+            display: flex;
+            min-width: max-content;
+        }
+
+        .mobile-tab {
+            flex-shrink: 0;
+            padding: 10px 14px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #6c7a9a;
+            background: transparent;
+            border: none;
+            border-bottom: 2px solid transparent;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
+        }
+
+        .mobile-tab:active {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .mobile-tab.active {
+            color: #e0e0e0;
+        }
+
+        .mobile-tab .tab-count {
+            font-size: 11px;
+            padding: 1px 6px;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            min-width: 18px;
+            text-align: center;
+        }
+
+        .mobile-tab.active .tab-count {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        /* Tab 颜色 */
+        .mobile-tab[data-tab="pending"].active        { color: #a29bfe; border-bottom-color: #6c5ce7; }
+        .mobile-tab[data-tab="planning"].active       { color: #a29bfe; border-bottom-color: #a29bfe; }
+        .mobile-tab[data-tab="planned"].active        { color: #74b9ff; border-bottom-color: #74b9ff; }
+        .mobile-tab[data-tab="approved"].active       { color: #00cec9; border-bottom-color: #00cec9; }
+        .mobile-tab[data-tab="running"].active        { color: #fdcb6e; border-bottom-color: #fdcb6e; }
+        .mobile-tab[data-tab="needs_input"].active    { color: #e17055; border-bottom-color: #e17055; }
+        .mobile-tab[data-tab="done"].active           { color: #00b894; border-bottom-color: #00b894; }
+        .mobile-tab[data-tab="failed"].active         { color: #ff6b6b; border-bottom-color: #ff6b6b; }
+
         /* -- 响应式设计 ------------------------------------------------------ */
         @media (max-width: 768px) {
             .header {
@@ -495,13 +565,33 @@
                 font-size: 16px;
             }
 
+            .mobile-tabs {
+                display: block;
+                position: sticky;
+                top: 0;
+                z-index: 99;
+            }
+
+            .header {
+                position: relative;
+            }
+
             .board {
                 padding: 12px;
                 gap: 12px;
+                flex-direction: column;
+                overflow-x: hidden;
             }
 
             .column {
-                min-width: 240px;
+                min-width: 100%;
+                max-width: 100%;
+                max-height: none;
+                display: none;
+            }
+
+            .column.mobile-active {
+                display: flex;
             }
 
             .modal {
@@ -524,6 +614,36 @@
             <button class="btn btn-primary" onclick="openNewTaskModal()">+ New Task</button>
         </div>
     </div>
+
+    <!-- 移动端 Tab 导航栏 -->
+    <nav class="mobile-tabs" id="mobileTabs">
+        <div class="mobile-tabs-inner">
+            <button class="mobile-tab active" data-tab="pending" onclick="switchMobileTab('pending')">
+                Pending <span class="tab-count" id="tab-count-pending">0</span>
+            </button>
+            <button class="mobile-tab" data-tab="planning" onclick="switchMobileTab('planning')">
+                Planning <span class="tab-count" id="tab-count-planning">0</span>
+            </button>
+            <button class="mobile-tab" data-tab="planned" onclick="switchMobileTab('planned')">
+                Planned <span class="tab-count" id="tab-count-planned">0</span>
+            </button>
+            <button class="mobile-tab" data-tab="approved" onclick="switchMobileTab('approved')">
+                Approved <span class="tab-count" id="tab-count-approved">0</span>
+            </button>
+            <button class="mobile-tab" data-tab="running" onclick="switchMobileTab('running')">
+                Running <span class="tab-count" id="tab-count-running">0</span>
+            </button>
+            <button class="mobile-tab" data-tab="needs_input" onclick="switchMobileTab('needs_input')">
+                Needs Input <span class="tab-count" id="tab-count-needs_input">0</span>
+            </button>
+            <button class="mobile-tab" data-tab="done" onclick="switchMobileTab('done')">
+                Done <span class="tab-count" id="tab-count-done">0</span>
+            </button>
+            <button class="mobile-tab" data-tab="failed" onclick="switchMobileTab('failed')">
+                Failed <span class="tab-count" id="tab-count-failed">0</span>
+            </button>
+        </div>
+    </nav>
 
     <!-- 看板主体 -->
     <div class="board" id="board">
@@ -673,6 +793,7 @@
         let viewingPlanTaskId = null;
         let viewingLogTaskId = null;
         let refreshTimer = null;
+        let activeMobileTab = 'pending';
 
         /* -- API 调用 -------------------------------------------------------- */
         async function api(path, options = {}) {
@@ -750,6 +871,44 @@
             });
 
             fetchStatus();
+            syncMobileTabState();
+        }
+
+        /* -- 移动端 Tab 切换 -------------------------------------------------- */
+        function switchMobileTab(status) {
+            activeMobileTab = status;
+
+            // 更新 Tab 按钮状态
+            document.querySelectorAll('.mobile-tab').forEach(function(tab) {
+                tab.classList.toggle('active', tab.dataset.tab === status);
+            });
+
+            // 更新列显示状态
+            document.querySelectorAll('.column').forEach(function(col) {
+                col.classList.toggle('mobile-active', col.dataset.status === status);
+            });
+
+            // 滚动 Tab 到可视区域
+            var activeTab = document.querySelector('.mobile-tab[data-tab="' + status + '"]');
+            if (activeTab) {
+                activeTab.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+            }
+        }
+
+        function syncMobileTabState() {
+            // 同步 Tab 上的计数
+            STATUSES.forEach(function(status) {
+                var tabCount = document.getElementById('tab-count-' + status);
+                var colCount = document.getElementById('count-' + status);
+                if (tabCount && colCount) {
+                    tabCount.textContent = colCount.textContent;
+                }
+            });
+
+            // 确保当前 active 列可见
+            document.querySelectorAll('.column').forEach(function(col) {
+                col.classList.toggle('mobile-active', col.dataset.status === activeMobileTab);
+            });
         }
 
         function renderCard(task, status) {
@@ -1220,6 +1379,8 @@
         });
 
         /* -- 初始化 ---------------------------------------------------------- */
+        // 移动端默认激活第一列
+        switchMobileTab(activeMobileTab);
         fetchTasks();
         startAutoRefresh();
     </script>
