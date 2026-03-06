@@ -527,11 +527,11 @@ def reset(ctx, task_id):
     root = ctx.obj["root"]
     tm = TaskManager(root)
     t = tm.get(task_id)
-    if t and t.status == TaskStatus.FAILED:
+    if t and t.status in (TaskStatus.FAILED, TaskStatus.NEEDS_INPUT):
         tm.update_status(task_id, TaskStatus.PENDING)
         click.echo(f"Reset {task_id} to pending")
     else:
-        click.echo(f"Task {task_id} not found or not failed")
+        click.echo(f"Task {task_id} not found or not in failed/needs_input status")
 
 
 @main.command()
@@ -545,6 +545,32 @@ def retry(ctx):
         tm.update_status(t.id, TaskStatus.APPROVED)
         click.echo(f"  {t.id} -> approved")
     click.echo(f"Retrying {len(failed)} tasks")
+
+
+# -- Respond command --------------------------------------------------------
+
+@main.command()
+@click.argument("task_id")
+@click.option("-m", "--message", prompt="补充信息", help="提供给任务的补充信息")
+@click.pass_context
+def respond(ctx, task_id, message):
+    """Respond to a task that needs input."""
+    root = ctx.obj["root"]
+    tm = TaskManager(root)
+    t = tm.get(task_id)
+    if not t:
+        click.echo(f"Task {task_id} not found")
+        return
+    if t.status != TaskStatus.NEEDS_INPUT:
+        click.echo(f"Task {task_id} is {t.status.value}, not needs_input")
+        return
+    if t.error:
+        click.echo(f"\nClaude's question:\n{t.error}\n")
+    updated = tm.respond(task_id, message)
+    if updated:
+        click.echo(f"Responded to {task_id}, status -> approved")
+    else:
+        click.echo(f"Failed to respond to {task_id}")
 
 
 # -- Progress command -------------------------------------------------------

@@ -14,6 +14,7 @@ class TaskStatus(Enum):
     APPROVED = "approved"
     RUNNING = "running"
     MERGING = "merging"
+    NEEDS_INPUT = "needs_input"
     DONE = "done"
     FAILED = "failed"
 

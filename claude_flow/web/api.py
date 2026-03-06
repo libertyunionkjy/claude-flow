@@ -181,6 +181,32 @@ def reject_task(task_id: str):
     return _ok(updated.to_dict())
 
 
+# -- 补充输入 ----------------------------------------------------------------
+
+@api_bp.route("/tasks/<task_id>/respond", methods=["POST"])
+def respond_task(task_id: str):
+    """为 needs_input 状态的任务补充信息。body: {message}"""
+    tm = current_app.config["TASK_MANAGER"]
+    task = tm.get(task_id)
+
+    if not task:
+        return _err(f"任务 {task_id} 不存在", 404)
+
+    if task.status != TaskStatus.NEEDS_INPUT:
+        return _err(f"任务 {task_id} 当前状态为 {task.status.value}，不需要补充输入")
+
+    data = request.get_json(silent=True) or {}
+    message = data.get("message", "").strip()
+    if not message:
+        return _err("message 不能为空")
+
+    updated = tm.respond(task_id, message)
+    if not updated:
+        return _err(f"补充输入失败")
+
+    return _ok(updated.to_dict())
+
+
 # -- 全局状态 / Worker 状态 ----------------------------------------------------
 
 @api_bp.route("/status", methods=["GET"])

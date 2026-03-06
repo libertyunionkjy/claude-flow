@@ -135,6 +135,30 @@ class TaskManager:
             return None
         return self._with_lock(_do)
 
+    def respond(self, task_id: str, additional_input: str) -> Optional[Task]:
+        """为 needs_input 状态的任务补充信息并重置为 approved。
+
+        将补充信息追加到原始 prompt 末尾，清除 error，重置为 approved 状态。
+        """
+        def _do():
+            tasks = self._load()
+            for t in tasks:
+                if t.id == task_id:
+                    if t.status != TaskStatus.NEEDS_INPUT:
+                        return None
+                    t.prompt += f"\n\n[补充信息] {additional_input}"
+                    t.status = TaskStatus.APPROVED
+                    t.error = None
+                    t.worker_id = None
+                    t.started_at = None
+                    t.completed_at = None
+                    t.branch = None
+                    t.progress = None
+                    self._save(tasks)
+                    return t
+            return None
+        return self._with_lock(_do)
+
     def add_from_file(self, filepath: Path) -> List[Task]:
         added = []
         for line in filepath.read_text().strip().splitlines():

@@ -156,6 +156,7 @@
         .col-planned .column-header { background: #1e3a5e; border-bottom: 2px solid #74b9ff; }
         .col-approved .column-header { background: #1e4a3e; border-bottom: 2px solid #00cec9; }
         .col-running .column-header { background: #3e3a1e; border-bottom: 2px solid #fdcb6e; }
+        .col-needs_input .column-header { background: #4a3a1e; border-bottom: 2px solid #e17055; }
         .col-done .column-header { background: #1e4a2e; border-bottom: 2px solid #00b894; }
         .col-failed .column-header { background: #4a1e2e; border-bottom: 2px solid #ff6b6b; }
 
@@ -434,6 +435,10 @@
             <div class="column-header">Running <span class="count" id="count-running">0</span></div>
             <div class="column-body" id="col-running"></div>
         </div>
+        <div class="column col-needs_input" data-status="needs_input">
+            <div class="column-header">Needs Input <span class="count" id="count-needs_input">0</span></div>
+            <div class="column-body" id="col-needs_input"></div>
+        </div>
         <div class="column col-done" data-status="done">
             <div class="column-header">Done <span class="count" id="count-done">0</span></div>
             <div class="column-body" id="col-done"></div>
@@ -483,6 +488,22 @@
             <div class="modal-actions">
                 <button class="btn btn-cancel" onclick="closeRejectModal()">取消</button>
                 <button class="btn btn-danger" onclick="submitReject()">确认拒绝</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 补充输入模态框 -->
+    <div class="modal-overlay" id="respondModal">
+        <div class="modal">
+            <h2>补充输入</h2>
+            <div id="respondQuestion" style="margin-bottom:14px; padding:10px; background:#0f0f23; border-radius:6px; font-size:13px; color:#e17055; white-space:pre-wrap; max-height:200px; overflow-y:auto;"></div>
+            <div class="form-group">
+                <label for="respondMessage">你的回复</label>
+                <textarea id="respondMessage" placeholder="补充信息给 Claude..."></textarea>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-cancel" onclick="closeRespondModal()">取消</button>
+                <button class="btn btn-warning" onclick="submitRespond()">提交并重试</button>
             </div>
         </div>
     </div>
@@ -541,7 +562,7 @@
         }
 
         /* -- 看板渲染 -------------------------------------------------------- */
-        const STATUSES = ['pending', 'planning', 'planned', 'approved', 'running', 'done', 'failed'];
+        const STATUSES = ['pending', 'planning', 'planned', 'approved', 'running', 'needs_input', 'done', 'failed'];
 
         function renderBoard() {
             // 按状态分组
@@ -610,6 +631,11 @@
                 actionsHtml = '<div class="card-actions">'
                     + '<button class="btn btn-success btn-small" onclick="approveTask(event, \'' + task.id + '\')">Approve</button>'
                     + '<button class="btn btn-danger btn-small" onclick="openRejectModal(event, \'' + task.id + '\')">Reject</button>'
+                    + '</div>';
+            } else if (status === 'needs_input') {
+                actionsHtml = '<div class="card-actions">'
+                    + '<button class="btn btn-warning btn-small" onclick="openRespondModal(event, \'' + task.id + '\')">Respond</button>'
+                    + '<button class="btn btn-danger btn-small" onclick="deleteTask(event, \'' + task.id + '\')">Delete</button>'
                     + '</div>';
             } else if (status === 'failed') {
                 actionsHtml = '<div class="card-actions">'
@@ -696,6 +722,47 @@
             }
         }
 
+        /* -- 补充输入 -------------------------------------------------------- */
+        let respondingTaskId = null;
+
+        function openRespondModal(event, taskId) {
+            event.stopPropagation();
+            respondingTaskId = taskId;
+            const task = allTasks.find(t => t.id === taskId);
+            const questionEl = document.getElementById('respondQuestion');
+            if (task && task.error) {
+                questionEl.textContent = task.error;
+                questionEl.style.display = 'block';
+            } else {
+                questionEl.style.display = 'none';
+            }
+            document.getElementById('respondMessage').value = '';
+            document.getElementById('respondModal').classList.add('active');
+        }
+
+        function closeRespondModal() {
+            respondingTaskId = null;
+            document.getElementById('respondModal').classList.remove('active');
+        }
+
+        async function submitRespond() {
+            if (!respondingTaskId) return;
+            const message = document.getElementById('respondMessage').value.trim();
+            if (!message) {
+                showToast('请输入补充信息', true);
+                return;
+            }
+            const data = await api('/tasks/' + respondingTaskId + '/respond', {
+                method: 'POST',
+                body: JSON.stringify({ message: message }),
+            });
+            if (data !== null) {
+                showToast('已补充输入，任务 ' + respondingTaskId + ' 重新排队');
+                closeRespondModal();
+                fetchTasks();
+            }
+        }
+
         /* -- 新建任务 -------------------------------------------------------- */
         function openNewTaskModal() {
             document.getElementById('taskTitle').value = '';
@@ -775,6 +842,7 @@
             if (e.key === 'Escape') {
                 closeNewTaskModal();
                 closeRejectModal();
+                closeRespondModal();
             }
         });
 
@@ -784,6 +852,9 @@
         });
         document.getElementById('rejectModal').addEventListener('click', function (e) {
             if (e.target === this) closeRejectModal();
+        });
+        document.getElementById('respondModal').addEventListener('click', function (e) {
+            if (e.target === this) closeRespondModal();
         });
 
         /* -- 初始化 ---------------------------------------------------------- */

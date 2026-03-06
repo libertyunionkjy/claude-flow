@@ -96,10 +96,11 @@ class Worker:
 
         # 检查分支上是否有新 commit（相对于 main）
         if not has_changes and not self._has_new_commits(task.branch, wt_path):
-            error_msg = "No code changes produced"
-            logger.warning(f"{prefix} {error_msg}")
-            self._tm.update_status(task.id, TaskStatus.FAILED, error_msg)
-            self._log_progress(task, False, error_msg, wt_path)
+            claude_reply = self._extract_claude_result(result.stdout)
+            error_msg = claude_reply or "No code changes produced"
+            logger.warning(f"{prefix} No changes detected, marking as needs_input")
+            self._tm.update_status(task.id, TaskStatus.NEEDS_INPUT, error_msg)
+            self._log_progress(task, False, "needs_input: " + error_msg, wt_path)
             self._wt.remove(task.id, task.branch)
             return False
 
