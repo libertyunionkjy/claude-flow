@@ -397,10 +397,8 @@
             border: 1px solid #2a2a4a;
             border-radius: 8px;
             padding: 16px;
-            font-family: "SF Mono", "Fira Code", monospace;
             font-size: 13px;
             line-height: 1.6;
-            white-space: pre-wrap;
             max-height: 500px;
             overflow-y: auto;
             color: #d0d0e0;
@@ -408,9 +406,114 @@
 
         .log-content {
             background: #0a0a16;
+            font-family: "SF Mono", "Fira Code", monospace;
             font-size: 12px;
             line-height: 1.5;
             color: #a0a0c0;
+            white-space: pre-wrap;
+        }
+
+        /* -- Markdown 渲染样式 ----------------------------------------------- */
+        .plan-content h1, .plan-content h2, .plan-content h3,
+        .plan-content h4, .plan-content h5, .plan-content h6 {
+            color: #00d4ff;
+            margin: 16px 0 8px 0;
+            font-weight: 600;
+        }
+        .plan-content h1 { font-size: 20px; border-bottom: 1px solid #2a2a4a; padding-bottom: 6px; }
+        .plan-content h2 { font-size: 17px; border-bottom: 1px solid #2a2a4a; padding-bottom: 4px; }
+        .plan-content h3 { font-size: 15px; }
+        .plan-content h4 { font-size: 14px; color: #66b3ff; }
+
+        .plan-content p {
+            margin: 8px 0;
+        }
+
+        .plan-content ul, .plan-content ol {
+            margin: 8px 0;
+            padding-left: 24px;
+        }
+        .plan-content li {
+            margin: 4px 0;
+        }
+
+        .plan-content code {
+            background: #1a1a3e;
+            color: #ff9f43;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: "SF Mono", "Fira Code", monospace;
+            font-size: 12px;
+        }
+
+        .plan-content pre {
+            background: #0a0a1e;
+            border: 1px solid #2a2a4a;
+            border-radius: 6px;
+            padding: 12px;
+            margin: 10px 0;
+            overflow-x: auto;
+        }
+        .plan-content pre code {
+            background: none;
+            padding: 0;
+            color: #d0d0e0;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        .plan-content blockquote {
+            border-left: 3px solid #00d4ff;
+            margin: 10px 0;
+            padding: 4px 12px;
+            color: #a0a0c0;
+            background: #12122a;
+            border-radius: 0 4px 4px 0;
+        }
+
+        .plan-content hr {
+            border: none;
+            border-top: 1px solid #2a2a4a;
+            margin: 16px 0;
+        }
+
+        .plan-content table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+        }
+        .plan-content th, .plan-content td {
+            border: 1px solid #2a2a4a;
+            padding: 6px 10px;
+            text-align: left;
+        }
+        .plan-content th {
+            background: #1a1a3e;
+            color: #00d4ff;
+            font-weight: 600;
+        }
+        .plan-content tr:nth-child(even) {
+            background: #12122a;
+        }
+
+        .plan-content strong {
+            color: #ffffff;
+        }
+
+        .plan-content em {
+            color: #b0b0d0;
+        }
+
+        .plan-content a {
+            color: #00d4ff;
+            text-decoration: none;
+        }
+        .plan-content a:hover {
+            text-decoration: underline;
+        }
+
+        .plan-content .task-checkbox {
+            margin-right: 6px;
         }
 
         /* -- 空状态提示 ------------------------------------------------------ */
@@ -976,6 +1079,11 @@
             const id = task.id;
             let btns = [];
 
+            // View Plan: show for any task that has a plan_file
+            if (task.plan_file) {
+                btns.push(actionBtn('View Plan', 'outline', 'viewPlan', id));
+            }
+
             switch (status) {
                 case 'pending':
                     btns.push(actionBtn('Plan', 'info', 'planTask', id));
@@ -983,7 +1091,6 @@
                     break;
 
                 case 'planned':
-                    btns.push(actionBtn('View Plan', 'outline', 'viewPlan', id));
                     btns.push(actionBtn('Approve', 'success', 'approveTask', id));
                     btns.push(actionBtn('Reject', 'danger', 'openRejectModal', id));
                     break;
@@ -1197,13 +1304,114 @@
             }
         }
 
+        /* -- 简易 Markdown 解析器 ------------------------------------------- */
+        function renderMarkdown(text) {
+            if (!text) return '';
+            let html = text;
+
+            // Normalize line endings
+            html = html.replace(/\r\n/g, '\n');
+
+            // Escape HTML (but we'll selectively unescape markdown constructs)
+            html = html.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+            // Fenced code blocks (```lang ... ```)
+            html = html.replace(/```(\w*)\n([\s\S]*?)```/g, function(_, lang, code) {
+                return '<pre><code>' + code.replace(/\n$/, '') + '</code></pre>';
+            });
+
+            // Inline code (`code`)
+            html = html.replace(/`([^`\n]+?)`/g, '<code>$1</code>');
+
+            // Tables
+            html = html.replace(/((?:^\|.+\|\s*\n)+)/gm, function(tableBlock) {
+                var rows = tableBlock.trim().split('\n');
+                if (rows.length < 2) return tableBlock;
+
+                var headerCells = rows[0].split('|').filter(function(c) { return c.trim() !== ''; });
+                var isAlignRow = /^\|[\s:]*-+[\s:]*\|/.test(rows[1]);
+                var dataStart = isAlignRow ? 2 : 1;
+
+                var thead = '<thead><tr>' + headerCells.map(function(c) {
+                    return '<th>' + c.trim() + '</th>';
+                }).join('') + '</tr></thead>';
+
+                var tbody = '<tbody>' + rows.slice(dataStart).map(function(row) {
+                    var cells = row.split('|').filter(function(c) { return c.trim() !== ''; });
+                    return '<tr>' + cells.map(function(c) {
+                        return '<td>' + c.trim() + '</td>';
+                    }).join('') + '</tr>';
+                }).join('') + '</tbody>';
+
+                return '<table>' + thead + tbody + '</table>\n';
+            });
+
+            // Headings (# ... ######)
+            html = html.replace(/^######\s+(.+)$/gm, '<h6>$1</h6>');
+            html = html.replace(/^#####\s+(.+)$/gm, '<h5>$1</h5>');
+            html = html.replace(/^####\s+(.+)$/gm, '<h4>$1</h4>');
+            html = html.replace(/^###\s+(.+)$/gm, '<h3>$1</h3>');
+            html = html.replace(/^##\s+(.+)$/gm, '<h2>$1</h2>');
+            html = html.replace(/^#\s+(.+)$/gm, '<h1>$1</h1>');
+
+            // Horizontal rule
+            html = html.replace(/^---+$/gm, '<hr>');
+            html = html.replace(/^\*\*\*+$/gm, '<hr>');
+
+            // Blockquote
+            html = html.replace(/^&gt;\s+(.+)$/gm, '<blockquote>$1</blockquote>');
+
+            // Task list items (- [x] / - [ ])
+            html = html.replace(/^(\s*)[-*]\s+\[x\]\s+(.+)$/gm, '$1<li><input type="checkbox" checked disabled class="task-checkbox">$2</li>');
+            html = html.replace(/^(\s*)[-*]\s+\[\s\]\s+(.+)$/gm, '$1<li><input type="checkbox" disabled class="task-checkbox">$2</li>');
+
+            // Unordered list items
+            html = html.replace(/^(\s*)[-*]\s+(.+)$/gm, '$1<li>$2</li>');
+
+            // Ordered list items
+            html = html.replace(/^(\s*)\d+\.\s+(.+)$/gm, '$1<li>$2</li>');
+
+            // Wrap consecutive <li> in <ul>
+            html = html.replace(/((?:\s*<li>[\s\S]*?<\/li>\s*)+)/g, '<ul>$1</ul>');
+
+            // Bold (**text** or __text__)
+            html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+            html = html.replace(/__(.+?)__/g, '<strong>$1</strong>');
+
+            // Italic (*text* or _text_)
+            html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+            html = html.replace(/_(.+?)_/g, '<em>$1</em>');
+
+            // Strikethrough (~~text~~)
+            html = html.replace(/~~(.+?)~~/g, '<del>$1</del>');
+
+            // Links [text](url)
+            html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+
+            // Paragraphs: replace double newlines with <p> tags
+            html = html.replace(/\n\n+/g, '</p><p>');
+
+            // Single newlines to <br> (except after block elements)
+            html = html.replace(/(?<!\>)\n(?!\<)/g, '<br>');
+
+            // Wrap in <p> if not starting with a block element
+            if (!/^\s*<(h[1-6]|ul|ol|pre|table|blockquote|hr)/.test(html)) {
+                html = '<p>' + html + '</p>';
+            }
+
+            // Clean up empty paragraphs
+            html = html.replace(/<p>\s*<\/p>/g, '');
+
+            return html;
+        }
+
         /* -- Plan 查看 ------------------------------------------------------- */
         async function viewPlan(event, taskId) {
             event.stopPropagation();
             viewingPlanTaskId = taskId;
             const task = allTasks.find(t => t.id === taskId);
             document.getElementById('planModalTitle').textContent = 'Plan: ' + (task ? task.title : taskId);
-            document.getElementById('planContent').textContent = 'Loading...';
+            document.getElementById('planContent').innerHTML = '<p style="color:#8888aa;">Loading...</p>';
 
             // 显示/隐藏 approve/reject 按钮
             const isPlanned = task && task.status === 'planned';
@@ -1214,9 +1422,9 @@
 
             const data = await api('/tasks/' + taskId + '/plan');
             if (data !== null) {
-                document.getElementById('planContent').textContent = data.content;
+                document.getElementById('planContent').innerHTML = renderMarkdown(data.content);
             } else {
-                document.getElementById('planContent').textContent = 'Plan not found.';
+                document.getElementById('planContent').innerHTML = '<p style="color:#ff6b6b;">Plan not found.</p>';
             }
         }
 
