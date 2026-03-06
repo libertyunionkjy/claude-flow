@@ -52,10 +52,7 @@ class TestPlanner:
         planner.approve(task)
         assert task.status == TaskStatus.APPROVED
 
-    def test_reject_appends_reason(self, tmp_path):
+    def test_reject_removed(self, tmp_path):
+        """reject() method should no longer exist on Planner."""
         planner = self._make_planner(tmp_path)
-        task = Task(title="Test", prompt="Original prompt")
-        task.status = TaskStatus.PLANNED
-        planner.reject(task, "需要更多错误处理")
-        assert task.status == TaskStatus.PENDING
-        assert "需要更多错误处理" in task.prompt
+        assert not hasattr(planner, 'reject')

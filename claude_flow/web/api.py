@@ -138,7 +138,7 @@ def delete_task(task_id: str):
         return _err(f"任务 {task_id} 不存在", 404)
 
 
-# -- 审批 / 拒绝 --------------------------------------------------------------
+# -- 审批 / 反馈 --------------------------------------------------------------
 
 @api_bp.route("/tasks/<task_id>/approve", methods=["POST"])
 def approve_task(task_id: str):
@@ -160,34 +160,50 @@ def approve_task(task_id: str):
     return _ok(updated.to_dict())
 
 
-@api_bp.route("/tasks/<task_id>/reject", methods=["POST"])
-def reject_task(task_id: str):
-    """拒绝任务。body: {reason}。仅对 planned 状态的任务有效。"""
+@api_bp.route("/tasks/<task_id>/feedback", methods=["POST"])
+def feedback_task(task_id: str):
+    """Provide feedback on a plan to trigger re-generation.
+
+    body: {message}. Only works on planned tasks.
+    Status flow: planned -> planning -> planned (async).
+    """
     tm = current_app.config["TASK_MANAGER"]
     planner = current_app.config["PLANNER"]
     task = tm.get(task_id)
 
     if not task:
-        return _err(f"任务 {task_id} 不存在", 404)
+        return _err(f"Task {task_id} not found", 404)
 
     if task.status != TaskStatus.PLANNED:
-        return _err(f"任务 {task_id} 当前状态为 {task.status.value}，无法拒绝")
+        return _err(
+            f"Task {task_id} is {task.status.value}, feedback only works on planned tasks"
+        )
 
     data = request.get_json(silent=True) or {}
-    reason = data.get("reason", "未提供原因")
+    message = data.get("message", "").strip()
+    if not message:
+        return _err("message is required")
 
-    planner.reject(task, reason)
+    # Transition: planned -> planning
+    tm.update_status(task_id, TaskStatus.PLANNING)
 
-    # planner.reject() 修改了内存中 task.prompt，需要同步持久化
-    def _do():
-        tasks = tm._load()
-        for t in tasks:
-            if t.id == task_id:
-                t.prompt = task.prompt
-                t.status = TaskStatus.PENDING
-                tm._save(tasks)
-                return
-    tm._with_lock(_do)
+    # Run re-generation in background thread
+    def _regenerate():
+        try:
+            plan_file = planner.generate_interactive(task, feedback=message)
+            if plan_file:
+                tm.update_status(task_id, TaskStatus.PLANNED)
+                _update_plan_file(tm, task_id, str(plan_file))
+            else:
+                tm.update_status(
+                    task_id, TaskStatus.FAILED,
+                    task.error or "Plan regeneration failed",
+                )
+        except Exception as e:
+            tm.update_status(task_id, TaskStatus.FAILED, str(e))
+
+    thread = threading.Thread(target=_regenerate, daemon=True)
+    thread.start()
 
     updated = tm.get(task_id)
     return _ok(updated.to_dict())

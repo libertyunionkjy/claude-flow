@@ -828,17 +828,17 @@
         </div>
     </div>
 
-    <!-- 拒绝原因模态框 -->
-    <div class="modal-overlay" id="rejectModal">
+    <!-- Feedback modal -->
+    <div class="modal-overlay" id="feedbackModal">
         <div class="modal">
-            <h2>Reject Task</h2>
+            <h2>Feedback</h2>
             <div class="form-group">
-                <label for="rejectReason">Reason</label>
-                <textarea id="rejectReason" placeholder="Enter rejection reason..."></textarea>
+                <label for="feedbackMessage">Your feedback</label>
+                <textarea id="feedbackMessage" placeholder="Enter your feedback or reply..."></textarea>
             </div>
             <div class="modal-actions">
-                <button class="btn btn-cancel" onclick="closeRejectModal()">Cancel</button>
-                <button class="btn btn-danger" onclick="submitReject()">Reject</button>
+                <button class="btn btn-cancel" onclick="closeFeedbackModal()">Cancel</button>
+                <button class="btn btn-warning" onclick="submitFeedback()">Submit</button>
             </div>
         </div>
     </div>
@@ -867,7 +867,7 @@
             <div class="modal-actions">
                 <button class="btn btn-cancel" onclick="closePlanModal()">Close</button>
                 <button class="btn btn-success" id="planApproveBtn" onclick="approveFromPlan()" style="display:none;">Approve</button>
-                <button class="btn btn-danger" id="planRejectBtn" onclick="rejectFromPlan()" style="display:none;">Reject</button>
+                <button class="btn btn-warning" id="planFeedbackBtn" onclick="feedbackFromPlan()" style="display:none;">Feedback</button>
             </div>
         </div>
     </div>
@@ -891,7 +891,7 @@
         /* -- 全局状态 -------------------------------------------------------- */
         let allTasks = [];
         let expandedCards = new Set();
-        let rejectingTaskId = null;
+        let feedbackTaskId = null;
         let respondingTaskId = null;
         let viewingPlanTaskId = null;
         let viewingLogTaskId = null;
@@ -1092,7 +1092,7 @@
 
                 case 'planned':
                     btns.push(actionBtn('Approve', 'success', 'approveTask', id));
-                    btns.push(actionBtn('Reject', 'danger', 'openRejectModal', id));
+                    btns.push(actionBtn('Feedback', 'warning', 'openFeedbackModal', id));
                     break;
 
                 case 'approved':
@@ -1159,7 +1159,7 @@
             }
         }
 
-        /* -- 任务操作: Approve / Reject --------------------------------------- */
+        /* -- 任务操作: Approve / Feedback -------------------------------------- */
         async function approveTask(event, taskId) {
             event.stopPropagation();
             const data = await api('/tasks/' + taskId + '/approve', { method: 'POST' });
@@ -1177,28 +1177,33 @@
             }
         }
 
-        function openRejectModal(event, taskId) {
+        /* -- Task action: Feedback ----------------------------------------- */
+        function openFeedbackModal(event, taskId) {
             event.stopPropagation();
-            rejectingTaskId = taskId;
-            document.getElementById('rejectReason').value = '';
-            document.getElementById('rejectModal').classList.add('active');
+            feedbackTaskId = taskId;
+            document.getElementById('feedbackMessage').value = '';
+            document.getElementById('feedbackModal').classList.add('active');
         }
 
-        function closeRejectModal() {
-            rejectingTaskId = null;
-            document.getElementById('rejectModal').classList.remove('active');
+        function closeFeedbackModal() {
+            feedbackTaskId = null;
+            document.getElementById('feedbackModal').classList.remove('active');
         }
 
-        async function submitReject() {
-            if (!rejectingTaskId) return;
-            const reason = document.getElementById('rejectReason').value.trim() || 'No reason provided';
-            const data = await api('/tasks/' + rejectingTaskId + '/reject', {
+        async function submitFeedback() {
+            if (!feedbackTaskId) return;
+            const message = document.getElementById('feedbackMessage').value.trim();
+            if (!message) {
+                showToast('Please enter feedback');
+                return;
+            }
+            const data = await api('/tasks/' + feedbackTaskId + '/feedback', {
                 method: 'POST',
-                body: JSON.stringify({ reason: reason }),
+                body: JSON.stringify({ message: message }),
             });
             if (data !== null) {
-                showToast('Task ' + rejectingTaskId + ' rejected');
-                closeRejectModal();
+                showToast('Feedback submitted, regenerating plan...');
+                closeFeedbackModal();
                 fetchTasks();
             }
         }
@@ -1413,10 +1418,10 @@
             document.getElementById('planModalTitle').textContent = 'Plan: ' + (task ? task.title : taskId);
             document.getElementById('planContent').innerHTML = '<p style="color:#8888aa;">Loading...</p>';
 
-            // 显示/隐藏 approve/reject 按钮
+            // 显示/隐藏 approve/feedback 按钮
             const isPlanned = task && task.status === 'planned';
             document.getElementById('planApproveBtn').style.display = isPlanned ? 'inline-block' : 'none';
-            document.getElementById('planRejectBtn').style.display = isPlanned ? 'inline-block' : 'none';
+            document.getElementById('planFeedbackBtn').style.display = isPlanned ? 'inline-block' : 'none';
 
             document.getElementById('planModal').classList.add('active');
 
@@ -1443,12 +1448,12 @@
             }
         }
 
-        async function rejectFromPlan() {
+        async function feedbackFromPlan() {
             if (!viewingPlanTaskId) return;
-            rejectingTaskId = viewingPlanTaskId;
+            feedbackTaskId = viewingPlanTaskId;
             closePlanModal();
-            document.getElementById('rejectReason').value = '';
-            document.getElementById('rejectModal').classList.add('active');
+            document.getElementById('feedbackMessage').value = '';
+            document.getElementById('feedbackModal').classList.add('active');
         }
 
         /* -- Log 查看 -------------------------------------------------------- */
@@ -1565,7 +1570,7 @@
         document.addEventListener('keydown', function (e) {
             if (e.key === 'Escape') {
                 closeNewTaskModal();
-                closeRejectModal();
+                closeFeedbackModal();
                 closeRespondModal();
                 closePlanModal();
                 closeLogModal();
@@ -1578,7 +1583,7 @@
         });
 
         /* -- 模态框外部点击关闭 ------------------------------------------------ */
-        ['newTaskModal', 'rejectModal', 'respondModal', 'planModal', 'logModal'].forEach(function(id) {
+        ['newTaskModal', 'feedbackModal', 'respondModal', 'planModal', 'logModal'].forEach(function(id) {
             document.getElementById(id).addEventListener('click', function(e) {
                 if (e.target === this) {
                     this.classList.remove('active');

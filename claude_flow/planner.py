@@ -105,10 +105,6 @@ class Planner:
     def approve(self, task: Task) -> None:
         task.status = TaskStatus.APPROVED
 
-    def reject(self, task: Task, reason: str) -> None:
-        task.prompt += f"\n\n注意：上次的方案被拒绝，原因：{reason}，请重新规划。"
-        task.status = TaskStatus.PENDING
-
     # ------------------------------------------------------------------
     # 新增：多轮对话支持
     # ------------------------------------------------------------------

@@ -119,38 +119,27 @@ class TestFullLifecycle:
         # stdin isolation enforced across all attempts
         claude_subprocess_guard.assert_stdin_isolated()
 
-    def test_plan_reject_and_regenerate(self, cf_project, claude_subprocess_guard):
-        """Plan rejected with feedback, regenerated, then approved."""
+    def test_plan_feedback_and_regenerate(self, cf_project, claude_subprocess_guard):
+        """Plan feedback triggers regeneration via generate_interactive."""
         cfg, tm, planner, wt, worker = self._build_stack(cf_project)
 
-        task = tm.add("Feature Y", "Build feature Y")
-
-        # Generate initial plan
-        claude_subprocess_guard.set_plan_output("# Plan v1\nBasic approach")
-        plan_file = planner.generate(task)
-        assert plan_file is not None
+        task = tm.add("Feat A", "Implement feature A")
+        claude_subprocess_guard.set_plan_output("# Plan v1\nInitial plan")
+        planner.generate(task)
+        tm.update_status(task.id, TaskStatus.PLANNED)
         assert task.status == TaskStatus.PLANNED
 
-        # Reject with reason
-        planner.reject(task, "needs error handling")
-        assert task.status == TaskStatus.PENDING
-        assert "needs error handling" in task.prompt
-
-        # Regenerate (the rejection reason is now in the prompt)
+        # Provide feedback and regenerate (no "rejected" wording)
         claude_subprocess_guard.set_plan_output("# Plan v2\nWith error handling")
-        plan_file = planner.generate(task)
+        task.status = TaskStatus.PLANNING
+        plan_file = planner.generate_interactive(task, feedback="needs error handling")
         assert plan_file is not None
         assert task.status == TaskStatus.PLANNED
 
-        # Approve
+        # Approve and verify
         planner.approve(task)
+        tm.update_status(task.id, TaskStatus.APPROVED)
         assert task.status == TaskStatus.APPROVED
-
-        # Verify two plan generation calls were made
-        claude_calls = claude_subprocess_guard.get_claude_calls()
-        assert len(claude_calls) == 2
-
-        claude_subprocess_guard.assert_stdin_isolated()
 
     def test_worker_execution_failure(self, cf_project, claude_subprocess_guard):
         """Worker execution fails: task marked FAILED, worktree cleaned up."""

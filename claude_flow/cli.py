@@ -374,19 +374,13 @@ def plan_review(ctx):
 
             _reset_terminal()
             action = click.prompt(
-                "[a]pprove  [r]eject  [s]kip  [e]dit  [f]eedback  [q]uit",
+                "[a]pprove  [f]eedback  [s]kip  [e]dit  [q]uit",
                 type=str, default="s"
             )
             if action == "a":
                 planner.approve(t)
                 tm.update_status(t.id, TaskStatus.APPROVED)
                 click.echo(f"  {t.id} approved")
-            elif action == "r":
-                _reset_terminal()
-                reason = click.prompt("Rejection reason", default="")
-                planner.reject(t, reason)
-                tm.update_status(t.id, TaskStatus.PENDING)
-                click.echo(f"  {t.id} rejected, back to pending")
             elif action == "f":
                 # 多轮对话：提供反馈后重新生成
                 _reset_terminal()

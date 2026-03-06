@@ -103,10 +103,10 @@ class TestTaskCRUD:
         assert data["data"]["priority"] == 5
 
 
-# -- Approve / Reject --------------------------------------------------------
+# -- Approve / Feedback ------------------------------------------------------
 
 
-class TestApproveReject:
+class TestApproveFeedback:
     def test_approve_task(self, client, tm, web_app):
         task = tm.add("T1", "P1")
         tm.update_status(task.id, TaskStatus.PLANNED)
@@ -121,31 +121,52 @@ class TestApproveReject:
         data = resp.get_json()
         assert data["ok"] is False
 
-    def test_reject_task(self, client, tm, web_app):
+    def test_feedback_task(self, client, tm, web_app):
+        """Feedback triggers re-planning with user message."""
+        task = tm.add("T1", "P1")
+        tm.update_status(task.id, TaskStatus.PLANNED)
+
+        # Mock generate_interactive to avoid calling Claude
+        planner = web_app.config["PLANNER"]
+        plans_dir = web_app.config["PROJECT_ROOT"] / ".claude-flow" / "plans"
+        plans_dir.mkdir(parents=True, exist_ok=True)
+
+        def fake_generate_interactive(t, feedback=None):
+            plan_file = plans_dir / f"{t.id}.md"
+            plan_file.write_text(f"# Plan with feedback: {feedback}")
+            t.status = TaskStatus.PLANNED
+            t.plan_file = str(plan_file)
+            return plan_file
+
+        with patch.object(planner, 'generate_interactive', side_effect=fake_generate_interactive):
+            resp = client.post(
+                f"/api/tasks/{task.id}/feedback",
+                json={"message": "Use option B"},
+            )
+            data = resp.get_json()
+            assert data["ok"] is True
+            assert data["data"]["status"] == "planning"
+
+    def test_feedback_task_wrong_status(self, client, tm, web_app):
+        """Feedback only works on planned tasks."""
+        task = tm.add("T1", "P1")
+        resp = client.post(
+            f"/api/tasks/{task.id}/feedback",
+            json={"message": "some feedback"},
+        )
+        data = resp.get_json()
+        assert data["ok"] is False
+
+    def test_feedback_task_empty_message(self, client, tm, web_app):
+        """Feedback requires non-empty message."""
         task = tm.add("T1", "P1")
         tm.update_status(task.id, TaskStatus.PLANNED)
         resp = client.post(
-            f"/api/tasks/{task.id}/reject",
-            json={"reason": "Bad plan"},
+            f"/api/tasks/{task.id}/feedback",
+            json={"message": ""},
         )
         data = resp.get_json()
-        assert data["ok"] is True
-        assert data["data"]["status"] == "pending"
-
-    def test_reject_task_persists_prompt(self, client, tm, web_app):
-        """Reject should persist the updated prompt (with rejection reason) to disk."""
-        task = tm.add("T1", "Original prompt")
-        tm.update_status(task.id, TaskStatus.PLANNED)
-        resp = client.post(
-            f"/api/tasks/{task.id}/reject",
-            json={"reason": "Needs more detail"},
-        )
-        data = resp.get_json()
-        assert data["ok"] is True
-        # Verify prompt was persisted with rejection reason
-        updated = tm.get(task.id)
-        assert "Needs more detail" in updated.prompt
-        assert "Original prompt" in updated.prompt
+        assert data["ok"] is False
 
     def test_approve_all(self, client, tm, web_app):
         t1 = tm.add("T1", "P1")
