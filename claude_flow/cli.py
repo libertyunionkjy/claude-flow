@@ -11,7 +11,7 @@ import click
 
 from .chat import ChatManager
 from .config import Config
-from .models import TaskStatus
+from .models import TaskStatus, TaskType
 from .planner import Planner
 from .task_manager import TaskManager
 from .worker import Worker
@@ -131,6 +131,48 @@ def task_add(ctx, title, prompt, filepath, priority):
     click.echo(f"Added: {t.id} - {t.title} (priority: {priority})")
 
 
+@task.command("mini")
+@click.argument("prompt")
+@click.option("-t", "--title", default=None, help="Task title (defaults to truncated prompt)")
+@click.option("-P", "--priority", default=0, type=int, help="Task priority (higher = more important)")
+@click.option("--run", "auto_run", is_flag=True, help="Immediately start a worker to execute")
+@click.pass_context
+def task_mini(ctx, prompt, title, priority, auto_run):
+    """Add a mini task (skips planning/approval, executes directly).
+
+    Mini tasks are lightweight tasks that bypass the full planning cycle.
+    They go directly to APPROVED status and can be executed immediately.
+    Ideal for small requests, running scripts, or quick code changes.
+
+    Examples:
+        cf task mini "run pytest and fix any failures"
+        cf task mini "update the version number to 2.0.0" --run
+        cf task mini -t "Fix typo" "fix the typo in README.md line 42"
+    """
+    root = ctx.obj["root"]
+    tm = TaskManager(root)
+    if title is None:
+        title = prompt[:60] + ("..." if len(prompt) > 60 else "")
+    t = tm.add_mini(title, prompt, priority=priority)
+    click.echo(f"Mini task added: {t.id} - {t.title} [approved]")
+
+    if auto_run:
+        cfg = Config.load(root)
+        wt = WorktreeManager(root, root / cfg.worktree_dir)
+        logging.basicConfig(level=logging.INFO, format="%(message)s")
+        worker = Worker(0, root, tm, wt, cfg)
+        claimed = tm.claim_next(0)
+        if claimed:
+            click.echo(f"Executing mini task {claimed.id}...")
+            success = worker.execute_task(claimed)
+            if success:
+                click.echo(f"Mini task {claimed.id} completed successfully")
+            else:
+                click.echo(f"Mini task {claimed.id} failed")
+        else:
+            click.echo("Failed to claim the task (it may have been picked up by another worker)")
+
+
 @task.command("list")
 @click.pass_context
 def task_list(ctx):
@@ -148,7 +190,8 @@ def task_list(ctx):
                        "running": "▶", "merging": "⇄", "done": "●", "failed": "✗"}
         icon = status_icon.get(t.status.value, "?")
         pri = f"P{t.priority}" if t.priority > 0 else ""
-        click.echo(f"  {icon} {t.id}  {t.status.value:<10}  {pri:>3}  {t.title}")
+        tag = "[mini] " if t.is_mini else ""
+        click.echo(f"  {icon} {t.id}  {t.status.value:<10}  {pri:>3}  {tag}{t.title}")
 
 
 @task.command("show")
@@ -313,6 +356,9 @@ def plan(ctx, task_id, foreground, interactive):
         if not t:
             click.echo(f"Task {task_id} not found")
             return
+        if t.is_mini:
+            click.echo(f"Task {task_id} is a mini task (no planning needed)")
+            return
         chat_mgr = ChatManager(root, cfg)
         chat_mgr.create_session(task_id, mode="interactive")
         tm.update_status(task_id, TaskStatus.PLANNING)
@@ -330,12 +376,16 @@ def plan(ctx, task_id, foreground, interactive):
         return
 
     if task_id:
-        tasks = [tm.get(task_id)]
-        if tasks[0] is None:
+        t = tm.get(task_id)
+        if t is None:
             click.echo(f"Task {task_id} not found")
             return
+        if t.is_mini:
+            click.echo(f"Task {task_id} is a mini task (no planning needed)")
+            return
+        tasks = [t]
     else:
-        tasks = tm.list_tasks(status=TaskStatus.PENDING)
+        tasks = [t for t in tm.list_tasks(status=TaskStatus.PENDING) if not t.is_mini]
 
     if not tasks:
         click.echo("No pending tasks to plan")
@@ -817,11 +867,16 @@ def reset(ctx, task_id):
         click.echo(f"Task {task_id} not found")
         return
     if t.status in (TaskStatus.FAILED, TaskStatus.NEEDS_INPUT):
-        tm.update_status(task_id, TaskStatus.PENDING)
-        click.echo(f"Reset {task_id} to pending")
+        # Mini tasks reset to APPROVED (skip planning), normal tasks to PENDING
+        target = TaskStatus.APPROVED if t.is_mini else TaskStatus.PENDING
+        tm.update_status(task_id, target)
+        click.echo(f"Reset {task_id} to {target.value}")
     elif t.status == TaskStatus.RUNNING:
         # Reset zombie running task (worker crashed without updating status)
-        target = TaskStatus.PLANNED if t.plan_file else TaskStatus.PENDING
+        if t.is_mini:
+            target = TaskStatus.APPROVED
+        else:
+            target = TaskStatus.PLANNED if t.plan_file else TaskStatus.PENDING
         tm.update_status(task_id, target)
         # Clean up orphaned worktree and branch
         cfg = Config.load(root)

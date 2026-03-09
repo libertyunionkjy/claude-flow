@@ -13,7 +13,7 @@ except ImportError:
     )
 
 from ..config import Config
-from ..models import TaskStatus
+from ..models import TaskStatus, TaskType
 from ..worktree import WorktreeManager
 
 api_bp = Blueprint("api", __name__, url_prefix="/api")
@@ -94,7 +94,11 @@ def create_task():
         except (ValueError, TypeError):
             return _err("priority 必须是整数")
 
-    task = tm.add(title, prompt, priority=priority)
+    task_type = data.get("task_type", "normal")
+    if task_type == "mini":
+        task = tm.add_mini(title, prompt, priority=priority)
+    else:
+        task = tm.add(title, prompt, priority=priority)
     return _ok(task.to_dict()), 201
 
 
@@ -577,6 +581,9 @@ def plan_task(task_id: str):
     if not task:
         return _err(f"Task {task_id} not found", 404)
 
+    if task.is_mini:
+        return _err(f"Task {task_id} is a mini task (no planning needed)")
+
     if task.status != TaskStatus.PENDING:
         return _err(
             f"Task {task_id} is {task.status.value}, only pending tasks can start planning"
@@ -627,7 +634,7 @@ def plan_all_tasks():
     """为所有 pending 状态的任务批量触发计划生成。"""
     tm = current_app.config["TASK_MANAGER"]
     planner = current_app.config["PLANNER"]
-    pending = tm.list_tasks(status=TaskStatus.PENDING)
+    pending = [t for t in tm.list_tasks(status=TaskStatus.PENDING) if not t.is_mini]
 
     if not pending:
         return _ok({"planned": 0, "message": "没有 pending 状态的任务"})
@@ -820,7 +827,9 @@ def reset_task(task_id: str):
     if task.status not in (TaskStatus.FAILED, TaskStatus.NEEDS_INPUT):
         return _err(f"任务 {task_id} 当前状态为 {task.status.value}，仅 failed/needs_input/running 可重置")
 
-    tm.update_status(task_id, TaskStatus.PENDING)
+    # Mini tasks reset to APPROVED (skip planning), normal tasks to PENDING
+    reset_target = TaskStatus.APPROVED if task.is_mini else TaskStatus.PENDING
+    tm.update_status(task_id, reset_target)
     updated = tm.get(task_id)
     return _ok(updated.to_dict())
 

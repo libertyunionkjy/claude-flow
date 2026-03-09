@@ -8,7 +8,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 
-from .models import Task, TaskStatus
+from .models import Task, TaskStatus, TaskType
 
 TASKS_FILE = "tasks.json"
 TASKS_BACKUP = "tasks.json.bak"
@@ -101,6 +101,22 @@ class TaskManager:
         def _do():
             tasks = self._load()
             task = Task(title=title, prompt=prompt, priority=priority)
+            tasks.append(task)
+            self._save(tasks)
+            return task
+        return self._with_lock(_do)
+
+    def add_mini(self, title: str, prompt: str, priority: int = 0) -> Task:
+        """Add a mini task that skips planning/approval and is immediately executable."""
+        def _do():
+            tasks = self._load()
+            task = Task(
+                title=title,
+                prompt=prompt,
+                priority=priority,
+                task_type=TaskType.MINI,
+                status=TaskStatus.APPROVED,
+            )
             tasks.append(task)
             self._save(tasks)
             return task
