@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import fcntl
 import logging
 import subprocess
 from pathlib import Path
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, Callable, List, Optional, TypeVar
 
 from .utils import can_skip_permissions
+
+T = TypeVar("T")
 
 if TYPE_CHECKING:
     from claude_flow.config import Config
@@ -16,10 +19,14 @@ logger = logging.getLogger(__name__)
 NETWORK_TIMEOUT = 30
 
 
+MERGE_LOCK_FILE = "merge.lock"
+
+
 class WorktreeManager:
     def __init__(self, repo_root: Path, worktree_dir: Path):
         self._repo = repo_root
         self._wt_dir = worktree_dir
+        self._merge_lock_file = self._wt_dir / MERGE_LOCK_FILE
 
     def _run(self, args: List[str], cwd: Path | None = None, check: bool = True,
              timeout: Optional[int] = None) -> subprocess.CompletedProcess:
@@ -34,6 +41,20 @@ class WorktreeManager:
             logger.warning(f"Command timed out after {timeout}s: {cmd_str}")
             # Return a failed CompletedProcess so callers with check=False still work
             return subprocess.CompletedProcess(args, returncode=124, stdout="", stderr=f"Timeout after {timeout}s")
+
+    def _with_merge_lock(self, fn: Callable[[], T]) -> T:
+        """在排他文件锁保护下执行 fn，防止多 Worker 同时 merge/rebase。
+
+        使用 fcntl.flock 获取排他锁，与 TaskManager._with_lock 保持一致的模式。
+        锁文件位于 worktree_dir/merge.lock。
+        """
+        self._merge_lock_file.parent.mkdir(parents=True, exist_ok=True)
+        with open(self._merge_lock_file, "w") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            try:
+                return fn()
+            finally:
+                fcntl.flock(lock, fcntl.LOCK_UN)
 
     # ------------------------------------------------------------------
     # Symlink 共享文件
@@ -107,14 +128,16 @@ class WorktreeManager:
     # ------------------------------------------------------------------
 
     def merge(self, branch: str, main_branch: str, strategy: str = "--no-ff") -> bool:
-        try:
-            self._run(["git", "checkout", main_branch])
-            self._run(["git", "merge", strategy, branch, "-m", f"merge {branch}"])
-            return True
-        except subprocess.CalledProcessError:
-            self._run(["git", "merge", "--abort"], check=False)
-            self._run(["git", "checkout", main_branch], check=False)
-            return False
+        def _do() -> bool:
+            try:
+                self._run(["git", "checkout", main_branch])
+                self._run(["git", "merge", strategy, branch, "-m", f"merge {branch}"])
+                return True
+            except subprocess.CalledProcessError:
+                self._run(["git", "merge", "--abort"], check=False)
+                self._run(["git", "checkout", main_branch], check=False)
+                return False
+        return self._with_merge_lock(_do)
 
     # ------------------------------------------------------------------
     # Rebase 合并策略
@@ -137,64 +160,67 @@ class WorktreeManager:
         5. 最多重试 max_retries 次
         6. 全部失败则 git rebase --abort，返回 False
         """
-        has_remote = self._has_remote()
+        def _do() -> bool:
+            has_remote = self._has_remote()
 
-        # 确定 rebase 的目标
-        rebase_target = f"origin/{main_branch}" if has_remote else main_branch
+            # 确定 rebase 的目标
+            rebase_target = f"origin/{main_branch}" if has_remote else main_branch
 
-        # 找到该 branch 对应的 worktree 路径
-        wt_path = self._find_worktree_path(branch)
+            # 找到该 branch 对应的 worktree 路径
+            wt_path = self._find_worktree_path(branch)
 
-        # 步骤 1: fetch（如果有 remote，设置超时防止网络挂起）
-        if has_remote:
-            self._run(["git", "fetch", "origin"], check=False, timeout=NETWORK_TIMEOUT)
+            # 步骤 1: fetch（如果有 remote，设置超时防止网络挂起）
+            if has_remote:
+                self._run(["git", "fetch", "origin"], check=False, timeout=NETWORK_TIMEOUT)
 
-        # 步骤 2: 在 worktree 中执行 rebase
-        rebase_result = self._run(
-            ["git", "rebase", rebase_target],
-            cwd=wt_path, check=False,
-        )
-
-        if rebase_result.returncode == 0:
-            # rebase 成功，执行 ff-only 合并
-            return self._ff_merge(branch, main_branch)
-
-        # 步骤 4: 冲突处理 — 最多重试 max_retries 次
-        skip_ok = config is not None and can_skip_permissions(
-            getattr(config, "skip_permissions", False)
-        )
-
-        for _ in range(max_retries):
-            if not skip_ok:
-                # 没有 skip_permissions 权限（或以 root 运行），无法自动解决冲突
-                break
-
-            # 调用 claude 解决冲突
-            claude_cmd = ["claude", "-p", "resolve rebase conflict", "--dangerously-skip-permissions"]
-            claude_result = self._run(
-                claude_cmd,
+            # 步骤 2: 在 worktree 中执行 rebase
+            rebase_result = self._run(
+                ["git", "rebase", rebase_target],
                 cwd=wt_path, check=False,
             )
 
-            if claude_result.returncode != 0:
-                break
-
-            # 将所有文件标记为已解决
-            self._run(["git", "add", "-A"], cwd=wt_path, check=False)
-
-            # 尝试继续 rebase
-            continue_result = self._run(
-                ["git", "rebase", "--continue"],
-                cwd=wt_path, check=False,
-            )
-
-            if continue_result.returncode == 0:
+            if rebase_result.returncode == 0:
                 # rebase 成功，执行 ff-only 合并
                 return self._ff_merge(branch, main_branch)
 
-        # 全部失败，abort rebase
-        self._run(["git", "rebase", "--abort"], cwd=wt_path, check=False)
-        return False
+            # 步骤 4: 冲突处理 — 最多重试 max_retries 次
+            skip_ok = config is not None and can_skip_permissions(
+                getattr(config, "skip_permissions", False)
+            )
+
+            for _ in range(max_retries):
+                if not skip_ok:
+                    # 没有 skip_permissions 权限（或以 root 运行），无法自动解决冲突
+                    break
+
+                # 调用 claude 解决冲突
+                claude_cmd = ["claude", "-p", "resolve rebase conflict", "--dangerously-skip-permissions"]
+                claude_result = self._run(
+                    claude_cmd,
+                    cwd=wt_path, check=False,
+                )
+
+                if claude_result.returncode != 0:
+                    break
+
+                # 将所有文件标记为已解决
+                self._run(["git", "add", "-A"], cwd=wt_path, check=False)
+
+                # 尝试继续 rebase
+                continue_result = self._run(
+                    ["git", "rebase", "--continue"],
+                    cwd=wt_path, check=False,
+                )
+
+                if continue_result.returncode == 0:
+                    # rebase 成功，执行 ff-only 合并
+                    return self._ff_merge(branch, main_branch)
+
+            # 全部失败，abort rebase
+            self._run(["git", "rebase", "--abort"], cwd=wt_path, check=False)
+            return False
+
+        return self._with_merge_lock(_do)
 
     def _find_worktree_path(self, branch: str) -> Path:
         """根据分支名找到对应的 worktree 路径。
