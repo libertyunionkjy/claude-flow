@@ -33,6 +33,19 @@ def cf_project(git_repo: Path) -> Path:
     return git_repo
 
 
+@pytest.fixture
+def non_git_dir(tmp_path: Path) -> Path:
+    """Create a plain directory (non-git) with .claude-flow initialized."""
+    project = tmp_path / "plain_project"
+    project.mkdir()
+    cf_dir = project / ".claude-flow"
+    for sub in ["logs", "plans", "worktrees"]:
+        (cf_dir / sub).mkdir(parents=True, exist_ok=True)
+    cfg = Config()
+    cfg.save(project)
+    return project
+
+
 @dataclass
 class SubprocessCall:
     """Record of a single subprocess invocation."""

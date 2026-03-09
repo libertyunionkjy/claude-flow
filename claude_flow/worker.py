@@ -27,12 +27,14 @@ class Worker:
         task_manager: TaskManager,
         worktree_manager: WorktreeManager,
         config: Config,
+        is_git: bool = True,
     ):
         self.worker_id = worker_id
         self._root = project_root
         self._tm = task_manager
         self._wt = worktree_manager
         self._cfg = config
+        self._is_git = is_git
         self._logs_dir = project_root / ".claude-flow" / "logs"
         self._logs_dir.mkdir(parents=True, exist_ok=True)
         # Worker 专属端口
@@ -63,6 +65,61 @@ class Worker:
             self._current_task_id = None
 
     def _execute_task_inner(self, task: Task) -> bool:
+        prefix = self._log_prefix()
+
+        if self._is_git:
+            return self._execute_task_git(task)
+        else:
+            return self._execute_task_simple(task)
+
+    def _execute_task_simple(self, task: Task) -> bool:
+        """Non-git mode: run Claude Code directly in project root without worktree isolation."""
+        prefix = self._log_prefix()
+        wt_path = self._root
+
+        prompt = f"{self._cfg.task_prompt_prefix}\n\n{task.prompt}"
+        cmd = ["claude", "-p", prompt, "--output-format", "stream-json", "--verbose"]
+        if can_skip_permissions(self._cfg.skip_permissions):
+            cmd.append("--dangerously-skip-permissions")
+        cmd.extend(self._cfg.claude_args)
+
+        log_file = self._logs_dir / f"{task.id}.log"
+        json_log_file = self._logs_dir / f"{task.id}.json"
+        env = os.environ.copy()
+        env["PORT"] = str(self.port)
+        env["WORKER_ID"] = str(self.worker_id)
+
+        try:
+            returncode = self._run_streaming(
+                cmd, cwd=str(wt_path), env=env,
+                task=task, log_file=log_file, json_log_file=json_log_file,
+            )
+        except subprocess.TimeoutExpired:
+            self._tm.update_status(task.id, TaskStatus.FAILED, "Timeout")
+            self._log_progress(task, False, "Timeout", wt_path)
+            return False
+
+        if returncode != 0:
+            error_msg = f"Exit code {returncode}"
+            self._tm.update_status(task.id, TaskStatus.FAILED, error_msg)
+            self._log_progress(task, False, error_msg, wt_path)
+            return False
+
+        # 合并前测试验证（non-git mode 也支持）
+        if self._cfg.pre_merge_commands:
+            test_passed = self._run_pre_merge_tests(task, wt_path)
+            if not test_passed:
+                self._tm.update_status(task.id, TaskStatus.FAILED, "Pre-merge tests failed")
+                self._log_progress(task, False, "Pre-merge tests failed", wt_path)
+                return False
+
+        self._log_progress(task, True, None, wt_path)
+        self._tm.update_status(task.id, TaskStatus.DONE)
+        logger.info(f"{prefix} Done (non-git): {task.title}")
+        return True
+
+    def _execute_task_git(self, task: Task) -> bool:
+        """Git mode: full worktree isolation, commit, merge flow."""
         prefix = self._log_prefix()
 
         # 创建 worktree（传入 config 自动设置 symlink 共享文件）

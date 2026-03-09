@@ -188,3 +188,16 @@ cf retry                             # 重试所有失败任务
 1. 所有文件读写操作必须限定在 `/opt/shared/claude-flow/.claude-flow/worktrees/task-f02fd6` 目录内
 2. 禁止使用 `/opt/shared/claude-flow` 的绝对路径操作文件
 3. 使用相对路径或以 `/opt/shared/claude-flow/.claude-flow/worktrees/task-f02fd6` 为前缀的绝对路径
+
+
+## Worktree 工作目录约束（自动生成）
+
+你当前工作在一个 Git Worktree 隔离环境中：
+- **工作目录**：`/opt/shared/claude-flow/.claude-flow/worktrees/task-49a4cd`
+- **任务 ID**：`task-49a4cd`
+- **主仓库**：`/opt/shared/claude-flow`（禁止直接修改）
+
+**强制规则**：
+1. 所有文件读写操作必须限定在 `/opt/shared/claude-flow/.claude-flow/worktrees/task-49a4cd` 目录内
+2. 禁止使用 `/opt/shared/claude-flow` 的绝对路径操作文件
+3. 使用相对路径或以 `/opt/shared/claude-flow/.claude-flow/worktrees/task-49a4cd` 为前缀的绝对路径

@@ -71,8 +71,10 @@ def create_app(project_root: Path, config: Config) -> Flask:
 
     chat_manager = ChatManager(project_root, config)
 
+    from ..utils import is_git_repo
     app.config["PROJECT_ROOT"] = project_root
     app.config["CF_CONFIG"] = config
+    app.config["IS_GIT"] = is_git_repo(project_root)
     app.config["TASK_MANAGER"] = task_manager
     app.config["PLANNER"] = planner
     app.config["CHAT_MANAGER"] = chat_manager

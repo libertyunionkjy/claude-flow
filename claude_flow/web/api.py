@@ -200,9 +200,12 @@ def _cleanup_task_resources(task_id: str, task) -> None:
 def _cleanup_worktree(task_id: str, branch: str | None) -> None:
     """Remove worktree and branch for a task."""
     try:
+        is_git = current_app.config.get("IS_GIT", True)
+        if not is_git:
+            return  # Non-git mode: nothing to clean
         root = current_app.config["PROJECT_ROOT"]
         cfg = current_app.config["CF_CONFIG"]
-        wt = WorktreeManager(root, root / cfg.worktree_dir)
+        wt = WorktreeManager(root, root / cfg.worktree_dir, is_git=is_git)
         wt.remove(task_id, branch)
     except Exception:
         pass  # Best effort cleanup
@@ -728,9 +731,10 @@ def run_task(task_id: str):
         from ..task_manager import TaskManager as TM
 
         # 使用独立的 TaskManager 实例避免线程竞争
+        is_git = current_app.config.get("IS_GIT", True)
         local_tm = TM(project_root)
-        wt = WorktreeManager(project_root, project_root / cfg.worktree_dir)
-        worker = Worker(0, project_root, local_tm, wt, cfg)
+        wt = WorktreeManager(project_root, project_root / cfg.worktree_dir, is_git=is_git)
+        worker = Worker(0, project_root, local_tm, wt, cfg, is_git=is_git)
         claimed = local_tm.claim_next(0)
         if claimed:
             _active_workers[claimed.id] = worker
@@ -769,10 +773,11 @@ def run_all_tasks():
         from ..worktree import WorktreeManager
         from ..task_manager import TaskManager as TM
 
+        is_git = current_app.config.get("IS_GIT", True)
         for wid in range(num_workers):
             local_tm = TM(project_root)
-            wt = WorktreeManager(project_root, project_root / cfg.worktree_dir)
-            w = Worker(wid, project_root, local_tm, wt, cfg)
+            wt = WorktreeManager(project_root, project_root / cfg.worktree_dir, is_git=is_git)
+            w = Worker(wid, project_root, local_tm, wt, cfg, is_git=is_git)
             if daemon:
                 thread = threading.Thread(
                     target=w.run_daemon, args=(_active_workers,), daemon=True
@@ -809,11 +814,13 @@ def reset_task(task_id: str):
         # Reset zombie running task (worker crashed without updating status)
         target = TaskStatus.PLANNED if task.plan_file else TaskStatus.PENDING
         tm.update_status(task_id, target)
-        # Clean up orphaned worktree and branch
-        root = current_app.config["PROJECT_ROOT"]
-        cfg = current_app.config["CF_CONFIG"]
-        wt = WorktreeManager(root, root / cfg.worktree_dir)
-        wt.remove(task_id, task.branch)
+        # Clean up orphaned worktree and branch (git repos only)
+        is_git = current_app.config.get("IS_GIT", True)
+        if is_git:
+            root = current_app.config["PROJECT_ROOT"]
+            cfg = current_app.config["CF_CONFIG"]
+            wt = WorktreeManager(root, root / cfg.worktree_dir, is_git=is_git)
+            wt.remove(task_id, task.branch)
         updated = tm.get(task_id)
         return _ok(updated.to_dict())
 

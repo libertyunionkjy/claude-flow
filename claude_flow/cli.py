@@ -15,6 +15,7 @@ from .models import TaskStatus
 from .planner import Planner
 from .task_manager import TaskManager
 from .worker import Worker
+from .utils import is_git_repo
 from .worktree import WorktreeManager
 
 
@@ -49,11 +50,11 @@ def _reset_terminal() -> None:
 
 def _worker_entry(args: tuple) -> int:
     """Module-level worker entry point (must be picklable for multiprocessing)."""
-    wid, root, worktree_dir, cfg_dict, daemon = args
+    wid, root, worktree_dir, cfg_dict, daemon, is_git = args
     cfg = Config(**cfg_dict)
     tm = TaskManager(root)
-    wt = WorktreeManager(root, root / worktree_dir)
-    w = Worker(wid, root, tm, wt, cfg)
+    wt = WorktreeManager(root, root / worktree_dir, is_git=is_git)
+    w = Worker(wid, root, tm, wt, cfg, is_git=is_git)
     if daemon:
         return w.run_daemon()
     return w.run_loop()
@@ -76,7 +77,9 @@ def _get_root() -> Path:
 def main(ctx):
     """Claude Flow - Multi-instance Claude Code workflow manager."""
     ctx.ensure_object(dict)
-    ctx.obj["root"] = _get_root()
+    root = _get_root()
+    ctx.obj["root"] = root
+    ctx.obj["is_git"] = is_git_repo(root)
 
 
 @main.command()
@@ -84,20 +87,23 @@ def main(ctx):
 def init(ctx):
     """Initialize .claude-flow/ in the current project."""
     root = ctx.obj["root"]
+    is_git = ctx.obj["is_git"]
     cf_dir = root / ".claude-flow"
     for sub in ["logs", "plans", "worktrees", "chats"]:
         (cf_dir / sub).mkdir(parents=True, exist_ok=True)
     cfg = Config()
     cfg.save(root)
-    # Add .claude-flow/worktrees, lock, log, chats to .gitignore
-    gitignore = root / ".gitignore"
-    ignore_lines = [".claude-flow/worktrees/", ".claude-flow/tasks.lock", ".claude-flow/logs/", ".claude-flow/chats/"]
-    existing = gitignore.read_text() if gitignore.exists() else ""
-    to_add = [l for l in ignore_lines if l not in existing]
-    if to_add:
-        with open(gitignore, "a") as f:
-            f.write("\n# claude-flow\n" + "\n".join(to_add) + "\n")
-    click.echo(f"Initialized .claude-flow/ in {root}")
+    # Add .claude-flow/worktrees, lock, log, chats to .gitignore (git repos only)
+    if is_git:
+        gitignore = root / ".gitignore"
+        ignore_lines = [".claude-flow/worktrees/", ".claude-flow/tasks.lock", ".claude-flow/logs/", ".claude-flow/chats/"]
+        existing = gitignore.read_text() if gitignore.exists() else ""
+        to_add = [l for l in ignore_lines if l not in existing]
+        if to_add:
+            with open(gitignore, "a") as f:
+                f.write("\n# claude-flow\n" + "\n".join(to_add) + "\n")
+    mode_label = "git" if is_git else "non-git"
+    click.echo(f"Initialized .claude-flow/ in {root} ({mode_label} mode)")
 
 
 # -- Task commands ----------------------------------------------------------
@@ -605,11 +611,17 @@ def plan_approve(ctx, task_id, approve_all):
 def run(ctx, num_workers, daemon, task_id):
     """Start workers to execute approved tasks."""
     root = ctx.obj["root"]
+    is_git = ctx.obj["is_git"]
     cfg = Config.load(root)
     tm = TaskManager(root)
-    wt = WorktreeManager(root, root / cfg.worktree_dir)
+    wt = WorktreeManager(root, root / cfg.worktree_dir, is_git=is_git)
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
+
+    # Non-git mode: enforce single worker (no worktree isolation)
+    if not is_git and num_workers > 1:
+        click.echo("Warning: non-git project, forcing single worker (no worktree isolation)")
+        num_workers = 1
 
     if task_id:
         t = tm.get(task_id)
@@ -618,14 +630,14 @@ def run(ctx, num_workers, daemon, task_id):
             return
         if t.status != TaskStatus.APPROVED:
             tm.update_status(t.id, TaskStatus.APPROVED)
-        worker = Worker(0, root, tm, wt, cfg)
+        worker = Worker(0, root, tm, wt, cfg, is_git=is_git)
         t = tm.claim_next(0)
         if t:
             worker.execute_task(t)
         return
 
     if num_workers == 1:
-        worker = Worker(0, root, tm, wt, cfg)
+        worker = Worker(0, root, tm, wt, cfg, is_git=is_git)
         if daemon:
             click.echo("Starting daemon mode (Ctrl+C to stop)...")
             count = worker.run_daemon()
@@ -638,7 +650,7 @@ def run(ctx, num_workers, daemon, task_id):
         from dataclasses import asdict
 
         worker_args = [
-            (wid, root, cfg.worktree_dir, asdict(cfg), daemon)
+            (wid, root, cfg.worktree_dir, asdict(cfg), daemon, is_git)
             for wid in range(num_workers)
         ]
         with multiprocessing.Pool(num_workers) as pool:
@@ -799,8 +811,12 @@ def log(ctx, task_id, raw):
 def clean(ctx):
     """Clean up worktrees and merged branches."""
     root = ctx.obj["root"]
+    is_git = ctx.obj["is_git"]
+    if not is_git:
+        click.echo("Non-git project: no worktrees to clean")
+        return
     cfg = Config.load(root)
-    wt = WorktreeManager(root, root / cfg.worktree_dir)
+    wt = WorktreeManager(root, root / cfg.worktree_dir, is_git=is_git)
     count = wt.cleanup_all()
     click.echo(f"Cleaned {count} worktrees")
 
@@ -823,10 +839,12 @@ def reset(ctx, task_id):
         # Reset zombie running task (worker crashed without updating status)
         target = TaskStatus.PLANNED if t.plan_file else TaskStatus.PENDING
         tm.update_status(task_id, target)
-        # Clean up orphaned worktree and branch
-        cfg = Config.load(root)
-        wt = WorktreeManager(root, root / cfg.worktree_dir)
-        wt.remove(task_id, t.branch)
+        # Clean up orphaned worktree and branch (git repos only)
+        is_git = ctx.obj["is_git"]
+        if is_git:
+            cfg = Config.load(root)
+            wt = WorktreeManager(root, root / cfg.worktree_dir, is_git=is_git)
+            wt.remove(task_id, t.branch)
         click.echo(f"Reset zombie running task {task_id} to {target.value}")
     else:
         click.echo(f"Task {task_id} is in {t.status.value} status, cannot reset")
