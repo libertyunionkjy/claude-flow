@@ -1,5 +1,105 @@
 # Progress Log
 
+## [2026-03-09 19:22:35] task-510746 - 添加删除 task 按钮
+**Status**: FAILED
+**Commit**: e2ddd5b
+
+**错误信息**: Merge conflict
+
+**任务 Prompt**: 现在删除 task 这个按钮只在某些状态的 task 页面才会出现，我希望在每个 task 页面都能删除某个 task（请注意，如果处于某些中间状态的，比如 planning, running, needs input 这些状态，则需要保证这些状态的后台程序及时停止）
+
+---
+
+## [2026-03-09 19:11:15] task-9a3f65 - 功能
+**Status**: FAILED
+**Commit**: a510cb0
+
+**错误信息**: Exit code 1
+
+**任务 Prompt**: 现在删除 task 这个按钮只在某些状态的 task 页面才会出现，我希望在每个 task 页面都能删除某个 task（请注意，如果处于某些中间状态的，比如 planning, running, needs input 这些状态，则需要保证这些状态的后台程序及时停止）
+
+---
+
+## [2026-03-09 19:10:03] task-9a3f65 - 功能
+**Status**: FAILED
+**Commit**: a510cb0
+
+**错误信息**: Exit code 1
+
+**任务 Prompt**: 现在删除 task 这个按钮只在某些状态的 task 页面才会出现，我希望在每个 task 页面都能删除某个 task（请注意，如果处于某些中间状态的，比如 planning, running, needs input 这些状态，则需要保证这些状态的后台程序及时停止）
+
+---
+
+## [2026-03-09 18:52:21] task-347726 - 增加 token 统计
+**Status**: SUCCESS
+**Commit**: a510cb0
+
+已有足够信息来生成经验总结。
+
+---
+
+## 任务经验总结：增加 token 统计
+
+**做了什么：** 新增 `claude_flow/usage.py` 模块和 `cf usage` CLI 命令组（含 `daily`/`monthly`/`summary` 子命令），采用双策略架构——优先使用 `ccusage` CLI（通过 npx）获取完整报告，降级为解析本地 `stream-json` 日志。共新增约 1026 行代码（含 458 行测试）。
+
+**遇到的问题：** Claude Code 没有直接暴露 token 用量 API，需要从 `stream-json` 输出中解析 `result` 事件的 `usage`/`modelUsage` 字段；同时 `ccusage` 作为外部工具可能不可用，需要设计可靠的降级路径。
+
+**解决方案：** 采用"主/备"双策略——`ccusage` 可用时走完整的 session/daily/monthly 报告，不可用时自动降级到本地日志解析，确保基本用量统计始终可用。CLI 层通过延迟导入（`from .usage import ...` 在函数内部）避免未安装 ccusage 时的启动开销。
+
+**经验教训：** 依赖外部 CLI 工具时务必设计降级方案，不能假定用户环境一定具备该工具。将采集逻辑集中到独立模块（`usage.py`）而非分散到 `worker.py`/`planner.py` 中，保持了良好的单一职责，后续扩展（如费用估算）只需修改一处。
+
+---
+
+## [2026-03-09 18:22:55] task-1326ab - BUG
+**Status**: FAILED
+**Commit**: 78f1cd2
+
+**错误信息**: Merge conflict
+
+**任务 Prompt**: 当我使用 Auto 模式生成plan但是AI又确实需要我的输入时，这时候我会在 planeed 模式下的任务卡片中点击 Chat，进行交互式输入，但是这个任务的状态依然不会改变（依然是 planned），我觉得此时应该变为 Planning，你觉得呢？会有问题吗？
+
+---
+
+## [2026-03-09 18:20:33] task-aff118 - 重构前端
+**Status**: SUCCESS
+**Commit**: 66803b9
+
+已收集到足够信息，以下是任务经验总结：
+
+---
+
+## 任务总结：重构前端（task-aff118）
+
+**做了什么：** 在单个 `index.html` 文件中新增了 848 行代码，实现了任务详情页（Task Detail View）。包含 detail header、info panel、tab 切换（Plan/Chat/Log 三个标签页）、交互式 chat 输入与轮询、日志自动刷新、状态感知的操作按钮等完整功能。
+
+**遇到的问题：** 所有前端代码（CSS + HTML + JS）集中在单一 `index.html` 模板文件中，单次提交就新增 848 行，文件体积持续膨胀，后续维护难度高。此外需要协调 detail view 与已有的 guide page、modal 弹窗、键盘快捷键等多个视图状态。
+
+**解决方案：** 通过 `currentView` 状态变量统一管理列表视图和详情视图的切换，用 `detailActiveTab` 跟踪 tab 状态；chat 轮询和 log 自动刷新使用独立的 `setInterval` 计时器并在视图关闭时清理；Escape 键优先处理 detail view 关闭。
+
+**经验教训：** 单文件前端架构在功能持续增长时会成为瓶颈——CSS/HTML/JS 耦合在一起，每次改动的 diff 可读性差，协作困难。如果项目继续演进，应考虑拆分为独立的 CSS/JS 文件，或引入轻量级前端构建工具。另外，多个定时器（chat polling、log refresh、detail refresh）需要统一的生命周期管理，避免内存泄漏。
+
+---
+
+## [2026-03-09 18:09:25] task-aff118 - 重构前端
+**Status**: FAILED
+**Commit**: 8f2a5af
+
+**错误信息**: Exit code 1
+
+**任务 Prompt**: 现在每一个任务是一个小卡片，结合现在 Plan 这个部分已经有 chat 互动式输入了，并且可能后期任务会越来越多，我觉得每个任务最好有一个自己的页面，当用户点击任务时，可以使用一个按钮进入到这个任务的控制面板，在里面显示任务的状态，操作任务，查看任务的log，交互式输入任务plan等等这些功能。
+
+---
+
+## [2026-03-09 18:02:48] task-aff118 - 重构前端
+**Status**: FAILED
+**Commit**: 8f2a5af
+
+**错误信息**: Timeout
+
+**任务 Prompt**: 现在每一个任务是一个小卡片，结合现在 Plan 这个部分已经有 chat 互动式输入了，并且可能后期任务会越来越多，我觉得每个任务最好有一个自己的页面，当用户点击任务时，可以使用一个按钮进入到这个任务的控制面板，在里面显示任务的状态，操作任务，查看任务的log，交互式输入任务plan等等这些功能。
+
+---
+
 ## [2026-03-09 17:48:58] task-e0a6d4 - 实现计划
 **Status**: SUCCESS
 **Commit**: 95a16b3
