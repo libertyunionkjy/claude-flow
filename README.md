@@ -1,6 +1,10 @@
-# Claude Flow
+<p align="center">
+  <img src="claude_flow/web/static/logo.svg" alt="Claude Flow Logo" width="128" height="128">
+</p>
 
-多实例 Claude Code 工作流管理器。在任意 Git 项目中管理多个 Claude Code 实例并行开发。
+<h1 align="center">Claude Flow</h1>
+
+<p align="center">多实例 Claude Code 工作流管理器。在任意 Git 项目中管理多个 Claude Code 实例并行开发。</p>
 
 灵感来自[胡渊鸣的 Claude Code 工作流](https://mp.weixin.qq.com/s/example)，实现了从任务队列、Git Worktree 隔离到 Web 看板的完整多 Agent 开发流水线。
 
