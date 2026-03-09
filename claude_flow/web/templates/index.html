@@ -641,6 +641,326 @@
         .guide-role-human { background: rgba(0, 206, 201, 0.2); color: #00cec9; }
         .guide-expand-all { text-align: center; margin-top: 16px; }
 
+        /* -- Task Detail View ------------------------------------------------ */
+        .detail-view {
+            display: none;
+            flex-direction: column;
+            height: 100%;
+            overflow: hidden;
+        }
+        .detail-view.active {
+            display: flex;
+        }
+
+        .detail-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 24px;
+            background: #12122a;
+            border-bottom: 1px solid #2a2a4a;
+            flex-shrink: 0;
+        }
+
+        .detail-back-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: transparent;
+            border: 1px solid #2a2a4a;
+            color: #8888aa;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            font-family: inherit;
+            transition: all 0.15s ease;
+        }
+        .detail-back-btn:hover {
+            border-color: #00d4ff;
+            color: #00d4ff;
+        }
+
+        .detail-header-info {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .detail-header-id {
+            font-family: "SF Mono", "Fira Code", monospace;
+            font-size: 13px;
+            color: #5a6a8a;
+        }
+
+        .detail-header-title {
+            font-size: 17px;
+            font-weight: 600;
+            color: #e0e0e0;
+        }
+
+        .detail-header-status {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 4px 10px;
+            border-radius: 6px;
+        }
+        .detail-header-status .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        .detail-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px 24px;
+        }
+
+        .detail-info-panel {
+            background: #16213e;
+            border: 1px solid #1e2a4a;
+            border-radius: 10px;
+            padding: 18px 20px;
+            margin-bottom: 20px;
+        }
+
+        .detail-info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 12px;
+            margin-bottom: 14px;
+        }
+
+        .detail-info-item {
+            font-size: 12px;
+        }
+        .detail-info-item .info-label {
+            color: #5a6a8a;
+            font-weight: 500;
+            margin-bottom: 2px;
+        }
+        .detail-info-item .info-value {
+            color: #d0d0e0;
+            word-break: break-word;
+        }
+
+        .detail-prompt-box {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #2a2a4a;
+        }
+        .detail-prompt-box .info-label {
+            color: #5a6a8a;
+            font-size: 12px;
+            font-weight: 500;
+            margin-bottom: 6px;
+        }
+        .detail-prompt-content {
+            padding: 10px 12px;
+            background: #0f0f23;
+            border-radius: 6px;
+            white-space: pre-wrap;
+            font-family: "SF Mono", "Fira Code", monospace;
+            font-size: 12px;
+            line-height: 1.6;
+            color: #b0b0d0;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .detail-actions-bar {
+            display: flex;
+            gap: 8px;
+            margin-top: 14px;
+            padding-top: 14px;
+            border-top: 1px solid #2a2a4a;
+            flex-wrap: wrap;
+        }
+
+        /* Detail Tabs */
+        .detail-tabs {
+            display: flex;
+            gap: 0;
+            border-bottom: 1px solid #2a2a4a;
+            margin-bottom: 0;
+        }
+
+        .detail-tab-btn {
+            padding: 10px 20px;
+            background: transparent;
+            border: none;
+            border-bottom: 2px solid transparent;
+            color: #6c7a9a;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            font-family: inherit;
+            transition: all 0.15s ease;
+        }
+        .detail-tab-btn:hover {
+            color: #b0b0cc;
+            background: rgba(255, 255, 255, 0.03);
+        }
+        .detail-tab-btn.active {
+            color: #00d4ff;
+            border-bottom-color: #00d4ff;
+        }
+
+        .detail-tab-panel {
+            display: none;
+            background: #16213e;
+            border: 1px solid #1e2a4a;
+            border-top: none;
+            border-radius: 0 0 10px 10px;
+            min-height: 300px;
+        }
+        .detail-tab-panel.active {
+            display: block;
+        }
+
+        /* Detail Plan Tab */
+        .detail-plan-content {
+            padding: 20px;
+        }
+        .detail-plan-content .plan-content {
+            max-height: none;
+            border: none;
+            background: transparent;
+            padding: 0;
+        }
+
+        .detail-plan-empty {
+            text-align: center;
+            padding: 40px 20px;
+            color: #4a4a6a;
+            font-size: 14px;
+        }
+
+        /* Detail Chat Tab */
+        .detail-chat-wrapper {
+            display: flex;
+            flex-direction: column;
+            height: 500px;
+            padding: 16px;
+        }
+
+        .detail-chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px;
+            background: #0a0a16;
+            border: 1px solid #2a2a4a;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+
+        .detail-chat-typing {
+            color: #6688aa;
+            font-size: 12px;
+            font-style: italic;
+            padding: 4px 12px;
+            display: none;
+        }
+
+        .detail-chat-input-area {
+            display: flex;
+            gap: 8px;
+        }
+        .detail-chat-input-area textarea {
+            flex: 1;
+            padding: 10px 12px;
+            background: #0f0f23;
+            border: 1px solid #2a2a4a;
+            border-radius: 8px;
+            color: #e0e0e0;
+            font-size: 14px;
+            font-family: inherit;
+            resize: none;
+            min-height: 44px;
+            max-height: 120px;
+        }
+        .detail-chat-input-area textarea:focus {
+            outline: none;
+            border-color: #00d4ff;
+        }
+        .detail-chat-input-area button {
+            align-self: flex-end;
+        }
+
+        .detail-chat-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .detail-chat-empty {
+            text-align: center;
+            padding: 40px 20px;
+            color: #4a4a6a;
+            font-size: 14px;
+        }
+
+        /* Detail Log Tab */
+        .detail-log-wrapper {
+            padding: 16px;
+        }
+        .detail-log-wrapper .log-content {
+            max-height: none;
+            min-height: 200px;
+        }
+        .detail-log-toolbar {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+        .detail-log-empty {
+            text-align: center;
+            padding: 40px 20px;
+            color: #4a4a6a;
+            font-size: 14px;
+        }
+
+        /* Detail Error Banner */
+        .detail-error-banner {
+            background: rgba(255, 71, 87, 0.1);
+            border: 1px solid rgba(255, 71, 87, 0.3);
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+        }
+        .detail-error-banner .error-icon {
+            color: #ff4757;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+        .detail-error-banner .error-msg {
+            color: #ff6b6b;
+            font-size: 13px;
+            word-break: break-word;
+        }
+
+        /* Responsive for detail view */
+        @media (max-width: 768px) {
+            .detail-header {
+                padding: 10px 14px;
+                gap: 8px;
+            }
+            .detail-header-title { font-size: 14px; }
+            .detail-body { padding: 12px 14px; }
+            .detail-info-grid { grid-template-columns: 1fr 1fr; }
+            .detail-chat-wrapper { height: 400px; }
+        }
+
         /* -- Toast ----------------------------------------------------------- */
         .toast {
             position: fixed; bottom: 20px; right: 20px;
@@ -822,6 +1142,84 @@
         <div class="content-panel" id="contentPanel">
             <div class="task-list" id="taskList">
                 <div class="empty-hint">No tasks</div>
+            </div>
+        </div>
+
+        <!-- Task Detail View (hidden by default) -->
+        <div class="detail-view" id="detailView">
+            <div class="detail-header">
+                <button class="detail-back-btn" onclick="closeTaskDetail()">
+                    &#8592; Back
+                </button>
+                <div class="detail-header-info">
+                    <span class="detail-header-id" id="detailHeaderId"></span>
+                    <span class="detail-header-title" id="detailHeaderTitle"></span>
+                </div>
+                <div class="detail-header-status" id="detailHeaderStatus">
+                    <span class="status-dot"></span>
+                    <span class="status-text"></span>
+                </div>
+            </div>
+            <div class="detail-body">
+                <!-- Error Banner (shown when task has error) -->
+                <div class="detail-error-banner" id="detailErrorBanner" style="display:none;">
+                    <span class="error-icon">!</span>
+                    <span class="error-msg" id="detailErrorMsg"></span>
+                </div>
+
+                <!-- Info Panel -->
+                <div class="detail-info-panel">
+                    <div class="detail-info-grid" id="detailInfoGrid"></div>
+                    <div class="detail-prompt-box">
+                        <div class="info-label">Prompt</div>
+                        <div class="detail-prompt-content" id="detailPromptContent"></div>
+                    </div>
+                    <div class="detail-actions-bar" id="detailActionsBar"></div>
+                </div>
+
+                <!-- Tabs: Plan / Chat / Log -->
+                <div class="detail-tabs" id="detailTabs">
+                    <button class="detail-tab-btn active" data-dtab="plan" onclick="switchDetailTab('plan')">Plan</button>
+                    <button class="detail-tab-btn" data-dtab="chat" onclick="switchDetailTab('chat')">Chat</button>
+                    <button class="detail-tab-btn" data-dtab="log" onclick="switchDetailTab('log')">Log</button>
+                </div>
+
+                <!-- Plan Tab -->
+                <div class="detail-tab-panel active" id="detailTabPlan">
+                    <div class="detail-plan-content" id="detailPlanContent">
+                        <div class="detail-plan-empty">No plan generated yet.</div>
+                    </div>
+                </div>
+
+                <!-- Chat Tab -->
+                <div class="detail-tab-panel" id="detailTabChat">
+                    <div class="detail-chat-wrapper">
+                        <div class="detail-chat-messages" id="detailChatMessages">
+                            <div class="detail-chat-empty">No chat messages. Start an interactive planning session.</div>
+                        </div>
+                        <div class="detail-chat-typing" id="detailChatTyping">AI is thinking...</div>
+                        <div class="detail-chat-input-area">
+                            <textarea id="detailChatInput" placeholder="Describe your requirements, ask questions, or refine the plan..." rows="2"
+                                      onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendDetailChatMessage();}"></textarea>
+                            <button class="btn btn-primary" onclick="sendDetailChatMessage()" id="detailChatSendBtn">Send</button>
+                        </div>
+                        <div class="detail-chat-actions">
+                            <button class="btn btn-success btn-small" id="detailChatFinalizeBtn" onclick="finalizeDetailChat()">Generate Plan</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Log Tab -->
+                <div class="detail-tab-panel" id="detailTabLog">
+                    <div class="detail-log-wrapper">
+                        <div class="detail-log-toolbar">
+                            <button class="btn btn-outline btn-small" onclick="refreshDetailLog()">Refresh</button>
+                        </div>
+                        <div class="log-content" id="detailLogContent">
+                            <div class="detail-log-empty">No log data available.</div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -1113,6 +1511,14 @@
         let refreshTimer = null;
         let activeTab = 'pending';
 
+        // Detail view state
+        let currentView = 'list';       // 'list' | 'detail'
+        let detailTaskId = null;         // Task ID being viewed in detail
+        let detailActiveTab = 'plan';    // 'plan' | 'chat' | 'log'
+        let detailChatPollingTimer = null;
+        let detailLogRefreshTimer = null;
+        let detailRefreshTimer = null;
+
         const STATUSES = ['pending', 'planning', 'planned', 'approved', 'running', 'needs_input', 'done', 'failed'];
 
         const STATUS_LABELS = {
@@ -1165,7 +1571,9 @@
             var data = await api('/tasks');
             if (data !== null) {
                 allTasks = data;
-                renderTaskList();
+                if (currentView === 'list') {
+                    renderTaskList();
+                }
                 updateNavCounts();
                 fetchStatus();
             }
@@ -1190,6 +1598,11 @@
         function switchTab(status) {
             activeTab = status;
 
+            // Close detail view if open
+            if (currentView === 'detail') {
+                closeTaskDetail();
+            }
+
             // Update nav items
             document.querySelectorAll('.nav-item[data-tab]').forEach(function(item) {
                 item.classList.toggle('active', item.dataset.tab === status);
@@ -1203,6 +1616,7 @@
             document.getElementById('guidePage').classList.remove('active');
             document.getElementById('contentPanel').style.display = '';
             document.getElementById('topBar').style.display = '';
+            document.getElementById('detailView').classList.remove('active');
             guideVisible = false;
             var guideBtn = document.getElementById('guideToggleBtn');
             guideBtn.querySelector('.nav-label').textContent = 'Workflow Guide';
@@ -1365,12 +1779,7 @@
 
         /* -- Card Interaction ------------------------------------------------ */
         function toggleCard(taskId) {
-            if (expandedCards.has(taskId)) {
-                expandedCards.delete(taskId);
-            } else {
-                expandedCards.add(taskId);
-            }
-            renderTaskList();
+            openTaskDetail(taskId);
         }
 
         /* -- Task Actions: Plan ---------------------------------------------- */
@@ -1887,10 +2296,437 @@
             setTimeout(function() { toast.className = 'toast'; }, 3000);
         }
 
+        /* -- Task Detail View ------------------------------------------------ */
+        function openTaskDetail(taskId) {
+            var task = allTasks.find(function(t) { return t.id === taskId; });
+            if (!task) return;
+
+            detailTaskId = taskId;
+            currentView = 'detail';
+
+            // Hide list views, show detail
+            document.getElementById('contentPanel').style.display = 'none';
+            document.getElementById('topBar').style.display = 'none';
+            document.getElementById('guidePage').classList.remove('active');
+            document.getElementById('detailView').classList.add('active');
+
+            // Render detail content
+            renderTaskDetail(task);
+
+            // Load active tab data
+            switchDetailTab(detailActiveTab);
+
+            // Start detail-specific auto-refresh
+            startDetailRefresh();
+        }
+
+        function closeTaskDetail() {
+            currentView = 'list';
+            detailTaskId = null;
+
+            // Clear detail timers
+            stopDetailChatPolling();
+            clearDetailLogRefresh();
+            clearDetailRefresh();
+
+            // Show list views, hide detail
+            document.getElementById('detailView').classList.remove('active');
+            document.getElementById('contentPanel').style.display = '';
+            document.getElementById('topBar').style.display = '';
+
+            // Re-render list
+            renderTaskList();
+        }
+
+        function renderTaskDetail(task) {
+            var status = task.status;
+            var color = STATUS_COLORS[status] || '#888';
+
+            // Header
+            document.getElementById('detailHeaderId').textContent = task.id;
+            document.getElementById('detailHeaderTitle').textContent = task.title;
+
+            var statusEl = document.getElementById('detailHeaderStatus');
+            statusEl.querySelector('.status-dot').style.background = color;
+            statusEl.querySelector('.status-text').textContent = STATUS_LABELS[status] || status;
+            statusEl.style.background = color + '18';
+            statusEl.style.color = color;
+
+            // Back button label
+            document.querySelector('.detail-back-btn').innerHTML = '&#8592; ' + (STATUS_LABELS[status] || 'Back');
+
+            // Error banner
+            var errorBanner = document.getElementById('detailErrorBanner');
+            if (task.error) {
+                errorBanner.style.display = 'flex';
+                document.getElementById('detailErrorMsg').textContent = task.error;
+            } else {
+                errorBanner.style.display = 'none';
+            }
+
+            // Info grid
+            var infoItems = [];
+            infoItems.push({ label: 'Status', value: STATUS_LABELS[status] || status });
+            infoItems.push({ label: 'Priority', value: task.priority > 0 ? 'P' + task.priority : 'Normal' });
+            infoItems.push({ label: 'Created', value: formatTime(task.created_at) });
+            infoItems.push({ label: 'Started', value: task.started_at ? formatTime(task.started_at) : '--' });
+            infoItems.push({ label: 'Completed', value: task.completed_at ? formatTime(task.completed_at) : '--' });
+            if (task.branch) infoItems.push({ label: 'Branch', value: task.branch });
+            if (task.worker_id !== null && task.worker_id !== undefined) {
+                infoItems.push({ label: 'Worker', value: 'W' + task.worker_id });
+            }
+            if (task.retry_count > 0) infoItems.push({ label: 'Retries', value: task.retry_count });
+            if (task.progress) infoItems.push({ label: 'Progress', value: task.progress });
+            if (task.plan_mode) infoItems.push({ label: 'Plan Mode', value: task.plan_mode });
+
+            var gridHtml = infoItems.map(function(item) {
+                return '<div class="detail-info-item">'
+                    + '<div class="info-label">' + item.label + '</div>'
+                    + '<div class="info-value">' + escapeHtml(String(item.value)) + '</div>'
+                    + '</div>';
+            }).join('');
+            document.getElementById('detailInfoGrid').innerHTML = gridHtml;
+
+            // Prompt
+            document.getElementById('detailPromptContent').textContent = task.prompt || '';
+
+            // Action buttons
+            var actionsHtml = buildDetailActions(task, status);
+            document.getElementById('detailActionsBar').innerHTML = actionsHtml;
+        }
+
+        function buildDetailActions(task, status) {
+            var id = task.id;
+            var btns = [];
+
+            if (task.plan_file) {
+                btns.push(detailActionBtn('View Plan', 'outline', function() { switchDetailTab('plan'); }));
+            }
+
+            switch (status) {
+                case 'pending':
+                    btns.push(detailActionBtn('Auto Plan', 'info', function() { planTaskAuto(new Event('click'), id); }));
+                    btns.push(detailActionBtn('Chat Plan', 'warning', function() {
+                        planTaskInteractiveDetail(id);
+                    }));
+                    btns.push(detailActionBtn('Delete', 'danger', function() { deleteTaskDetail(id); }));
+                    break;
+                case 'planning':
+                    if (task.plan_mode === 'interactive') {
+                        btns.push(detailActionBtn('Open Chat', 'warning', function() { switchDetailTab('chat'); }));
+                    }
+                    break;
+                case 'planned':
+                    btns.push(detailActionBtn('Approve', 'success', function() { approveTask(new Event('click'), id); }));
+                    btns.push(detailActionBtn('Chat', 'warning', function() { switchDetailTab('chat'); }));
+                    break;
+                case 'approved':
+                    btns.push(detailActionBtn('Run', 'warning', function() { runTask(new Event('click'), id); }));
+                    btns.push(detailActionBtn('Delete', 'danger', function() { deleteTaskDetail(id); }));
+                    break;
+                case 'running':
+                    btns.push(detailActionBtn('View Log', 'outline', function() { switchDetailTab('log'); }));
+                    break;
+                case 'needs_input':
+                    btns.push(detailActionBtn('Respond', 'warning', function() { openRespondModal(new Event('click'), id); }));
+                    btns.push(detailActionBtn('Reset', 'outline', function() { resetTask(new Event('click'), id); }));
+                    btns.push(detailActionBtn('Delete', 'danger', function() { deleteTaskDetail(id); }));
+                    break;
+                case 'done':
+                    btns.push(detailActionBtn('View Log', 'outline', function() { switchDetailTab('log'); }));
+                    btns.push(detailActionBtn('Delete', 'danger', function() { deleteTaskDetail(id); }));
+                    break;
+                case 'failed':
+                    btns.push(detailActionBtn('View Log', 'outline', function() { switchDetailTab('log'); }));
+                    btns.push(detailActionBtn('Retry', 'warning', function() { retryTask(new Event('click'), id); }));
+                    btns.push(detailActionBtn('Reset', 'outline', function() { resetTask(new Event('click'), id); }));
+                    btns.push(detailActionBtn('Delete', 'danger', function() { deleteTaskDetail(id); }));
+                    break;
+            }
+
+            return btns.join('');
+        }
+
+        function detailActionBtn(label, variant, onclickFn) {
+            var btnId = 'detailBtn_' + label.replace(/\s+/g, '_');
+            setTimeout(function() {
+                var el = document.getElementById(btnId);
+                if (el) el._handler = onclickFn;
+            }, 0);
+            return '<button class="btn btn-' + variant + '" id="' + btnId + '" onclick="this._handler && this._handler()">' + label + '</button>';
+        }
+
+        async function planTaskInteractiveDetail(taskId) {
+            var data = await api('/tasks/' + taskId + '/plan', {
+                method: 'POST',
+                body: JSON.stringify({ mode: 'interactive' }),
+            });
+            if (data !== null) {
+                showToast('Interactive planning started for ' + taskId);
+                await fetchTasks();
+                if (currentView === 'detail' && detailTaskId === taskId) {
+                    var task = allTasks.find(function(t) { return t.id === taskId; });
+                    if (task) renderTaskDetail(task);
+                    switchDetailTab('chat');
+                }
+            }
+        }
+
+        async function deleteTaskDetail(taskId) {
+            if (!confirm('Delete task ' + taskId + '?')) return;
+            var data = await api('/tasks/' + taskId, { method: 'DELETE' });
+            if (data !== null) {
+                showToast('Task ' + taskId + ' deleted');
+                closeTaskDetail();
+                fetchTasks();
+            }
+        }
+
+        /* -- Detail Tabs ----------------------------------------------------- */
+        function switchDetailTab(tab) {
+            detailActiveTab = tab;
+
+            // Update tab buttons
+            document.querySelectorAll('.detail-tab-btn').forEach(function(btn) {
+                btn.classList.toggle('active', btn.dataset.dtab === tab);
+            });
+
+            // Update tab panels
+            document.getElementById('detailTabPlan').classList.toggle('active', tab === 'plan');
+            document.getElementById('detailTabChat').classList.toggle('active', tab === 'chat');
+            document.getElementById('detailTabLog').classList.toggle('active', tab === 'log');
+
+            // Load data for active tab
+            if (tab === 'plan') loadDetailPlan();
+            if (tab === 'chat') loadDetailChat();
+            if (tab === 'log') loadDetailLog();
+        }
+
+        /* -- Detail Plan Tab ------------------------------------------------- */
+        async function loadDetailPlan() {
+            if (!detailTaskId) return;
+            var container = document.getElementById('detailPlanContent');
+            container.innerHTML = '<div class="detail-plan-empty">Loading...</div>';
+
+            var data = await api('/tasks/' + detailTaskId + '/plan');
+            if (data !== null && data.content) {
+                container.innerHTML = '<div class="plan-content">' + renderMarkdown(data.content) + '</div>';
+            } else {
+                container.innerHTML = '<div class="detail-plan-empty">No plan generated yet. Use "Auto Plan" or "Chat Plan" to create one.</div>';
+            }
+        }
+
+        /* -- Detail Chat Tab ------------------------------------------------- */
+        async function loadDetailChat() {
+            if (!detailTaskId) return;
+            stopDetailChatPolling();
+
+            var container = document.getElementById('detailChatMessages');
+            var data = await api('/tasks/' + detailTaskId + '/chat');
+
+            if (data !== null && data.exists && data.messages && data.messages.length > 0) {
+                renderDetailChatMessages(data.messages);
+            } else {
+                container.innerHTML = '<div class="detail-chat-empty">No chat messages. Start an interactive planning session.</div>';
+            }
+
+            // Handle thinking state
+            if (data !== null && data.thinking) {
+                document.getElementById('detailChatSendBtn').disabled = true;
+                document.getElementById('detailChatInput').disabled = true;
+                document.getElementById('detailChatTyping').style.display = 'block';
+                startDetailChatPolling();
+            } else {
+                document.getElementById('detailChatSendBtn').disabled = false;
+                document.getElementById('detailChatInput').disabled = false;
+                document.getElementById('detailChatTyping').style.display = 'none';
+            }
+
+            // Check if task needs interactive session started first
+            var task = allTasks.find(function(t) { return t.id === detailTaskId; });
+            var needsSession = task && task.status === 'pending';
+            document.getElementById('detailChatInput').placeholder = needsSession
+                ? 'Type to start an interactive planning session...'
+                : 'Describe your requirements, ask questions, or refine the plan...';
+        }
+
+        function renderDetailChatMessages(messages) {
+            var container = document.getElementById('detailChatMessages');
+            container.innerHTML = '';
+            messages.forEach(function(msg) {
+                var bubble = document.createElement('div');
+                bubble.className = 'chat-bubble ' + msg.role;
+                var roleLabel = msg.role === 'user' ? 'You' : 'AI';
+                bubble.innerHTML = '<div class="chat-role">' + roleLabel + '</div>'
+                    + renderMarkdown(msg.content);
+                container.appendChild(bubble);
+            });
+            container.scrollTop = container.scrollHeight;
+        }
+
+        async function sendDetailChatMessage() {
+            if (!detailTaskId) return;
+            var input = document.getElementById('detailChatInput');
+            var message = input.value.trim();
+            if (!message) return;
+
+            var container = document.getElementById('detailChatMessages');
+
+            // Clear empty hint if present
+            var emptyHint = container.querySelector('.detail-chat-empty');
+            if (emptyHint) emptyHint.remove();
+
+            // Add user bubble
+            var userBubble = document.createElement('div');
+            userBubble.className = 'chat-bubble user';
+            userBubble.innerHTML = '<div class="chat-role">You</div>' + renderMarkdown(message);
+            container.appendChild(userBubble);
+            container.scrollTop = container.scrollHeight;
+
+            input.value = '';
+            document.getElementById('detailChatSendBtn').disabled = true;
+            document.getElementById('detailChatInput').disabled = true;
+            document.getElementById('detailChatTyping').style.display = 'block';
+
+            var data = await api('/tasks/' + detailTaskId + '/chat', {
+                method: 'POST',
+                body: JSON.stringify({ message: message }),
+            });
+
+            if (data !== null && data.accepted) {
+                startDetailChatPolling();
+            } else {
+                document.getElementById('detailChatSendBtn').disabled = false;
+                document.getElementById('detailChatInput').disabled = false;
+                document.getElementById('detailChatTyping').style.display = 'none';
+            }
+        }
+
+        function startDetailChatPolling() {
+            stopDetailChatPolling();
+            detailChatPollingTimer = setInterval(async function() {
+                if (!detailTaskId) { stopDetailChatPolling(); return; }
+                var data = await api('/tasks/' + detailTaskId + '/chat');
+                if (data === null) { stopDetailChatPolling(); return; }
+                if (!data.thinking) {
+                    stopDetailChatPolling();
+                    document.getElementById('detailChatSendBtn').disabled = false;
+                    document.getElementById('detailChatInput').disabled = false;
+                    document.getElementById('detailChatTyping').style.display = 'none';
+                    if (data.messages && data.messages.length > 0) {
+                        var lastMsg = data.messages[data.messages.length - 1];
+                        if (lastMsg.role === 'assistant') {
+                            var container = document.getElementById('detailChatMessages');
+                            var aiBubble = document.createElement('div');
+                            aiBubble.className = 'chat-bubble assistant';
+                            aiBubble.innerHTML = '<div class="chat-role">AI</div>' + renderMarkdown(lastMsg.content);
+                            container.appendChild(aiBubble);
+                            container.scrollTop = container.scrollHeight;
+                        }
+                    }
+                    document.getElementById('detailChatInput').focus();
+                }
+            }, 1500);
+        }
+
+        function stopDetailChatPolling() {
+            if (detailChatPollingTimer) { clearInterval(detailChatPollingTimer); detailChatPollingTimer = null; }
+        }
+
+        async function finalizeDetailChat() {
+            if (!detailTaskId) return;
+            var data = await api('/tasks/' + detailTaskId + '/chat/finalize', { method: 'POST' });
+            if (data !== null) {
+                showToast('Plan generation started from chat...');
+                await fetchTasks();
+                if (currentView === 'detail') {
+                    var task = allTasks.find(function(t) { return t.id === detailTaskId; });
+                    if (task) renderTaskDetail(task);
+                    switchDetailTab('plan');
+                }
+            }
+        }
+
+        /* -- Detail Log Tab -------------------------------------------------- */
+        async function loadDetailLog() {
+            if (!detailTaskId) return;
+            clearDetailLogRefresh();
+
+            var el = document.getElementById('detailLogContent');
+            el.innerHTML = '<div class="detail-log-empty">Loading...</div>';
+
+            var data = await api('/tasks/' + detailTaskId + '/log');
+            if (data === null) return;
+            if (!data.exists) {
+                el.innerHTML = '<div class="detail-log-empty">No log data available.</div>';
+                return;
+            }
+            if (data.structured && data.data) {
+                el.innerHTML = renderStructuredLog(data.data);
+            } else if (data.content) {
+                el.textContent = data.content;
+            } else {
+                el.innerHTML = '<div class="detail-log-empty">No log data available.</div>';
+            }
+
+            // Auto-refresh if running
+            var task = allTasks.find(function(t) { return t.id === detailTaskId; });
+            if (task && task.status === 'running') {
+                detailLogRefreshTimer = setInterval(function() {
+                    if (detailTaskId && detailActiveTab === 'log') loadDetailLog();
+                }, 3000);
+            }
+        }
+
+        async function refreshDetailLog() {
+            await loadDetailLog();
+            showToast('Log refreshed');
+        }
+
+        function clearDetailLogRefresh() {
+            if (detailLogRefreshTimer) { clearInterval(detailLogRefreshTimer); detailLogRefreshTimer = null; }
+        }
+
+        /* -- Detail Auto Refresh --------------------------------------------- */
+        function startDetailRefresh() {
+            clearDetailRefresh();
+            detailRefreshTimer = setInterval(async function() {
+                if (currentView !== 'detail' || !detailTaskId) {
+                    clearDetailRefresh();
+                    return;
+                }
+                var data = await api('/tasks/' + detailTaskId);
+                if (data === null) return;
+
+                // Update allTasks with fresh data
+                var idx = allTasks.findIndex(function(t) { return t.id === detailTaskId; });
+                if (idx >= 0) allTasks[idx] = data;
+
+                // Re-render detail
+                renderTaskDetail(data);
+
+                // Also refresh nav counts
+                var statusData = await api('/tasks');
+                if (statusData !== null) {
+                    allTasks = statusData;
+                    updateNavCounts();
+                }
+            }, 3000);
+        }
+
+        function clearDetailRefresh() {
+            if (detailRefreshTimer) { clearInterval(detailRefreshTimer); detailRefreshTimer = null; }
+        }
+
         /* -- Guide Page ------------------------------------------------------ */
         var guideVisible = false;
 
         function toggleGuidePage() {
+            // Close detail view first if open
+            if (currentView === 'detail') {
+                closeTaskDetail();
+            }
+
             guideVisible = !guideVisible;
             var guidePage = document.getElementById('guidePage');
             var contentPanel = document.getElementById('contentPanel');
@@ -1901,6 +2737,7 @@
                 guidePage.classList.add('active');
                 contentPanel.style.display = 'none';
                 topBar.style.display = 'none';
+                document.getElementById('detailView').classList.remove('active');
                 btn.querySelector('.nav-label').textContent = 'Back to Board';
                 // Deactivate all nav items
                 document.querySelectorAll('.nav-item[data-tab]').forEach(function(item) {
@@ -1935,6 +2772,10 @@
         /* -- Keyboard Shortcuts ---------------------------------------------- */
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape') {
+                if (currentView === 'detail') {
+                    closeTaskDetail();
+                    return;
+                }
                 closeNewTaskModal(); closeChatModal(); closeRespondModal(); closePlanModal(); closeLogModal();
             }
             if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
