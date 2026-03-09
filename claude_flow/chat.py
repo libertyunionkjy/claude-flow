@@ -79,6 +79,41 @@ class ChatManager:
         self._root = project_root
         self._config = config
         self._chats_dir = project_root / ".claude-flow" / "chats"
+        # Track active background threads by task_id
+        self._active_threads: dict[str, threading.Thread] = {}
+        # Recover stale thinking states from previous process
+        self._recover_stale_sessions()
+
+    # ------------------------------------------------------------------
+    # Startup recovery
+    # ------------------------------------------------------------------
+
+    def _recover_stale_sessions(self) -> None:
+        """Reset thinking=True on sessions left over from a previous process.
+
+        When the server restarts, daemon threads are lost but the JSON
+        files still have thinking=True. This scans all chat files on
+        startup and resets them, appending an error message so the user
+        knows the previous request was interrupted.
+        """
+        if not self._chats_dir.exists():
+            return
+        for path in self._chats_dir.glob("*.json"):
+            try:
+                data = json.loads(path.read_text())
+                if data.get("thinking"):
+                    session = ChatSession.from_dict(data)
+                    session.thinking = False
+                    session.messages.append(
+                        ChatMessage(
+                            role="assistant",
+                            content="[System] AI response was interrupted "
+                            "(server restarted). Please resend your message.",
+                        )
+                    )
+                    self._save_session(session)
+            except (json.JSONDecodeError, KeyError):
+                continue
 
     # ------------------------------------------------------------------
     # Session CRUD
@@ -110,8 +145,28 @@ class ChatManager:
         return session
 
     def get_session(self, task_id: str) -> Optional[ChatSession]:
-        """Retrieve an existing chat session."""
-        return self._load_session(task_id)
+        """Retrieve an existing chat session.
+
+        Also checks for dead background threads: if thinking=True but
+        the tracked thread is no longer alive, resets the thinking flag
+        and appends an error message.
+        """
+        session = self._load_session(task_id)
+        if session and session.thinking:
+            thread = self._active_threads.get(task_id)
+            if thread is None or not thread.is_alive():
+                # Thread died or was never tracked — recover
+                session.thinking = False
+                session.messages.append(
+                    ChatMessage(
+                        role="assistant",
+                        content="[System] AI response generation failed "
+                        "(background process lost). Please resend.",
+                    )
+                )
+                self._save_session(session)
+                self._active_threads.pop(task_id, None)
+        return session
 
     def delete_session(self, task_id: str) -> bool:
         """Delete a chat session file."""
@@ -278,6 +333,7 @@ class ChatManager:
             args=(task_id, cmd),
             daemon=True,
         )
+        self._active_threads[task_id] = thread
         thread.start()
         return True
 
@@ -306,6 +362,7 @@ class ChatManager:
             args=(task_id, cmd),
             daemon=True,
         )
+        self._active_threads[task_id] = thread
         thread.start()
         return True
 
@@ -346,6 +403,8 @@ class ChatManager:
             )
             session.thinking = False
             self._save_session(session)
+        # Clean up thread reference
+        self._active_threads.pop(task_id, None)
 
     def finalize(self, task_id: str) -> Optional[ChatSession]:
         """Mark the session as finalized (plan generated)."""
