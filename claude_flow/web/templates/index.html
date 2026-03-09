@@ -2993,6 +2993,8 @@
             document.getElementById('contentPanel').style.display = 'none';
             document.getElementById('topBar').style.display = 'none';
             document.getElementById('guidePage').classList.remove('active');
+            document.getElementById('allTasksPanel').classList.remove('active');
+            document.getElementById('usagePage').classList.remove('active');
             document.getElementById('detailView').classList.add('active');
 
             // Render detail content
@@ -3014,13 +3016,20 @@
             clearDetailLogRefresh();
             clearDetailRefresh();
 
-            // Show list views, hide detail
+            // Hide detail view
             document.getElementById('detailView').classList.remove('active');
-            document.getElementById('contentPanel').style.display = '';
-            document.getElementById('topBar').style.display = '';
 
-            // Re-render list
-            renderTaskList();
+            // Restore the correct list view based on activeTab
+            if (activeTab === 'all_tasks') {
+                document.getElementById('contentPanel').style.display = 'none';
+                document.getElementById('topBar').style.display = 'none';
+                document.getElementById('allTasksPanel').classList.add('active');
+                renderAllTasksTable();
+            } else {
+                document.getElementById('contentPanel').style.display = '';
+                document.getElementById('topBar').style.display = '';
+                renderTaskList();
+            }
         }
 
         function renderTaskDetail(task) {
