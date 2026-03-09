@@ -132,6 +132,59 @@ class ChatManager:
         self._save_session(session)
         return session
 
+    def send_initial_prompt(
+        self, task_id: str, task_prompt: str
+    ) -> Optional[str]:
+        """Send the initial task prompt to AI for the first round of output.
+
+        This is called when starting a planning session (interactive or auto)
+        to let AI analyze the task prompt and produce the first response,
+        without requiring user input first.
+
+        Returns the AI response text, or None if session not found.
+        """
+        session = self._load_session(task_id)
+        if not session or session.status != "active":
+            return None
+
+        # Build initial analysis prompt
+        prompt = self._build_initial_prompt(task_prompt)
+        cmd = ["claude", "-p", prompt, "--print", "--output-format", "text"]
+        if can_skip_permissions(self._config.skip_permissions):
+            cmd.append("--dangerously-skip-permissions")
+
+        try:
+            result = subprocess.run(
+                cmd,
+                cwd=str(self._root),
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                text=True,
+                timeout=self._config.task_timeout,
+            )
+        except (subprocess.TimeoutExpired, OSError) as e:
+            error_msg = f"Chat error: {e}"
+            session.messages.append(
+                ChatMessage(role="assistant", content=error_msg)
+            )
+            self._save_session(session)
+            return error_msg
+
+        if result.returncode != 0:
+            error_msg = f"Chat error: {result.stderr.strip()}"
+            session.messages.append(
+                ChatMessage(role="assistant", content=error_msg)
+            )
+            self._save_session(session)
+            return error_msg
+
+        ai_response = result.stdout.strip()
+        session.messages.append(
+            ChatMessage(role="assistant", content=ai_response)
+        )
+        self._save_session(session)
+        return ai_response
+
     def send_message(
         self, task_id: str, content: str, task_prompt: str = ""
     ) -> Optional[str]:
@@ -198,6 +251,26 @@ class ChatManager:
     # ------------------------------------------------------------------
     # Prompt building
     # ------------------------------------------------------------------
+
+    def _build_initial_prompt(self, task_prompt: str) -> str:
+        """Build the initial prompt for first-round AI analysis.
+
+        Used when starting a planning session to let AI analyze the task
+        requirements and produce initial thoughts/questions.
+        """
+        parts: list[str] = [
+            "## Task Description",
+            task_prompt,
+            "",
+            "Please analyze this task and provide:",
+            "1. Your understanding of the requirements",
+            "2. Key considerations and potential challenges",
+            "3. Initial thoughts on the implementation approach",
+            "4. Questions for clarification (if any)",
+            "",
+            "Focus on helping the user refine the implementation plan.",
+        ]
+        return "\n".join(parts)
 
     def _build_prompt(
         self, session: ChatSession, task_prompt: str = ""

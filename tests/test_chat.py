@@ -164,6 +164,67 @@ class TestChatManager:
     def test_finalize_not_found(self, chat_mgr):
         assert chat_mgr.finalize("nonexistent") is None
 
+    def test_send_initial_prompt(self, chat_mgr):
+        chat_mgr.create_session("task-011")
+
+        with patch("claude_flow.chat.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=0, stdout="Task analysis: looks good", stderr=""
+            )
+            response = chat_mgr.send_initial_prompt(
+                "task-011", "Build a REST API for users"
+            )
+
+        assert response == "Task analysis: looks good"
+        session = chat_mgr.get_session("task-011")
+        # Only assistant message (no user message in initial prompt)
+        assert len(session.messages) == 1
+        assert session.messages[0].role == "assistant"
+        assert session.messages[0].content == "Task analysis: looks good"
+
+    def test_send_initial_prompt_includes_task_description(self, chat_mgr):
+        chat_mgr.create_session("task-012")
+
+        with patch("claude_flow.chat.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=0, stdout="Analysis done", stderr=""
+            )
+            chat_mgr.send_initial_prompt("task-012", "Fix the login bug")
+            call_args = mock_run.call_args
+            cmd = call_args[0][0]
+            prompt = cmd[2]  # claude -p <prompt>
+            assert "Fix the login bug" in prompt
+
+    def test_send_initial_prompt_no_session(self, chat_mgr):
+        response = chat_mgr.send_initial_prompt("nonexistent", "Some prompt")
+        assert response is None
+
+    def test_send_initial_prompt_finalized(self, chat_mgr):
+        chat_mgr.create_session("task-013")
+        chat_mgr.finalize("task-013")
+        response = chat_mgr.send_initial_prompt("task-013", "Some prompt")
+        assert response is None
+
+    def test_send_initial_prompt_error(self, chat_mgr):
+        chat_mgr.create_session("task-014")
+
+        with patch("claude_flow.chat.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=1, stdout="", stderr="Some error"
+            )
+            response = chat_mgr.send_initial_prompt("task-014", "Do task")
+
+        assert "Chat error" in response
+        session = chat_mgr.get_session("task-014")
+        assert len(session.messages) == 1
+        assert session.messages[0].role == "assistant"
+
+    def test_build_initial_prompt(self, chat_mgr):
+        prompt = chat_mgr._build_initial_prompt("Build a REST API")
+        assert "Build a REST API" in prompt
+        assert "Task Description" in prompt
+        assert "requirements" in prompt.lower()
+
     def test_build_prompt(self, chat_mgr):
         session = ChatSession(
             task_id="task-010",

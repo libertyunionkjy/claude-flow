@@ -194,8 +194,10 @@ def task_remove(ctx, task_id):
 def _plan_foreground(root, cfg, tm, planner, tasks):
     """Run plan generation in foreground (blocking)."""
     for t in tasks:
-        click.echo(f"Planning: {t.id} - {t.title} ...")
+        click.echo(f"Planning: {t.id} - {t.title}")
+        click.echo(f"  Prompt: {t.prompt[:100]}{'...' if len(t.prompt) > 100 else ''}")
         tm.update_status(t.id, TaskStatus.PLANNING)
+        click.echo(f"  [AI is generating plan...]")
         try:
             plan_file = planner.generate(t)
         except KeyboardInterrupt:
@@ -204,9 +206,11 @@ def _plan_foreground(root, cfg, tm, planner, tasks):
             raise SystemExit(130)
         if plan_file:
             tm.update_status(t.id, TaskStatus.PLANNED)
+            click.echo(f"  [AI generation complete]")
             click.echo(f"  Plan saved to {plan_file}")
         else:
             tm.update_status(t.id, TaskStatus.FAILED, t.error)
+            click.echo(f"  [AI generation failed]")
             click.echo(f"  Plan failed: {t.error}")
 
 
@@ -313,7 +317,15 @@ def plan(ctx, task_id, foreground, interactive):
         chat_mgr.create_session(task_id, mode="interactive")
         tm.update_status(task_id, TaskStatus.PLANNING)
         click.echo(f"Interactive planning session started for {task_id}")
-        click.echo(f"Use 'cf plan chat {task_id} -m \"message\"' to send messages")
+        click.echo(f"Task prompt: {t.prompt[:100]}{'...' if len(t.prompt) > 100 else ''}")
+        click.echo(f"\n[AI is analyzing the task...]\n")
+        response = chat_mgr.send_initial_prompt(task_id, t.prompt)
+        if response:
+            click.echo(f"AI: {response}\n")
+            click.echo(f"[Waiting for your input]")
+        else:
+            click.echo("Failed to get initial AI analysis")
+        click.echo(f"\nUse 'cf plan chat {task_id}' to continue the conversation")
         click.echo(f"Use 'cf plan finalize {task_id}' to generate the plan document")
         return
 
@@ -454,10 +466,11 @@ def plan_chat(ctx, task_id, message):
 
     if message:
         # Single message mode
-        click.echo(f"Sending message to AI...")
+        click.echo(f"[AI is generating response...]")
         response = chat_mgr.send_message(task_id, message, task_prompt=t.prompt)
         if response:
             click.echo(f"\nAI: {response}")
+            click.echo(f"\n[Waiting for your input]")
         else:
             click.echo("Failed to get AI response")
     else:
@@ -465,12 +478,22 @@ def plan_chat(ctx, task_id, message):
         click.echo(f"Chat session for: {t.title} ({task_id})")
         click.echo(f"Type your messages. Enter empty line to quit.\n")
 
-        # Show existing history
+        # Show existing history or trigger first-round AI output
         if session.messages:
             for msg in session.messages:
                 prefix = "You" if msg.role == "user" else "AI"
                 click.echo(f"  {prefix}: {msg.content[:200]}{'...' if len(msg.content) > 200 else ''}\n")
+        else:
+            # No history yet: trigger initial AI analysis from the task prompt
+            click.echo(f"  Task prompt: {t.prompt[:200]}{'...' if len(t.prompt) > 200 else ''}\n")
+            click.echo(f"  [AI is analyzing your task...]")
+            response = chat_mgr.send_initial_prompt(task_id, t.prompt)
+            if response:
+                click.echo(f"\n  AI: {response}\n")
+            else:
+                click.echo("  Failed to get initial AI analysis\n")
 
+        click.echo(f"[Waiting for your input]\n")
         _reset_terminal()
         while True:
             try:
@@ -480,10 +503,11 @@ def plan_chat(ctx, task_id, message):
                 break
             if not user_input.strip():
                 break
-            click.echo("  Thinking...")
+            click.echo("  [AI is generating response...]")
             response = chat_mgr.send_message(task_id, user_input, task_prompt=t.prompt)
             if response:
                 click.echo(f"\n  AI: {response}\n")
+                click.echo(f"  [Waiting for your input]\n")
             else:
                 click.echo("  Failed to get response\n")
 

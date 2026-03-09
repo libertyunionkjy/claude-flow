@@ -4,6 +4,8 @@ from click.testing import CliRunner
 from claude_flow.cli import main
 from claude_flow.task_manager import TaskManager
 from claude_flow.models import TaskStatus
+from claude_flow.chat import ChatManager
+from claude_flow.config import Config
 
 
 class TestCLI:
@@ -224,3 +226,81 @@ class TestPlanStatus:
         assert result.exit_code == 0
         assert "Recent log" in result.output
         assert "Background planning started" in result.output
+
+
+class TestPlanInteractive:
+    """Tests for interactive plan mode with initial AI output."""
+
+    def _add_task(self, git_repo, prompt="Do something complex"):
+        """Add a pending task and return its ID."""
+        (git_repo / ".claude-flow").mkdir(exist_ok=True)
+        tm = TaskManager(git_repo)
+        t = tm.add("Test Task", prompt)
+        return t.id
+
+    def test_interactive_plan_triggers_initial_prompt(self, git_repo):
+        """cf plan -i -t <id> should trigger initial AI analysis."""
+        task_id = self._add_task(git_repo, "Build a REST API for users")
+        runner = CliRunner()
+
+        with patch("claude_flow.chat.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=0, stdout="I'll analyze this task...", stderr=""
+            )
+            result = runner.invoke(
+                main, ["plan", "-i", "-t", task_id],
+                catch_exceptions=False,
+                env={"CF_PROJECT_ROOT": str(git_repo)},
+            )
+
+        assert result.exit_code == 0
+        assert "AI is analyzing" in result.output
+        assert "I'll analyze this task..." in result.output
+        assert "Waiting for your input" in result.output
+
+        # Verify chat session has the initial AI message
+        cfg = Config()
+        chat_mgr = ChatManager(git_repo, cfg)
+        session = chat_mgr.get_session(task_id)
+        assert session is not None
+        assert len(session.messages) == 1
+        assert session.messages[0].role == "assistant"
+
+    def test_interactive_plan_shows_task_prompt(self, git_repo):
+        """cf plan -i -t <id> should display the task prompt."""
+        task_id = self._add_task(git_repo, "Fix the authentication bug")
+        runner = CliRunner()
+
+        with patch("claude_flow.chat.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=0, stdout="Analyzing...", stderr=""
+            )
+            result = runner.invoke(
+                main, ["plan", "-i", "-t", task_id],
+                catch_exceptions=False,
+                env={"CF_PROJECT_ROOT": str(git_repo)},
+            )
+
+        assert result.exit_code == 0
+        assert "Fix the authentication bug" in result.output
+
+    def test_foreground_plan_shows_status_indicators(self, git_repo):
+        """cf plan -F shows AI generation status indicators."""
+        task_id = self._add_task(git_repo)
+        runner = CliRunner()
+
+        with patch("claude_flow.planner.subprocess.Popen") as mock_popen:
+            mock_proc = MagicMock()
+            mock_proc.communicate.return_value = ("# Plan\n1. Step one", "")
+            mock_proc.returncode = 0
+            mock_popen.return_value = mock_proc
+
+            result = runner.invoke(
+                main, ["plan", "-F"],
+                catch_exceptions=False,
+                env={"CF_PROJECT_ROOT": str(git_repo)},
+            )
+
+        assert result.exit_code == 0
+        assert "AI is generating plan" in result.output
+        assert "AI generation complete" in result.output
