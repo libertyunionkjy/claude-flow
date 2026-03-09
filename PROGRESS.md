@@ -1,5 +1,63 @@
 # Progress Log
 
+## [2026-03-09 17:10:41] task-15cf06 - 重构前端
+**Status**: FAILED
+**Commit**: dde021b
+
+**错误信息**: Exit code 1
+
+**任务 Prompt**: 现在这个前端是横向展开的，但是很多现代的前端都是纵向的，左侧有一列作为 Tab，这样对移动设备也比较友好。我希望重构为纵向的设计
+
+---
+
+## [2026-03-09 16:53:25] task-0a6e06 - BUG
+**Status**: SUCCESS
+**Commit**: 4d88df0
+
+以下是该任务的经验总结：
+
+---
+
+**任务：RUNNING 状态任务的 View Log 无输出**
+
+- **做了什么**：将 Worker 执行 Claude CLI 的方式从 `subprocess.run`（一次性收集全部输出）改为 `subprocess.Popen` 流式读取，逐行写入日志文件；前端增加 3 秒自动刷新定时器，对 running 状态的任务持续轮询日志。
+- **根因**：原来使用 `subprocess.run(capture_output=True)` 会阻塞直到进程结束才写入日志文件，导致 RUNNING 期间日志文件为空。
+- **解决方案**：新增 `_run_streaming` 方法，用 `Popen` + 逐行迭代 `proc.stdout` 实时写文件并定期 flush；前端在打开 running 任务日志时启动 `setInterval` 自动刷新，关闭时清理定时器。
+- **测试适配**：Mock 层需要同步适配——`Popen` mock 的 `stdout` 从字符串改为 `StringIO` 可迭代对象，`conftest.py` 补上了对 `worker.subprocess.Popen` 的 monkey-patch。
+- **经验教训**：涉及"实时可见性"的需求，前后端需同步改造——后端保证数据持续产出（流式写+flush），前端保证定时拉取并展示。
+
+---
+
+## [2026-03-09 16:53:07] task-c94edb - 修复BUG
+**Status**: FAILED
+**Commit**: e417571
+
+**错误信息**: Merge conflict
+
+**任务 Prompt**: 现在交互式的plan似乎在一个任务的AI进行thinking的时候，另一个任务的对话框无法send 消息给AI
+
+---
+
+## [2026-03-09 16:41:53] task-f9fae9 - 优化
+**Status**: SUCCESS
+**Commit**: 3e7c85e
+
+以下是该任务的经验总结：
+
+---
+
+**任务总结：交互式 Plan 模式的初始 Prompt 优化**
+
+**做了什么：** 在 `ChatManager` 中新增 `send_initial_prompt` 方法，使交互式和自动 Plan 模式启动时，AI 会基于任务 prompt 先进行第一轮分析输出；同时在 CLI 各交互节点添加了状态指示（`[AI is generating...]` / `[Waiting for your input]`），让用户清楚当前轮到谁操作。
+
+**遇到的问题：** 原有流程中，用户通过 `cf task add -p "prompt"` 设定的详细需求在进入 `plan chat` 后丢失——session 初始为空，用户需要重新输入需求；且没有状态提示，用户不知道是该等待还是该输入。
+
+**解决方案：** 在 `plan -i` 启动和 `plan chat` REPL 进入时，检测 session 是否为空，若为空则自动调用 `send_initial_prompt` 将任务 prompt 发送给 AI 并展示首轮响应；在所有 AI 调用前后插入状态文本提示。
+
+**经验教训：** 交互式系统中"谁先说话"和"当前轮次状态"是关键 UX 要素。信息不应在流程衔接中丢失——前序步骤收集的输入（如 task prompt）需要贯穿到后续所有阶段。改动涉及 4 个文件（chat.py, cli.py + 对应测试），共 243 行，测试覆盖了正常流程、错误处理和边界情况。
+
+---
+
 ## [2026-03-09 15:39:49] task-e8abf8 - claude flow 工作流优化
 **Status**: FAILED
 **Commit**: 0959e6f

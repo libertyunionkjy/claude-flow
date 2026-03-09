@@ -1,0 +1,170 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Dark body gradient -->
+    <linearGradient id="bodyGrad" x1="256" y1="90" x2="256" y2="310" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1a1a2e"/>
+      <stop offset="100%" stop-color="#0d1117"/>
+    </linearGradient>
+
+    <!-- Tentacle gradient -->
+    <linearGradient id="tentGrad" x1="256" y1="290" x2="256" y2="430" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#16161a"/>
+      <stop offset="100%" stop-color="#0d1117"/>
+    </linearGradient>
+
+    <!-- Head subtle sheen -->
+    <radialGradient id="headShine" cx="225" cy="175" r="110" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#2DD4BF" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#2DD4BF" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Eye glow -->
+    <radialGradient id="eyeGlowL" cx="215" cy="235" r="48" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#2DD4BF" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#2DD4BF" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="eyeGlowR" cx="297" cy="235" r="48" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#2DD4BF" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#2DD4BF" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Terminal screen gradient -->
+    <linearGradient id="termGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+
+    <!-- Circuit glow effect -->
+    <filter id="circuitGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="2" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- ==================== TENTACLES (short & cute, behind head) ==================== -->
+  <g id="tentacles" fill="none" stroke-linecap="round" stroke-linejoin="round">
+
+    <!-- Tentacle LEFT: short, stubby, gentle curve -->
+    <path d="M 178 290 C 150 320, 110 350, 95 385 Q 88 402, 100 408"
+          stroke="url(#tentGrad)" stroke-width="26"/>
+    <!-- Branch fork -->
+    <path d="M 115 355 C 95 368, 68 372, 52 382"
+          stroke="url(#tentGrad)" stroke-width="12"/>
+    <circle cx="52" cy="382" r="7" fill="#2DD4BF" opacity="0.5"/>
+
+    <!-- Tentacle CENTER: short drop with gentle wiggle -->
+    <path d="M 256 308 C 252 340, 260 370, 256 400 Q 254 415, 256 420"
+          stroke="url(#tentGrad)" stroke-width="24"/>
+    <!-- Branch fork -->
+    <path d="M 258 370 C 275 382, 295 388, 312 395"
+          stroke="url(#tentGrad)" stroke-width="11"/>
+    <circle cx="312" cy="395" r="6.5" fill="#3B82F6" opacity="0.5"/>
+
+    <!-- Tentacle RIGHT: short, stubby, gentle curve (mirror) -->
+    <path d="M 334 290 C 362 320, 402 350, 417 385 Q 424 402, 412 408"
+          stroke="url(#tentGrad)" stroke-width="26"/>
+    <!-- Branch fork -->
+    <path d="M 397 355 C 417 368, 444 372, 460 382"
+          stroke="url(#tentGrad)" stroke-width="12"/>
+    <circle cx="460" cy="382" r="7" fill="#2DD4BF" opacity="0.5"/>
+  </g>
+
+  <!-- ==================== TERMINAL ICONS (larger, at short tentacle tips) ==================== -->
+  <g id="terminals">
+    <!-- Terminal LEFT -->
+    <g transform="translate(72, 400)">
+      <rect x="0" y="0" width="56" height="40" rx="7" ry="7" fill="url(#termGrad)" stroke="#2DD4BF" stroke-width="2" opacity="0.92"/>
+      <circle cx="10" cy="8" r="3" fill="#EF4444"/>
+      <circle cx="18" cy="8" r="3" fill="#F59E0B"/>
+      <circle cx="26" cy="8" r="3" fill="#22C55E"/>
+      <line x1="0" y1="14" x2="56" y2="14" stroke="#2DD4BF" stroke-width="0.5" opacity="0.3"/>
+      <text x="8" y="32" font-family="'SF Mono','Fira Code',monospace" font-size="15" fill="#2DD4BF" font-weight="700">&gt;_</text>
+    </g>
+
+    <!-- Terminal CENTER -->
+    <g transform="translate(228, 414)">
+      <rect x="0" y="0" width="56" height="40" rx="7" ry="7" fill="url(#termGrad)" stroke="#3B82F6" stroke-width="2" opacity="0.92"/>
+      <circle cx="10" cy="8" r="3" fill="#EF4444"/>
+      <circle cx="18" cy="8" r="3" fill="#F59E0B"/>
+      <circle cx="26" cy="8" r="3" fill="#22C55E"/>
+      <line x1="0" y1="14" x2="56" y2="14" stroke="#3B82F6" stroke-width="0.5" opacity="0.3"/>
+      <text x="8" y="32" font-family="'SF Mono','Fira Code',monospace" font-size="15" fill="#3B82F6" font-weight="700">&gt;_</text>
+    </g>
+
+    <!-- Terminal RIGHT -->
+    <g transform="translate(384, 400)">
+      <rect x="0" y="0" width="56" height="40" rx="7" ry="7" fill="url(#termGrad)" stroke="#2DD4BF" stroke-width="2" opacity="0.92"/>
+      <circle cx="10" cy="8" r="3" fill="#EF4444"/>
+      <circle cx="18" cy="8" r="3" fill="#F59E0B"/>
+      <circle cx="26" cy="8" r="3" fill="#22C55E"/>
+      <line x1="0" y1="14" x2="56" y2="14" stroke="#2DD4BF" stroke-width="0.5" opacity="0.3"/>
+      <text x="8" y="32" font-family="'SF Mono','Fira Code',monospace" font-size="15" fill="#2DD4BF" font-weight="700">&gt;_</text>
+    </g>
+  </g>
+
+  <!-- ==================== HEAD (dominant, cute proportion) ==================== -->
+  <ellipse id="head" cx="256" cy="200" rx="115" ry="108" fill="url(#bodyGrad)"/>
+  <ellipse cx="256" cy="200" rx="115" ry="108" fill="url(#headShine)"/>
+
+  <!-- ==================== CIRCUIT PATTERN (high contrast) ==================== -->
+  <g id="circuit" filter="url(#circuitGlow)">
+    <!-- Main horizontal bus -->
+    <path d="M 195 155 L 235 155 L 248 168" stroke="#2DD4BF" stroke-width="1.8" stroke-linecap="round" fill="none" opacity="0.7"/>
+    <path d="M 264 153 L 305 153 L 318 163" stroke="#2DD4BF" stroke-width="1.8" stroke-linecap="round" fill="none" opacity="0.7"/>
+
+    <!-- Vertical connectors -->
+    <path d="M 220 155 L 220 173" stroke="#2DD4BF" stroke-width="1.5" stroke-linecap="round" fill="none" opacity="0.5"/>
+    <path d="M 290 153 L 290 170" stroke="#2DD4BF" stroke-width="1.5" stroke-linecap="round" fill="none" opacity="0.5"/>
+
+    <!-- Lower circuit lines -->
+    <path d="M 210 180 L 245 180 L 256 191" stroke="#3B82F6" stroke-width="1.5" stroke-linecap="round" fill="none" opacity="0.6"/>
+    <path d="M 256 191 L 268 180 L 302 180" stroke="#3B82F6" stroke-width="1.5" stroke-linecap="round" fill="none" opacity="0.6"/>
+
+    <!-- Chip/IC -->
+    <rect x="245" y="163" width="22" height="14" rx="3" ry="3" fill="none" stroke="#2DD4BF" stroke-width="1.2" opacity="0.6"/>
+    <line x1="250" y1="163" x2="250" y2="159" stroke="#2DD4BF" stroke-width="1" opacity="0.5"/>
+    <line x1="256" y1="163" x2="256" y2="159" stroke="#2DD4BF" stroke-width="1" opacity="0.5"/>
+    <line x1="262" y1="163" x2="262" y2="159" stroke="#2DD4BF" stroke-width="1" opacity="0.5"/>
+    <line x1="250" y1="177" x2="250" y2="180" stroke="#2DD4BF" stroke-width="1" opacity="0.5"/>
+    <line x1="256" y1="177" x2="256" y2="180" stroke="#2DD4BF" stroke-width="1" opacity="0.5"/>
+    <line x1="262" y1="177" x2="262" y2="180" stroke="#2DD4BF" stroke-width="1" opacity="0.5"/>
+
+    <!-- Junction nodes -->
+    <circle cx="195" cy="155" r="2.5" fill="#2DD4BF" opacity="0.8"/>
+    <circle cx="318" cy="163" r="2.5" fill="#2DD4BF" opacity="0.8"/>
+    <circle cx="220" cy="173" r="2" fill="#2DD4BF" opacity="0.6"/>
+    <circle cx="290" cy="170" r="2" fill="#2DD4BF" opacity="0.6"/>
+    <circle cx="210" cy="180" r="2" fill="#3B82F6" opacity="0.7"/>
+    <circle cx="302" cy="180" r="2" fill="#3B82F6" opacity="0.7"/>
+  </g>
+
+  <!-- ==================== EYES (bigger, looking down at tentacles) ==================== -->
+  <circle cx="215" cy="235" r="46" fill="url(#eyeGlowL)"/>
+  <circle cx="297" cy="235" r="46" fill="url(#eyeGlowR)"/>
+
+  <!-- Left eye - big & round for cuteness -->
+  <ellipse cx="215" cy="232" rx="28" ry="30" fill="#ffffff"/>
+  <!-- Left pupil - looking down-left at left tentacle -->
+  <circle cx="208" cy="242" r="15" fill="#0f172a"/>
+  <circle cx="208" cy="242" r="8" fill="#1e293b" opacity="0.7"/>
+  <circle cx="208" cy="242" r="4" fill="#2DD4BF" opacity="0.5"/>
+  <!-- Highlights -->
+  <circle cx="218" cy="224" r="5.5" fill="#ffffff" opacity="0.95"/>
+  <circle cx="204" cy="246" r="2.2" fill="#ffffff" opacity="0.35"/>
+
+  <!-- Right eye - big & round for cuteness -->
+  <ellipse cx="297" cy="232" rx="28" ry="30" fill="#ffffff"/>
+  <!-- Right pupil - looking down-right at right tentacle -->
+  <circle cx="304" cy="242" r="15" fill="#0f172a"/>
+  <circle cx="304" cy="242" r="8" fill="#1e293b" opacity="0.7"/>
+  <circle cx="304" cy="242" r="4" fill="#2DD4BF" opacity="0.5"/>
+  <!-- Highlights -->
+  <circle cx="294" cy="224" r="5.5" fill="#ffffff" opacity="0.95"/>
+  <circle cx="308" cy="246" r="2.2" fill="#ffffff" opacity="0.35"/>
+
+  <!-- ==================== MOUTH (cute smile) ==================== -->
+  <path d="M 240 264 Q 256 278, 272 264" stroke="#2DD4BF" stroke-width="2.2" stroke-linecap="round" fill="none" opacity="0.45"/>
+</svg>
