@@ -1753,7 +1753,7 @@
                             <button class="btn btn-primary" onclick="sendDetailChatMessage()" id="detailChatSendBtn">Send</button>
                         </div>
                         <div class="detail-chat-actions">
-                            <button class="btn btn-success btn-small" id="detailChatFinalizeBtn" onclick="finalizeDetailChat()">Generate Plan</button>
+                            <button class="btn btn-success btn-small" id="detailChatFinalizeBtn" onclick="finalizeDetailChat()">Finalize Plan</button>
                         </div>
                     </div>
                 </div>
@@ -1891,7 +1891,7 @@
                     <div class="guide-step-dot" style="background: #a29bfe;"></div>
                     <div class="guide-step-header">
                         <span class="guide-step-num" style="background: #a29bfe;">3</span>
-                        <span class="guide-step-title">Generate Plans</span>
+                        <span class="guide-step-title">Plan Tasks</span>
                         <span class="guide-step-tag" style="background: rgba(162,155,254,0.2); color: #a29bfe;">Planning</span>
                         <span class="guide-role-tag guide-role-auto">AUTO</span>
                         <span class="guide-step-arrow">&#9660;</span>
@@ -1926,7 +1926,7 @@
                             <div class="guide-cmd-box"><span class="cmd-label cli">CLI</span><code>cf plan review</code><br><code>cf plan approve --all</code></div>
                             <div class="guide-cmd-box"><span class="cmd-label web">Web</span><span class="cmd-text">Click <strong>View Plan</strong> to read, then <strong>Approve</strong> or <strong>Chat</strong></span></div>
                         </div>
-                        <div class="guide-tip"><strong>Chat: </strong>Open the chat dialog to discuss the plan with AI, ask questions, or request revisions. Click <strong>Generate Plan</strong> in the chat to regenerate from the conversation.</div>
+                        <div class="guide-tip"><strong>Chat: </strong>Open the chat dialog to discuss the plan with AI, ask questions, or request revisions. Click <strong>Finalize Plan</strong> in the chat to regenerate from the conversation.</div>
                     </div>
                 </div>
 
@@ -2055,7 +2055,7 @@
             <div class="chat-actions-top">
                 <h2 id="chatModalTitle">Chat</h2>
                 <div>
-                    <button class="btn btn-success btn-small" id="chatFinalizeBtn" onclick="finalizeChat()">Generate Plan</button>
+                    <button class="btn btn-success btn-small" id="chatFinalizeBtn" onclick="finalizeChat()">Finalize Plan</button>
                     <button class="btn btn-cancel btn-small" onclick="closeChatModal()">Close</button>
                 </div>
             </div>
@@ -2333,7 +2333,7 @@
                         statusIndicator = '<div class="planning-indicator planning-ready">AI has replied — open chat to continue</div>';
                     }
                 } else {
-                    statusIndicator = '<div class="planning-indicator"><span class="spinner"></span>Generating plan...</div>';
+                    statusIndicator = '<div class="planning-indicator"><span class="spinner"></span>Finalizing plan...</div>';
                 }
             } else if (status === 'running') {
                 statusIndicator = '<div class="running-indicator"><span class="spinner"></span>Executing...</div>';
@@ -2628,7 +2628,7 @@
                 fetchTasks();
             } else {
                 btn.disabled = false;
-                btn.textContent = 'Generate Plan';
+                btn.textContent = 'Finalize Plan';
             }
         }
 
@@ -3344,7 +3344,7 @@
                 }
             } else {
                 btn.disabled = false;
-                btn.textContent = 'Generate Plan';
+                btn.textContent = 'Finalize Plan';
             }
         }
 
