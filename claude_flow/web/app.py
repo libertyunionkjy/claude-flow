@@ -14,6 +14,7 @@ from ..chat import ChatManager
 from ..config import Config
 from ..planner import Planner
 from ..task_manager import TaskManager
+from ..usage import UsageManager
 
 
 def create_app(project_root: Path, config: Config) -> Flask:
@@ -46,6 +47,7 @@ def create_app(project_root: Path, config: Config) -> Flask:
     app.config["TASK_MANAGER"] = task_manager
     app.config["PLANNER"] = planner
     app.config["CHAT_MANAGER"] = chat_manager
+    app.config["USAGE_MANAGER"] = UsageManager(project_root, config)
 
     # 注册 API 蓝图
     from .api import api_bp

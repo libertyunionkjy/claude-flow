@@ -18,6 +18,10 @@ from ..worktree import WorktreeManager
 
 api_bp = Blueprint("api", __name__, url_prefix="/api")
 
+# Module-level registry for active workers by task_id.
+# Used to stop worker subprocesses when deleting a running task.
+_active_workers: dict = {}
+
 
 def _ok(data):
     """成功响应。"""
@@ -30,6 +34,24 @@ def _err(message: str, status_code: int = 400):
 
 
 # -- 任务列表 / 创建 ----------------------------------------------------------
+
+def _enrich_task_dict(task_dict: dict) -> dict:
+    """Enrich task dict with chat session state for frontend display."""
+    chat_mgr = current_app.config.get("CHAT_MANAGER")
+    if not chat_mgr:
+        return task_dict
+    task_id = task_dict.get("id")
+    if not task_id:
+        return task_dict
+    session = chat_mgr.get_session(task_id)
+    if session:
+        task_dict["chat_thinking"] = session.thinking
+        task_dict["chat_status"] = session.status
+    else:
+        task_dict["chat_thinking"] = False
+        task_dict["chat_status"] = None
+    return task_dict
+
 
 @api_bp.route("/tasks", methods=["GET"])
 def list_tasks():
@@ -46,7 +68,7 @@ def list_tasks():
     else:
         tasks = tm.list_tasks()
 
-    return _ok([t.to_dict() for t in tasks])
+    return _ok([_enrich_task_dict(t.to_dict()) for t in tasks])
 
 
 @api_bp.route("/tasks", methods=["POST"])
@@ -87,7 +109,7 @@ def get_task(task_id: str):
     if not task:
         return _err(f"任务 {task_id} 不存在", 404)
 
-    return _ok(task.to_dict())
+    return _ok(_enrich_task_dict(task.to_dict()))
 
 
 @api_bp.route("/tasks/<task_id>", methods=["PATCH"])
@@ -131,13 +153,86 @@ def update_task(task_id: str):
 
 @api_bp.route("/tasks/<task_id>", methods=["DELETE"])
 def delete_task(task_id: str):
-    """删除任务。"""
+    """删除任务，自动停止关联的后台进程并清理资源。"""
     tm = current_app.config["TASK_MANAGER"]
+    task = tm.get(task_id)
+
+    if not task:
+        return _err(f"任务 {task_id} 不存在", 404)
+
+    _cleanup_task_resources(task_id, task)
 
     if tm.remove(task_id):
         return _ok({"deleted": task_id})
     else:
-        return _err(f"任务 {task_id} 不存在", 404)
+        return _err(f"删除任务 {task_id} 失败")
+
+
+def _cleanup_task_resources(task_id: str, task) -> None:
+    """Clean up background processes and resources for a task before deletion.
+
+    Handles:
+    - planning: abort chat session (kills AI subprocess), clean up planner threads
+    - running/merging: stop worker subprocess, clean up worktree
+    - needs_input: clean up worktree
+    """
+    status = task.status
+
+    # Stop chat/planning subprocess if active
+    if status in (TaskStatus.PLANNING, TaskStatus.PLANNED):
+        chat_mgr = current_app.config.get("CHAT_MANAGER")
+        if chat_mgr:
+            chat_mgr.abort_session(task_id)
+
+    # Stop worker subprocess if running
+    if status in (TaskStatus.RUNNING, TaskStatus.MERGING):
+        worker = _active_workers.pop(task_id, None)
+        if worker:
+            worker.stop()
+        # Clean up worktree and branch
+        _cleanup_worktree(task_id, task.branch)
+
+    # Clean up worktree for needs_input (worker already exited but worktree may remain)
+    if status == TaskStatus.NEEDS_INPUT and task.branch:
+        _cleanup_worktree(task_id, task.branch)
+
+
+def _cleanup_worktree(task_id: str, branch: str | None) -> None:
+    """Remove worktree and branch for a task."""
+    try:
+        root = current_app.config["PROJECT_ROOT"]
+        cfg = current_app.config["CF_CONFIG"]
+        wt = WorktreeManager(root, root / cfg.worktree_dir)
+        wt.remove(task_id, branch)
+    except Exception:
+        pass  # Best effort cleanup
+
+
+@api_bp.route("/tasks/batch-delete", methods=["POST"])
+def batch_delete_tasks():
+    """批量删除任务。body: {task_ids: [str]}"""
+    tm = current_app.config["TASK_MANAGER"]
+    data = request.get_json(silent=True)
+
+    if not data or not data.get("task_ids"):
+        return _err("task_ids 不能为空")
+
+    task_ids = data["task_ids"]
+    if not isinstance(task_ids, list):
+        return _err("task_ids 必须是数组")
+
+    deleted = []
+    failed = []
+    for tid in task_ids:
+        task = tm.get(tid)
+        if task:
+            _cleanup_task_resources(tid, task)
+        if tm.remove(tid):
+            deleted.append(tid)
+        else:
+            failed.append(tid)
+
+    return _ok({"deleted": deleted, "failed": failed, "count": len(deleted)})
 
 
 # -- 审批 / 反馈 --------------------------------------------------------------
@@ -543,7 +638,11 @@ def run_task(task_id: str):
         worker = Worker(0, project_root, local_tm, wt, cfg)
         claimed = local_tm.claim_next(0)
         if claimed:
-            worker.execute_task(claimed)
+            _active_workers[claimed.id] = worker
+            try:
+                worker.execute_task(claimed)
+            finally:
+                _active_workers.pop(claimed.id, None)
 
     thread = threading.Thread(target=_execute, daemon=True)
     thread.start()
@@ -580,9 +679,13 @@ def run_all_tasks():
             wt = WorktreeManager(project_root, project_root / cfg.worktree_dir)
             w = Worker(wid, project_root, local_tm, wt, cfg)
             if daemon:
-                thread = threading.Thread(target=w.run_daemon, daemon=True)
+                thread = threading.Thread(
+                    target=w.run_daemon, args=(_active_workers,), daemon=True
+                )
             else:
-                thread = threading.Thread(target=w.run_loop, daemon=True)
+                thread = threading.Thread(
+                    target=w.run_loop, args=(_active_workers,), daemon=True
+                )
             thread.start()
 
     thread = threading.Thread(target=_run_workers, daemon=True)
@@ -677,6 +780,52 @@ def retry_all_tasks():
         count += 1
 
     return _ok({"retried": count})
+
+
+# -- Token Usage ---------------------------------------------------------------
+
+@api_bp.route("/usage/summary", methods=["GET"])
+def usage_summary():
+    """Get aggregated usage summary (total tokens, cost, sessions)."""
+    um = current_app.config["USAGE_MANAGER"]
+    since = request.args.get("since")
+    until = request.args.get("until")
+    data = um.get_summary(since=since, until=until)
+    return _ok(data)
+
+
+@api_bp.route("/usage/sessions", methods=["GET"])
+def usage_sessions():
+    """Get per-session (task) usage report."""
+    um = current_app.config["USAGE_MANAGER"]
+    since = request.args.get("since")
+    until = request.args.get("until")
+    data = um.get_session_usage(since=since, until=until)
+    return _ok(data)
+
+
+@api_bp.route("/usage/daily", methods=["GET"])
+def usage_daily():
+    """Get daily aggregated usage report."""
+    um = current_app.config["USAGE_MANAGER"]
+    since = request.args.get("since")
+    until = request.args.get("until")
+    data = um.get_daily_usage(since=since, until=until)
+    if data is None:
+        return _ok([])
+    return _ok(data)
+
+
+@api_bp.route("/usage/monthly", methods=["GET"])
+def usage_monthly():
+    """Get monthly aggregated usage report."""
+    um = current_app.config["USAGE_MANAGER"]
+    since = request.args.get("since")
+    until = request.args.get("until")
+    data = um.get_monthly_usage(since=since, until=until)
+    if data is None:
+        return _ok([])
+    return _ok(data)
 
 
 # -- 辅助函数 ------------------------------------------------------------------

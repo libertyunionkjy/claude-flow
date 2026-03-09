@@ -128,6 +128,9 @@
         .nav-item[data-tab="done"].active       { border-left-color: #00b894; color: #55d4b0; }
         .nav-item[data-tab="failed"].active     { border-left-color: #ff6b6b; color: #ff9090; }
 
+        .nav-item[data-tab="all_tasks"].active { border-left-color: #00d4ff; color: #00d4ff; }
+        .nav-item[data-tab="all_tasks"]  .nav-dot { background: #00d4ff; }
+
         .nav-item[data-tab="pending"]    .nav-dot { background: #6c5ce7; }
         .nav-item[data-tab="planning"]   .nav-dot { background: #a29bfe; }
         .nav-item[data-tab="planned"]    .nav-dot { background: #74b9ff; }
@@ -344,6 +347,15 @@
             margin-top: 6px;
         }
         .planning-indicator { color: #a29bfe; }
+        .planning-indicator.planning-ready {
+            color: #00b894;
+            font-weight: 600;
+            animation: ready-pulse 2s ease-in-out infinite;
+        }
+        @keyframes ready-pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
         .running-indicator { color: #fdcb6e; }
 
         .empty-hint {
@@ -557,6 +569,161 @@
         .plan-content a { color: #00d4ff; text-decoration: none; }
         .plan-content a:hover { text-decoration: underline; }
         .plan-content .task-checkbox { margin-right: 6px; }
+
+        /* -- Usage Dashboard ------------------------------------------------- */
+        .usage-page {
+            display: none;
+            padding: 24px;
+            max-width: 1100px;
+            margin: 0 auto;
+            overflow-y: auto;
+        }
+        .usage-page.active { display: block; }
+
+        .usage-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .usage-header h2 { font-size: 22px; color: #00d4ff; margin: 0; }
+
+        .usage-filter {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .usage-filter label {
+            font-size: 12px;
+            color: #8888aa;
+        }
+        .usage-filter input[type="date"] {
+            background: #12122a;
+            border: 1px solid #2a2a4a;
+            color: #e0e0e0;
+            padding: 5px 8px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-family: inherit;
+        }
+        .usage-filter input[type="date"]:focus {
+            outline: none;
+            border-color: #00d4ff;
+        }
+        .usage-filter .btn { margin-left: 4px; }
+
+        .usage-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 28px;
+        }
+
+        .usage-card {
+            background: #16213e;
+            border: 1px solid #2a2a4a;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            transition: border-color 0.2s ease;
+        }
+        .usage-card:hover { border-color: #3a3a6a; }
+        .usage-card .usage-card-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+            color: #6a6a8a;
+            margin-bottom: 8px;
+        }
+        .usage-card .usage-card-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: #00d4ff;
+            line-height: 1.2;
+        }
+        .usage-card .usage-card-sub {
+            font-size: 12px;
+            color: #6a6a8a;
+            margin-top: 4px;
+        }
+
+        .usage-tabs {
+            display: flex;
+            gap: 0;
+            border-bottom: 1px solid #2a2a4a;
+            margin-bottom: 16px;
+        }
+        .usage-tab-btn {
+            background: none;
+            border: none;
+            color: #6a6a8a;
+            font-size: 13px;
+            font-weight: 500;
+            padding: 10px 20px;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.15s ease;
+            font-family: inherit;
+        }
+        .usage-tab-btn:hover { color: #b0b0cc; }
+        .usage-tab-btn.active {
+            color: #00d4ff;
+            border-bottom-color: #00d4ff;
+        }
+
+        .usage-tab-panel { display: none; }
+        .usage-tab-panel.active { display: block; }
+
+        .usage-table-wrap {
+            overflow-x: auto;
+        }
+        .usage-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        .usage-table th {
+            text-align: left;
+            padding: 10px 12px;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #6a6a8a;
+            border-bottom: 1px solid #2a2a4a;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        .usage-table th.num { text-align: right; }
+        .usage-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid rgba(42, 42, 74, 0.5);
+            color: #c0c0d0;
+        }
+        .usage-table td.num {
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
+        .usage-table tr:hover td { background: rgba(255, 255, 255, 0.02); }
+        .usage-table .total-row td {
+            font-weight: 700;
+            color: #e0e0e0;
+            border-top: 2px solid #2a2a4a;
+        }
+        .usage-table .cost { color: #fdcb6e; }
+        .usage-table .task-link {
+            color: #74b9ff;
+            cursor: pointer;
+        }
+        .usage-table .task-link:hover { text-decoration: underline; }
+
+        .usage-empty {
+            text-align: center;
+            color: #4a4a6a;
+            padding: 40px 20px;
+            font-size: 14px;
+        }
 
         /* -- Guide Page ------------------------------------------------------ */
         .guide-page {
@@ -906,6 +1073,47 @@
             font-size: 14px;
         }
 
+        /* Chat notification badge */
+        .detail-tab-btn {
+            position: relative;
+        }
+        .tab-badge {
+            position: absolute;
+            top: 4px;
+            right: 2px;
+            width: 8px;
+            height: 8px;
+            background: #ff6b6b;
+            border-radius: 50%;
+            animation: badge-pulse 1.5s ease-in-out infinite;
+        }
+        @keyframes badge-pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(1.3); }
+        }
+
+        /* Open Chat button with new message indicator */
+        .btn-has-new::after {
+            content: '';
+            display: inline-block;
+            width: 7px;
+            height: 7px;
+            background: #ff6b6b;
+            border-radius: 50%;
+            margin-left: 5px;
+            animation: badge-pulse 1.5s ease-in-out infinite;
+        }
+
+        /* Finalizing / generating plan state */
+        .btn-finalizing {
+            position: relative;
+            pointer-events: none;
+            opacity: 0.7;
+        }
+        .btn-finalizing .spinner {
+            margin-right: 4px;
+        }
+
         /* Detail Log Tab */
         .detail-log-wrapper {
             padding: 16px;
@@ -959,6 +1167,282 @@
             .detail-body { padding: 12px 14px; }
             .detail-info-grid { grid-template-columns: 1fr 1fr; }
             .detail-chat-wrapper { height: 400px; }
+        }
+
+        /* -- All Tasks Manager Panel ----------------------------------------- */
+        .all-tasks-panel {
+            display: none;
+            flex-direction: column;
+            height: 100%;
+            overflow: hidden;
+        }
+        .all-tasks-panel.active {
+            display: flex;
+        }
+
+        .all-tasks-toolbar {
+            padding: 16px 24px;
+            background: #12122a;
+            border-bottom: 1px solid #2a2a4a;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            flex-shrink: 0;
+        }
+
+        .all-tasks-toolbar-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .all-tasks-search {
+            flex: 1;
+            min-width: 200px;
+            padding: 8px 12px;
+            background: #0f0f23;
+            border: 1px solid #2a2a4a;
+            border-radius: 6px;
+            color: #e0e0e0;
+            font-size: 13px;
+            font-family: inherit;
+        }
+        .all-tasks-search:focus {
+            outline: none;
+            border-color: #00d4ff;
+        }
+        .all-tasks-search::placeholder {
+            color: #4a4a6a;
+        }
+
+        .filter-group {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .filter-label {
+            font-size: 11px;
+            color: #5a6a8a;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            white-space: nowrap;
+        }
+
+        .filter-select {
+            padding: 6px 10px;
+            background: #0f0f23;
+            border: 1px solid #2a2a4a;
+            border-radius: 6px;
+            color: #e0e0e0;
+            font-size: 12px;
+            font-family: inherit;
+            cursor: pointer;
+        }
+        .filter-select:focus {
+            outline: none;
+            border-color: #00d4ff;
+        }
+
+        .filter-date-input {
+            padding: 6px 10px;
+            background: #0f0f23;
+            border: 1px solid #2a2a4a;
+            border-radius: 6px;
+            color: #e0e0e0;
+            font-size: 12px;
+            font-family: inherit;
+            cursor: pointer;
+        }
+        .filter-date-input:focus {
+            outline: none;
+            border-color: #00d4ff;
+        }
+        /* Fix date input color scheme for dark theme */
+        .filter-date-input::-webkit-calendar-picker-indicator {
+            filter: invert(0.7);
+        }
+
+        .batch-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .batch-info {
+            font-size: 12px;
+            color: #00d4ff;
+            font-weight: 500;
+        }
+
+        .all-tasks-table-wrapper {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0 24px 24px;
+        }
+
+        .all-tasks-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 16px;
+        }
+
+        .all-tasks-table th,
+        .all-tasks-table td {
+            padding: 10px 12px;
+            text-align: left;
+            border-bottom: 1px solid #1e2a4a;
+            font-size: 13px;
+        }
+
+        .all-tasks-table th {
+            background: #0f0f23;
+            color: #5a6a8a;
+            font-weight: 600;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            cursor: pointer;
+            user-select: none;
+            white-space: nowrap;
+        }
+
+        .all-tasks-table th:hover {
+            color: #00d4ff;
+        }
+
+        .all-tasks-table th.sorted {
+            color: #00d4ff;
+        }
+
+        .all-tasks-table th .sort-arrow {
+            margin-left: 4px;
+            font-size: 10px;
+            opacity: 0.5;
+        }
+        .all-tasks-table th.sorted .sort-arrow {
+            opacity: 1;
+        }
+
+        .all-tasks-table tr {
+            transition: background 0.15s ease;
+        }
+
+        .all-tasks-table tbody tr:hover {
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .all-tasks-table tbody tr.selected {
+            background: rgba(0, 212, 255, 0.08);
+        }
+
+        .all-tasks-table td {
+            color: #d0d0e0;
+        }
+
+        .all-tasks-table .task-checkbox-cell {
+            width: 36px;
+            text-align: center;
+        }
+
+        .all-tasks-table input[type="checkbox"] {
+            width: 15px;
+            height: 15px;
+            cursor: pointer;
+            accent-color: #00d4ff;
+        }
+
+        .table-task-id {
+            font-family: "SF Mono", "Fira Code", monospace;
+            font-size: 11px;
+            color: #5a6a8a;
+        }
+
+        .table-task-title {
+            cursor: pointer;
+            max-width: 300px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .table-task-title:hover {
+            color: #00d4ff;
+        }
+
+        .table-status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: 500;
+        }
+        .table-status-badge .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+        }
+
+        .table-priority {
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .table-priority.p0 { color: #5a6a8a; }
+        .table-priority.p1 { color: #a29bfe; }
+        .table-priority.p2 { color: #ffa502; }
+        .table-priority.p3 { color: #ff4757; }
+
+        .table-date {
+            font-size: 12px;
+            color: #8888aa;
+            white-space: nowrap;
+        }
+
+        .table-actions {
+            white-space: nowrap;
+        }
+
+        .all-tasks-empty {
+            text-align: center;
+            color: #4a4a6a;
+            font-size: 14px;
+            padding: 60px 20px;
+        }
+
+        .all-tasks-result-info {
+            font-size: 12px;
+            color: #5a6a8a;
+            padding: 8px 0;
+        }
+
+        /* Mobile responsive for all-tasks panel */
+        @media (max-width: 768px) {
+            .all-tasks-toolbar {
+                padding: 12px 14px;
+            }
+            .all-tasks-toolbar-row {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .all-tasks-search {
+                min-width: unset;
+            }
+            .all-tasks-table-wrapper {
+                padding: 0 14px 14px;
+            }
+            .all-tasks-table td, .all-tasks-table th {
+                padding: 8px 6px;
+                font-size: 11px;
+            }
+            .table-task-title {
+                max-width: 150px;
+            }
         }
 
         /* -- Toast ----------------------------------------------------------- */
@@ -1022,6 +1506,7 @@
                 background: transparent;
             }
 
+            .nav-item[data-tab="all_tasks"].active  { border-bottom-color: #00d4ff; border-left-color: transparent; }
             .nav-item[data-tab="pending"].active    { border-bottom-color: #6c5ce7; border-left-color: transparent; }
             .nav-item[data-tab="planning"].active   { border-bottom-color: #a29bfe; border-left-color: transparent; }
             .nav-item[data-tab="planned"].active    { border-bottom-color: #74b9ff; border-left-color: transparent; }
@@ -1068,6 +1553,12 @@
         </div>
 
         <nav class="sidebar-nav" id="sidebarNav">
+            <div class="sidebar-section-label">Management</div>
+            <button class="nav-item" data-tab="all_tasks" onclick="switchTab('all_tasks')">
+                <span class="nav-dot" style="background: #00d4ff;"></span>
+                <span class="nav-label">All Tasks</span>
+                <span class="nav-count" id="nav-count-all_tasks">0</span>
+            </button>
             <div class="sidebar-section-label">Task Status</div>
             <button class="nav-item active" data-tab="pending" onclick="switchTab('pending')">
                 <span class="nav-dot"></span>
@@ -1114,6 +1605,10 @@
         <div class="sidebar-status" id="statusBar">loading...</div>
 
         <div class="sidebar-bottom">
+            <button class="nav-item" id="usageToggleBtn" onclick="toggleUsagePage()">
+                <span class="nav-dot" style="background: #fdcb6e;"></span>
+                <span class="nav-label">Token Usage</span>
+            </button>
             <button class="nav-item" id="guideToggleBtn" onclick="toggleGuidePage()">
                 <span class="nav-dot" style="background: #00d4ff;"></span>
                 <span class="nav-label">Workflow Guide</span>
@@ -1142,6 +1637,60 @@
         <div class="content-panel" id="contentPanel">
             <div class="task-list" id="taskList">
                 <div class="empty-hint">No tasks</div>
+            </div>
+        </div>
+
+        <!-- All Tasks Manager Panel (hidden by default) -->
+        <div class="all-tasks-panel" id="allTasksPanel">
+            <div class="all-tasks-toolbar">
+                <div class="all-tasks-toolbar-row">
+                    <input type="text" class="all-tasks-search" id="allTasksSearch"
+                           placeholder="Search tasks..." oninput="filterAllTasks()">
+                    <select id="allTasksStatusFilter" onchange="filterAllTasks()">
+                        <option value="">All Status</option>
+                        <option value="pending">Pending</option>
+                        <option value="planning">Planning</option>
+                        <option value="planned">Planned</option>
+                        <option value="approved">Approved</option>
+                        <option value="running">Running</option>
+                        <option value="needs_input">Needs Input</option>
+                        <option value="done">Done</option>
+                        <option value="failed">Failed</option>
+                    </select>
+                    <select id="allTasksPriorityFilter" onchange="filterAllTasks()">
+                        <option value="">All Priority</option>
+                        <option value="0">Normal</option>
+                        <option value="1">P1</option>
+                        <option value="2">P2</option>
+                        <option value="3">P3</option>
+                    </select>
+                    <input type="date" id="allTasksDateFilter" onchange="filterAllTasks()">
+                </div>
+                <div class="all-tasks-toolbar-row">
+                    <span id="allTasksResultInfo" style="color:#888; font-size:0.85rem;"></span>
+                    <div id="batchActions" style="display:none; align-items:center; gap:8px; margin-left:auto;">
+                        <span id="batchInfo" style="color:#00d4ff; font-size:0.85rem;"></span>
+                        <button class="btn btn-danger btn-small" onclick="batchDeleteTasks()">Delete Selected</button>
+                        <button class="btn btn-outline btn-small" onclick="clearSelection()">Clear</button>
+                    </div>
+                </div>
+            </div>
+            <div class="all-tasks-table-wrapper">
+                <table class="all-tasks-table">
+                    <thead>
+                        <tr>
+                            <th style="width:40px;"><input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll(this)"></th>
+                            <th data-sort="id" onclick="sortAllTasks('id')" style="cursor:pointer;">ID <span class="sort-arrow"></span></th>
+                            <th data-sort="title" onclick="sortAllTasks('title')" style="cursor:pointer;">Title <span class="sort-arrow"></span></th>
+                            <th data-sort="status" onclick="sortAllTasks('status')" style="cursor:pointer;">Status <span class="sort-arrow"></span></th>
+                            <th data-sort="priority" onclick="sortAllTasks('priority')" style="cursor:pointer;">Priority <span class="sort-arrow"></span></th>
+                            <th data-sort="created_at" onclick="sortAllTasks('created_at')" style="cursor:pointer;">Created <span class="sort-arrow"></span></th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="allTasksBody"></tbody>
+                </table>
+                <div id="allTasksEmpty" class="empty-hint" style="display:none;">No matching tasks</div>
             </div>
         </div>
 
@@ -1219,6 +1768,73 @@
                             <div class="detail-log-empty">No log data available.</div>
                         </div>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Usage Dashboard (hidden by default) -->
+        <div class="usage-page" id="usagePage">
+            <div class="usage-header">
+                <h2>Token Usage</h2>
+                <div class="usage-filter">
+                    <label>From</label>
+                    <input type="date" id="usageSince" />
+                    <label>To</label>
+                    <input type="date" id="usageUntil" />
+                    <button class="btn btn-outline btn-small" onclick="fetchUsageData()">Apply</button>
+                    <button class="btn btn-outline btn-small" onclick="clearUsageFilter()">Clear</button>
+                </div>
+            </div>
+
+            <!-- Summary Cards -->
+            <div class="usage-cards" id="usageCards">
+                <div class="usage-card">
+                    <div class="usage-card-label">Total Tokens</div>
+                    <div class="usage-card-value" id="usageTotalTokens">-</div>
+                    <div class="usage-card-sub" id="usageTotalTokensSub"></div>
+                </div>
+                <div class="usage-card">
+                    <div class="usage-card-label">Total Cost</div>
+                    <div class="usage-card-value" id="usageTotalCost">-</div>
+                    <div class="usage-card-sub" id="usageTotalCostSub"></div>
+                </div>
+                <div class="usage-card">
+                    <div class="usage-card-label">Sessions</div>
+                    <div class="usage-card-value" id="usageSessionCount">-</div>
+                    <div class="usage-card-sub" id="usageSessionCountSub"></div>
+                </div>
+                <div class="usage-card">
+                    <div class="usage-card-label">Input / Output</div>
+                    <div class="usage-card-value" id="usageIORatio">-</div>
+                    <div class="usage-card-sub" id="usageIORatioSub"></div>
+                </div>
+            </div>
+
+            <!-- Detail Tabs -->
+            <div class="usage-tabs">
+                <button class="usage-tab-btn active" data-utab="sessions" onclick="switchUsageTab('sessions')">Sessions</button>
+                <button class="usage-tab-btn" data-utab="daily" onclick="switchUsageTab('daily')">Daily</button>
+                <button class="usage-tab-btn" data-utab="monthly" onclick="switchUsageTab('monthly')">Monthly</button>
+            </div>
+
+            <!-- Sessions Tab -->
+            <div class="usage-tab-panel active" id="usageTabSessions">
+                <div class="usage-table-wrap">
+                    <div id="usageSessionsTable" class="usage-empty">Loading...</div>
+                </div>
+            </div>
+
+            <!-- Daily Tab -->
+            <div class="usage-tab-panel" id="usageTabDaily">
+                <div class="usage-table-wrap">
+                    <div id="usageDailyTable" class="usage-empty">Loading...</div>
+                </div>
+            </div>
+
+            <!-- Monthly Tab -->
+            <div class="usage-tab-panel" id="usageTabMonthly">
+                <div class="usage-table-wrap">
+                    <div id="usageMonthlyTable" class="usage-empty">Loading...</div>
                 </div>
             </div>
         </div>
@@ -1519,6 +2135,11 @@
         let detailLogRefreshTimer = null;
         let detailRefreshTimer = null;
 
+        // Chat notification state
+        let chatHasNewMessage = {};      // {taskId: true} - tracks unread AI replies
+        let isFinalizing = {};           // {taskId: true} - tracks finalize in progress
+        let lastKnownThinking = {};      // {taskId: bool} - tracks thinking state for change detection
+
         const STATUSES = ['pending', 'planning', 'planned', 'approved', 'running', 'needs_input', 'done', 'failed'];
 
         const STATUS_LABELS = {
@@ -1572,7 +2193,11 @@
             if (data !== null) {
                 allTasks = data;
                 if (currentView === 'list') {
-                    renderTaskList();
+                    if (activeTab === 'all_tasks') {
+                        renderAllTasksTable();
+                    } else {
+                        renderTaskList();
+                    }
                 }
                 updateNavCounts();
                 fetchStatus();
@@ -1608,26 +2233,41 @@
                 item.classList.toggle('active', item.dataset.tab === status);
             });
 
-            // Update top bar title
-            document.getElementById('currentTabTitle').textContent = STATUS_LABELS[status] || status;
-            document.getElementById('titleDot').style.background = STATUS_COLORS[status] || '#888';
-
-            // Show/hide guide vs task list
+            // Hide all views first
             document.getElementById('guidePage').classList.remove('active');
-            document.getElementById('contentPanel').style.display = '';
-            document.getElementById('topBar').style.display = '';
+            document.getElementById('usagePage').classList.remove('active');
             document.getElementById('detailView').classList.remove('active');
+            document.getElementById('allTasksPanel').classList.remove('active');
             guideVisible = false;
+            usageVisible = false;
             var guideBtn = document.getElementById('guideToggleBtn');
             guideBtn.querySelector('.nav-label').textContent = 'Workflow Guide';
+            var usageBtn = document.getElementById('usageToggleBtn');
+            usageBtn.querySelector('.nav-label').textContent = 'Token Usage';
+
+            if (status === 'all_tasks') {
+                // Show All Tasks panel, hide normal list
+                document.getElementById('contentPanel').style.display = 'none';
+                document.getElementById('topBar').style.display = 'none';
+                document.getElementById('allTasksPanel').classList.add('active');
+                renderAllTasksTable();
+            } else {
+                // Show normal status-filtered task list
+                document.getElementById('contentPanel').style.display = '';
+                document.getElementById('topBar').style.display = '';
+
+                // Update top bar title
+                document.getElementById('currentTabTitle').textContent = STATUS_LABELS[status] || status;
+                document.getElementById('titleDot').style.background = STATUS_COLORS[status] || '#888';
+
+                renderTaskList();
+            }
 
             // Scroll to active tab on mobile
             var activeNavItem = document.querySelector('.nav-item[data-tab="' + status + '"]');
             if (activeNavItem) {
                 activeNavItem.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
             }
-
-            renderTaskList();
         }
 
         function updateNavCounts() {
@@ -1642,6 +2282,9 @@
                 var el = document.getElementById('nav-count-' + status);
                 if (el) el.textContent = groups[status];
             });
+            // Update All Tasks count
+            var allCountEl = document.getElementById('nav-count-all_tasks');
+            if (allCountEl) allCountEl.textContent = allTasks.length;
         }
 
         /* -- Task List Rendering --------------------------------------------- */
@@ -1681,7 +2324,17 @@
             // Status indicators
             var statusIndicator = '';
             if (status === 'planning') {
-                statusIndicator = '<div class="planning-indicator"><span class="spinner"></span>Generating plan...</div>';
+                if (task.plan_mode === 'interactive') {
+                    if (task.chat_status === 'finalized') {
+                        statusIndicator = '<div class="planning-indicator"><span class="spinner"></span>Generating final plan...</div>';
+                    } else if (task.chat_thinking) {
+                        statusIndicator = '<div class="planning-indicator"><span class="spinner"></span>AI is thinking...</div>';
+                    } else {
+                        statusIndicator = '<div class="planning-indicator planning-ready">AI has replied — open chat to continue</div>';
+                    }
+                } else {
+                    statusIndicator = '<div class="planning-indicator"><span class="spinner"></span>Generating plan...</div>';
+                }
             } else if (status === 'running') {
                 statusIndicator = '<div class="running-indicator"><span class="spinner"></span>Executing...</div>';
             }
@@ -1738,12 +2391,20 @@
                     break;
                 case 'planning':
                     if (task.plan_mode === 'interactive') {
-                        btns.push(actionBtn('Open Chat', 'warning', 'openChatModal', id));
+                        if (task.chat_status === 'finalized') {
+                            // Finalize in progress — no chat interaction
+                        } else if (!task.chat_thinking) {
+                            btns.push(actionBtn('Open Chat (new reply)', 'success', 'openChatModal', id));
+                        } else {
+                            btns.push(actionBtn('Open Chat', 'warning', 'openChatModal', id));
+                        }
                     }
+                    btns.push(actionBtn('Delete', 'danger', 'deleteTask', id));
                     break;
                 case 'planned':
                     btns.push(actionBtn('Approve', 'success', 'approveTask', id));
                     btns.push(actionBtn('Chat', 'warning', 'openChatModal', id));
+                    btns.push(actionBtn('Delete', 'danger', 'deleteTask', id));
                     break;
                 case 'approved':
                     btns.push(actionBtn('Run', 'warning', 'runTask', id));
@@ -1751,6 +2412,10 @@
                     break;
                 case 'running':
                     btns.push(actionBtn('View Log', 'outline', 'viewLog', id));
+                    btns.push(actionBtn('Delete', 'danger', 'deleteTask', id));
+                    break;
+                case 'merging':
+                    btns.push(actionBtn('Delete', 'danger', 'deleteTask', id));
                     break;
                 case 'needs_input':
                     btns.push(actionBtn('Respond', 'warning', 'openRespondModal', id));
@@ -2012,9 +2677,22 @@
         }
 
         /* -- Task Actions: Delete -------------------------------------------- */
+        function _getDeleteConfirmMessage(taskId) {
+            var task = allTasks.find(function(t) { return t.id === taskId; });
+            if (!task) return 'Delete task ' + taskId + '?';
+            var status = task.status;
+            if (status === 'planning' || status === 'running') {
+                return 'Task ' + taskId + ' is currently ' + status + '. Deleting will stop any running background processes. Continue?';
+            }
+            if (status === 'merging') {
+                return 'Task ' + taskId + ' is currently merging. Deleting may leave partial merge state. Continue?';
+            }
+            return 'Delete task ' + taskId + '?';
+        }
+
         async function deleteTask(event, taskId) {
             event.stopPropagation();
-            if (!confirm('Delete task ' + taskId + '?')) return;
+            if (!confirm(_getDeleteConfirmMessage(taskId))) return;
             var data = await api('/tasks/' + taskId, { method: 'DELETE' });
             if (data !== null) {
                 showToast('Task ' + taskId + ' deleted');
@@ -2415,10 +3093,12 @@
                     if (task.plan_mode === 'interactive') {
                         btns.push(detailActionBtn('Open Chat', 'warning', function() { switchDetailTab('chat'); }));
                     }
+                    btns.push(detailActionBtn('Delete', 'danger', function() { deleteTaskDetail(id); }));
                     break;
                 case 'planned':
                     btns.push(detailActionBtn('Approve', 'success', function() { approveTask(new Event('click'), id); }));
                     btns.push(detailActionBtn('Chat', 'warning', function() { switchDetailTab('chat'); }));
+                    btns.push(detailActionBtn('Delete', 'danger', function() { deleteTaskDetail(id); }));
                     break;
                 case 'approved':
                     btns.push(detailActionBtn('Run', 'warning', function() { runTask(new Event('click'), id); }));
@@ -2426,6 +3106,10 @@
                     break;
                 case 'running':
                     btns.push(detailActionBtn('View Log', 'outline', function() { switchDetailTab('log'); }));
+                    btns.push(detailActionBtn('Delete', 'danger', function() { deleteTaskDetail(id); }));
+                    break;
+                case 'merging':
+                    btns.push(detailActionBtn('Delete', 'danger', function() { deleteTaskDetail(id); }));
                     break;
                 case 'needs_input':
                     btns.push(detailActionBtn('Respond', 'warning', function() { openRespondModal(new Event('click'), id); }));
@@ -2473,7 +3157,7 @@
         }
 
         async function deleteTaskDetail(taskId) {
-            if (!confirm('Delete task ' + taskId + '?')) return;
+            if (!confirm(_getDeleteConfirmMessage(taskId))) return;
             var data = await api('/tasks/' + taskId, { method: 'DELETE' });
             if (data !== null) {
                 showToast('Task ' + taskId + ' deleted');
@@ -2495,6 +3179,9 @@
             document.getElementById('detailTabPlan').classList.toggle('active', tab === 'plan');
             document.getElementById('detailTabChat').classList.toggle('active', tab === 'chat');
             document.getElementById('detailTabLog').classList.toggle('active', tab === 'log');
+
+            // Clear chat badge when switching to chat tab
+            if (tab === 'chat') clearChatBadge(detailTaskId);
 
             // Load data for active tab
             if (tab === 'plan') loadDetailPlan();
@@ -2702,6 +3389,28 @@
                 var idx = allTasks.findIndex(function(t) { return t.id === detailTaskId; });
                 if (idx >= 0) allTasks[idx] = data;
 
+                // Check chat status for notification badge
+                if (data.plan_mode === 'interactive') {
+                    var chatData = await api('/tasks/' + detailTaskId + '/chat');
+                    if (chatData !== null) {
+                        var wasThinking = lastKnownThinking[detailTaskId];
+                        var isThinking = chatData.thinking;
+                        lastKnownThinking[detailTaskId] = isThinking;
+
+                        // AI just finished responding and we're not on chat tab
+                        if (wasThinking === true && !isThinking && detailActiveTab !== 'chat') {
+                            chatHasNewMessage[detailTaskId] = true;
+                        }
+
+                        // If finalizing just completed (status changed from planning to planned)
+                        if (isFinalizing[detailTaskId] && data.status !== 'planning') {
+                            delete isFinalizing[detailTaskId];
+                        }
+
+                        updateChatTabBadge();
+                    }
+                }
+
                 // Re-render detail
                 renderTaskDetail(data);
 
@@ -2718,6 +3427,223 @@
             if (detailRefreshTimer) { clearInterval(detailRefreshTimer); detailRefreshTimer = null; }
         }
 
+        /* -- Chat Tab Badge -------------------------------------------------- */
+        function updateChatTabBadge() {
+            var chatTabBtn = document.querySelector('.detail-tab-btn[data-dtab="chat"]');
+            if (!chatTabBtn) return;
+            var badge = chatTabBtn.querySelector('.tab-badge');
+            if (detailTaskId && chatHasNewMessage[detailTaskId]) {
+                if (!badge) {
+                    badge = document.createElement('span');
+                    badge.className = 'tab-badge';
+                    chatTabBtn.appendChild(badge);
+                }
+            } else {
+                if (badge) badge.remove();
+            }
+        }
+
+        function clearChatBadge(taskId) {
+            if (taskId) delete chatHasNewMessage[taskId];
+            updateChatTabBadge();
+        }
+
+        /* -- All Tasks Manager ----------------------------------------------- */
+        var allTasksSortField = 'created_at';
+        var allTasksSortDir = 'desc';   // 'asc' | 'desc'
+        var selectedTaskIds = new Set();
+
+        function getFilteredAllTasks() {
+            var searchText = (document.getElementById('allTasksSearch').value || '').toLowerCase().trim();
+            var statusFilter = document.getElementById('allTasksStatusFilter').value;
+            var priorityFilter = document.getElementById('allTasksPriorityFilter').value;
+            var dateFilter = document.getElementById('allTasksDateFilter').value;
+
+            var filtered = allTasks.filter(function(task) {
+                // Search filter
+                if (searchText) {
+                    var matchId = task.id.toLowerCase().indexOf(searchText) >= 0;
+                    var matchTitle = task.title.toLowerCase().indexOf(searchText) >= 0;
+                    var matchPrompt = (task.prompt || '').toLowerCase().indexOf(searchText) >= 0;
+                    if (!matchId && !matchTitle && !matchPrompt) return false;
+                }
+                // Status filter
+                if (statusFilter && task.status !== statusFilter) return false;
+                // Priority filter
+                if (priorityFilter !== '' && String(task.priority) !== priorityFilter) return false;
+                // Date filter
+                if (dateFilter && task.created_at) {
+                    var taskDate = task.created_at.substring(0, 10);
+                    if (taskDate !== dateFilter) return false;
+                }
+                return true;
+            });
+
+            // Sort
+            filtered.sort(function(a, b) {
+                var valA, valB;
+                switch (allTasksSortField) {
+                    case 'id':
+                        valA = a.id; valB = b.id;
+                        break;
+                    case 'title':
+                        valA = a.title.toLowerCase(); valB = b.title.toLowerCase();
+                        break;
+                    case 'status':
+                        valA = STATUSES.indexOf(a.status); valB = STATUSES.indexOf(b.status);
+                        break;
+                    case 'priority':
+                        valA = a.priority || 0; valB = b.priority || 0;
+                        break;
+                    case 'created_at':
+                        valA = a.created_at || ''; valB = b.created_at || '';
+                        break;
+                    default:
+                        valA = a.created_at || ''; valB = b.created_at || '';
+                }
+                var cmp = valA < valB ? -1 : (valA > valB ? 1 : 0);
+                return allTasksSortDir === 'asc' ? cmp : -cmp;
+            });
+
+            return filtered;
+        }
+
+        function renderAllTasksTable() {
+            var filtered = getFilteredAllTasks();
+            var tbody = document.getElementById('allTasksBody');
+            var emptyEl = document.getElementById('allTasksEmpty');
+            var infoEl = document.getElementById('allTasksResultInfo');
+
+            // Update sort column indicators
+            document.querySelectorAll('.all-tasks-table th[data-sort]').forEach(function(th) {
+                var field = th.dataset.sort;
+                th.classList.toggle('sorted', field === allTasksSortField);
+                var arrow = th.querySelector('.sort-arrow');
+                if (field === allTasksSortField) {
+                    arrow.textContent = allTasksSortDir === 'asc' ? '\u25B2' : '\u25BC';
+                } else {
+                    arrow.textContent = '';
+                }
+            });
+
+            // Result info
+            infoEl.textContent = filtered.length + ' / ' + allTasks.length + ' tasks';
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = '';
+                emptyEl.style.display = 'block';
+                return;
+            }
+            emptyEl.style.display = 'none';
+
+            tbody.innerHTML = filtered.map(function(task) {
+                var isSelected = selectedTaskIds.has(task.id);
+                var color = STATUS_COLORS[task.status] || '#888';
+                var priorityClass = 'p' + (task.priority || 0);
+                var priorityLabel = task.priority > 0 ? 'P' + task.priority : 'Normal';
+                var createdDate = formatTime(task.created_at);
+
+                return '<tr class="' + (isSelected ? 'selected' : '') + '">'
+                    + '<td class="task-checkbox-cell"><input type="checkbox" '
+                    + (isSelected ? 'checked' : '')
+                    + ' onchange="toggleTaskSelection(\'' + task.id + '\', this.checked)"></td>'
+                    + '<td class="table-task-id">' + escapeHtml(task.id) + '</td>'
+                    + '<td class="table-task-title" onclick="openTaskDetail(\'' + task.id + '\')">'
+                    + escapeHtml(task.title) + '</td>'
+                    + '<td><span class="table-status-badge" style="background:' + color + '18; color:' + color + ';">'
+                    + '<span class="status-dot" style="background:' + color + ';"></span>'
+                    + (STATUS_LABELS[task.status] || task.status) + '</span></td>'
+                    + '<td><span class="table-priority ' + priorityClass + '">' + priorityLabel + '</span></td>'
+                    + '<td class="table-date">' + createdDate + '</td>'
+                    + '<td class="table-actions">'
+                    + '<button class="btn btn-danger btn-small" onclick="deleteTask(new Event(\'click\'), \'' + task.id + '\')">Delete</button>'
+                    + '</td>'
+                    + '</tr>';
+            }).join('');
+
+            updateBatchUI();
+        }
+
+        function filterAllTasks() {
+            renderAllTasksTable();
+        }
+
+        function sortAllTasks(field) {
+            if (allTasksSortField === field) {
+                allTasksSortDir = allTasksSortDir === 'asc' ? 'desc' : 'asc';
+            } else {
+                allTasksSortField = field;
+                allTasksSortDir = field === 'priority' ? 'desc' : 'asc';
+            }
+            renderAllTasksTable();
+        }
+
+        function clearAllFilters() {
+            document.getElementById('allTasksSearch').value = '';
+            document.getElementById('allTasksStatusFilter').value = '';
+            document.getElementById('allTasksPriorityFilter').value = '';
+            document.getElementById('allTasksDateFilter').value = '';
+            renderAllTasksTable();
+        }
+
+        function toggleTaskSelection(taskId, checked) {
+            if (checked) {
+                selectedTaskIds.add(taskId);
+            } else {
+                selectedTaskIds.delete(taskId);
+            }
+            updateBatchUI();
+            // Update "select all" checkbox state
+            var filtered = getFilteredAllTasks();
+            var allChecked = filtered.length > 0 && filtered.every(function(t) { return selectedTaskIds.has(t.id); });
+            document.getElementById('selectAllCheckbox').checked = allChecked;
+        }
+
+        function toggleSelectAll(checkbox) {
+            var filtered = getFilteredAllTasks();
+            if (checkbox.checked) {
+                filtered.forEach(function(t) { selectedTaskIds.add(t.id); });
+            } else {
+                filtered.forEach(function(t) { selectedTaskIds.delete(t.id); });
+            }
+            renderAllTasksTable();
+        }
+
+        function updateBatchUI() {
+            var count = selectedTaskIds.size;
+            var batchEl = document.getElementById('batchActions');
+            var infoEl = document.getElementById('batchInfo');
+            if (count > 0) {
+                batchEl.style.display = 'flex';
+                infoEl.textContent = count + ' selected';
+            } else {
+                batchEl.style.display = 'none';
+            }
+        }
+
+        function clearSelection() {
+            selectedTaskIds.clear();
+            document.getElementById('selectAllCheckbox').checked = false;
+            renderAllTasksTable();
+        }
+
+        async function batchDeleteTasks() {
+            var ids = Array.from(selectedTaskIds);
+            if (ids.length === 0) return;
+            if (!confirm('Delete ' + ids.length + ' selected task(s)?')) return;
+
+            var data = await api('/tasks/batch-delete', {
+                method: 'POST',
+                body: JSON.stringify({ task_ids: ids }),
+            });
+            if (data !== null) {
+                showToast(data.count + ' task(s) deleted');
+                selectedTaskIds.clear();
+                document.getElementById('selectAllCheckbox').checked = false;
+                fetchTasks();
+            }
+        }
+
         /* -- Guide Page ------------------------------------------------------ */
         var guideVisible = false;
 
@@ -2725,6 +3651,12 @@
             // Close detail view first if open
             if (currentView === 'detail') {
                 closeTaskDetail();
+            }
+            // Close usage page if open
+            if (usageVisible) {
+                document.getElementById('usagePage').classList.remove('active');
+                document.getElementById('usageToggleBtn').querySelector('.nav-label').textContent = 'Token Usage';
+                usageVisible = false;
             }
 
             guideVisible = !guideVisible;
@@ -2738,6 +3670,7 @@
                 contentPanel.style.display = 'none';
                 topBar.style.display = 'none';
                 document.getElementById('detailView').classList.remove('active');
+                document.getElementById('allTasksPanel').classList.remove('active');
                 btn.querySelector('.nav-label').textContent = 'Back to Board';
                 // Deactivate all nav items
                 document.querySelectorAll('.nav-item[data-tab]').forEach(function(item) {
@@ -2761,6 +3694,217 @@
                 if (allExpanded) s.classList.remove('expanded');
                 else s.classList.add('expanded');
             });
+        }
+
+        /* -- Usage Dashboard ------------------------------------------------- */
+        var usageVisible = false;
+        var usageActiveTab = 'sessions';
+
+        function toggleUsagePage() {
+            if (currentView === 'detail') { closeTaskDetail(); }
+            if (guideVisible) {
+                document.getElementById('guidePage').classList.remove('active');
+                document.getElementById('guideToggleBtn').querySelector('.nav-label').textContent = 'Workflow Guide';
+                guideVisible = false;
+            }
+
+            usageVisible = !usageVisible;
+            var usagePage = document.getElementById('usagePage');
+            var contentPanel = document.getElementById('contentPanel');
+            var topBar = document.getElementById('topBar');
+            var btn = document.getElementById('usageToggleBtn');
+
+            if (usageVisible) {
+                usagePage.classList.add('active');
+                contentPanel.style.display = 'none';
+                topBar.style.display = 'none';
+                document.getElementById('detailView').classList.remove('active');
+                document.getElementById('allTasksPanel').classList.remove('active');
+                btn.querySelector('.nav-label').textContent = 'Back to Board';
+                document.querySelectorAll('.nav-item[data-tab]').forEach(function(item) {
+                    item.classList.remove('active');
+                });
+                fetchUsageData();
+            } else {
+                usagePage.classList.remove('active');
+                contentPanel.style.display = '';
+                topBar.style.display = '';
+                btn.querySelector('.nav-label').textContent = 'Token Usage';
+                switchTab(activeTab);
+            }
+        }
+
+        function getUsageFilterParams() {
+            var since = document.getElementById('usageSince').value;
+            var until = document.getElementById('usageUntil').value;
+            var params = '';
+            if (since) params += '?since=' + since;
+            if (until) params += (params ? '&' : '?') + 'until=' + until;
+            return params;
+        }
+
+        function clearUsageFilter() {
+            document.getElementById('usageSince').value = '';
+            document.getElementById('usageUntil').value = '';
+            fetchUsageData();
+        }
+
+        async function fetchUsageData() {
+            var params = getUsageFilterParams();
+            var results = await Promise.all([
+                api('/usage/summary' + params),
+                api('/usage/sessions' + params),
+                api('/usage/daily' + params),
+                api('/usage/monthly' + params)
+            ]);
+            renderUsageSummary(results[0]);
+            renderUsageSessionsTable(results[1]);
+            renderUsageDailyTable(results[2]);
+            renderUsageMonthlyTable(results[3]);
+        }
+
+        function fmtTok(n) {
+            if (n == null) return '-';
+            if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+            if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+            return String(n);
+        }
+
+        function fmtTokFull(n) {
+            if (n == null) return '-';
+            return n.toLocaleString();
+        }
+
+        function fmtCost(c) {
+            if (c == null || c === 0) return '/usr/bin/zsh.00';
+            if (c < 0.01) return '$' + c.toFixed(4);
+            return '$' + c.toFixed(2);
+        }
+
+        function renderUsageSummary(s) {
+            if (!s) return;
+            document.getElementById('usageTotalTokens').textContent = fmtTok(s.total_tokens);
+            document.getElementById('usageTotalTokensSub').textContent =
+                'In: ' + fmtTok(s.input_tokens) + ' | Out: ' + fmtTok(s.output_tokens);
+            document.getElementById('usageTotalCost').textContent = fmtCost(s.total_cost_usd);
+            document.getElementById('usageTotalCostSub').textContent = 'USD';
+            document.getElementById('usageSessionCount').textContent = s.session_count || 0;
+            document.getElementById('usageSessionCountSub').textContent = 'active sessions';
+            var inp = s.input_tokens || 0, out = s.output_tokens || 0;
+            document.getElementById('usageIORatio').textContent = (inp > 0 && out > 0) ? ((inp / out).toFixed(1) + ':1') : '-';
+            document.getElementById('usageIORatioSub').textContent =
+                'Cache: ' + fmtTok((s.cache_creation_input_tokens || 0) + (s.cache_read_input_tokens || 0));
+        }
+
+        function switchUsageTab(tab) {
+            usageActiveTab = tab;
+            document.querySelectorAll('.usage-tab-btn').forEach(function(b) {
+                b.classList.toggle('active', b.dataset.utab === tab);
+            });
+            document.querySelectorAll('.usage-tab-panel').forEach(function(p) { p.classList.remove('active'); });
+            document.getElementById('usageTab' + tab.charAt(0).toUpperCase() + tab.slice(1)).classList.add('active');
+        }
+
+        function _uRow(cells, isTotal) {
+            var cls = isTotal ? ' class="total-row"' : '';
+            return '<tr' + cls + '>' + cells.map(function(c) {
+                if (typeof c === 'object') return '<td class="' + (c.cls || '') + '">' + c.v + '</td>';
+                return '<td>' + c + '</td>';
+            }).join('') + '</tr>';
+        }
+
+        function _uHead(cols) {
+            return '<thead><tr>' + cols.map(function(c) {
+                return '<th' + (c.n ? ' class="num"' : '') + '>' + c.l + '</th>';
+            }).join('') + '</tr></thead>';
+        }
+
+        function _n(s, k, a) { return s[k] || s[a] || 0; }
+
+        function renderUsageSessionsTable(sessions) {
+            var el = document.getElementById('usageSessionsTable');
+            if (!sessions || sessions.length === 0) {
+                el.innerHTML = '<div class="usage-empty">No session data available.</div>';
+                return;
+            }
+            var tI = 0, tO = 0, tCC = 0, tCR = 0, tCost = 0;
+            var rows = sessions.map(function(s) {
+                var tid = s.task_id || s.sessionId || s.session_id || '-';
+                var i = _n(s, 'input_tokens', 'inputTokens');
+                var o = _n(s, 'output_tokens', 'outputTokens');
+                var cc = _n(s, 'cache_creation_input_tokens', 'cacheCreationInputTokens');
+                var cr = _n(s, 'cache_read_input_tokens', 'cacheReadInputTokens');
+                var tot = i + o + cc + cr;
+                var cost = s.cost_usd || s.costUSD || s.total_cost_usd || 0;
+                tI += i; tO += o; tCC += cc; tCR += cr; tCost += (cost || 0);
+                var tc = (tid && tid !== '-')
+                    ? '<span class="task-link" onclick="navigateToTask(\'' + tid + '\')">' + tid + '</span>' : '-';
+                return _uRow([tc,{v:fmtTokFull(i),cls:'num'},{v:fmtTokFull(o),cls:'num'},
+                    {v:fmtTokFull(cc),cls:'num'},{v:fmtTokFull(cr),cls:'num'},
+                    {v:fmtTokFull(tot),cls:'num'},{v:fmtCost(cost),cls:'num cost'}]);
+            });
+            var totalTok = tI + tO + tCC + tCR;
+            rows.push(_uRow(['Total ('+sessions.length+')',{v:fmtTokFull(tI),cls:'num'},{v:fmtTokFull(tO),cls:'num'},
+                {v:fmtTokFull(tCC),cls:'num'},{v:fmtTokFull(tCR),cls:'num'},
+                {v:fmtTokFull(totalTok),cls:'num'},{v:fmtCost(tCost),cls:'num cost'}], true));
+            el.innerHTML = '<table class="usage-table">' +
+                _uHead([{l:'Task / Session'},{l:'Input',n:1},{l:'Output',n:1},
+                    {l:'Cache Cr.',n:1},{l:'Cache Rd.',n:1},{l:'Total',n:1},{l:'Cost',n:1}]) +
+                '<tbody>' + rows.join('') + '</tbody></table>';
+        }
+
+        function _renderTimeTable(data, el, timeLabel, timeKey, altTimeKey) {
+            if (!data || data.length === 0) {
+                el.innerHTML = '<div class="usage-empty">No data available. Requires ccusage CLI.</div>';
+                return;
+            }
+            var tI = 0, tO = 0, tCC = 0, tCR = 0, tCost = 0;
+            var rows = data.map(function(d) {
+                var time = d[timeKey] || d[altTimeKey] || '-';
+                var i = _n(d, 'input_tokens', 'inputTokens');
+                var o = _n(d, 'output_tokens', 'outputTokens');
+                var cc = _n(d, 'cache_creation_input_tokens', 'cacheCreationInputTokens');
+                var cr = _n(d, 'cache_read_input_tokens', 'cacheReadInputTokens');
+                var tot = i + o + cc + cr;
+                var cost = d.cost_usd || d.costUSD || d.total_cost_usd || 0;
+                tI += i; tO += o; tCC += cc; tCR += cr; tCost += (cost || 0);
+                return _uRow([time,{v:fmtTokFull(i),cls:'num'},{v:fmtTokFull(o),cls:'num'},
+                    {v:fmtTokFull(cc),cls:'num'},{v:fmtTokFull(cr),cls:'num'},
+                    {v:fmtTokFull(tot),cls:'num'},{v:fmtCost(cost),cls:'num cost'}]);
+            });
+            var totalTok = tI + tO + tCC + tCR;
+            rows.push(_uRow(['Total',{v:fmtTokFull(tI),cls:'num'},{v:fmtTokFull(tO),cls:'num'},
+                {v:fmtTokFull(tCC),cls:'num'},{v:fmtTokFull(tCR),cls:'num'},
+                {v:fmtTokFull(totalTok),cls:'num'},{v:fmtCost(tCost),cls:'num cost'}], true));
+            el.innerHTML = '<table class="usage-table">' +
+                _uHead([{l:timeLabel},{l:'Input',n:1},{l:'Output',n:1},
+                    {l:'Cache Cr.',n:1},{l:'Cache Rd.',n:1},{l:'Total',n:1},{l:'Cost',n:1}]) +
+                '<tbody>' + rows.join('') + '</tbody></table>';
+        }
+
+        function renderUsageDailyTable(data) {
+            _renderTimeTable(data, document.getElementById('usageDailyTable'), 'Date', 'date', 'day');
+        }
+
+        function renderUsageMonthlyTable(data) {
+            _renderTimeTable(data, document.getElementById('usageMonthlyTable'), 'Month', 'month', 'date');
+        }
+
+        function navigateToTask(taskId) {
+            if (usageVisible) {
+                usageVisible = false;
+                document.getElementById('usagePage').classList.remove('active');
+                document.getElementById('contentPanel').style.display = '';
+                document.getElementById('topBar').style.display = '';
+                document.getElementById('usageToggleBtn').querySelector('.nav-label').textContent = 'Token Usage';
+            }
+            var task = allTasks.find(function(t) { return t.id === taskId; });
+            if (task) {
+                switchTab(task.status);
+                openTaskDetail(taskId);
+            } else {
+                showToast('Task ' + taskId + ' not found', true);
+            }
         }
 
         /* -- Auto Refresh ---------------------------------------------------- */
