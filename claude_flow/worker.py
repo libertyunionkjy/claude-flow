@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import shutil
 import signal
 import subprocess
 import time
@@ -71,8 +72,13 @@ class Worker:
             self._tm.update_status(task.id, TaskStatus.FAILED, f"Worktree creation failed: {e.stderr}")
             return False
 
-        # 运行 Claude Code
-        prompt = f"{self._cfg.task_prompt_prefix}\n\n{task.prompt}"
+        # 运行 Claude Code（注入 worktree 路径约束）
+        worktree_constraint = (
+            f"重要：你的项目工作目录是 {wt_path}。"
+            f"所有文件操作（读取、编辑、创建）必须在此目录下进行，"
+            f"禁止操作 {self._root} 路径下的文件。"
+        )
+        prompt = f"{self._cfg.task_prompt_prefix}\n\n{worktree_constraint}\n\n{task.prompt}"
         cmd = ["claude", "-p", prompt, "--output-format", "stream-json", "--verbose"]
         if can_skip_permissions(self._cfg.skip_permissions):
             cmd.append("--dangerously-skip-permissions")
@@ -102,6 +108,11 @@ class Worker:
             self._log_progress(task, False, error_msg, wt_path)
             self._wt.remove(task.id, task.branch)
             return False
+
+        # 检测主仓库是否被意外修改（Claude 可能使用了主仓库绝对路径）
+        contaminated_files = self._check_repo_contamination()
+        if contaminated_files:
+            self._rescue_contaminated_changes(wt_path, contaminated_files)
 
         # 自动提交 worktree 中的未提交变更
         has_changes = self._auto_commit(task, wt_path)
@@ -467,6 +478,60 @@ class Worker:
             return int(result.stdout.strip()) > 0
         except (ValueError, AttributeError):
             return False
+
+    def _check_repo_contamination(self) -> list[str]:
+        """检查主仓库是否有被意外修改的文件（unstaged changes）。
+
+        返回被修改的文件相对路径列表（相对于主仓库根）。
+        """
+        result = subprocess.run(
+            ["git", "diff", "--name-only"],
+            cwd=str(self._root), capture_output=True, text=True,
+        )
+        return [f for f in result.stdout.strip().splitlines() if f]
+
+    def _rescue_contaminated_changes(self, wt_path: Path, contaminated_files: list[str]) -> bool:
+        """将主仓库中被误修改的文件迁移到 worktree，然后还原主仓库。
+
+        Args:
+            wt_path: worktree 路径
+            contaminated_files: 被污染的文件相对路径列表
+
+        Returns:
+            True 表示成功迁移了文件
+        """
+        prefix = self._log_prefix()
+        migrated = 0
+
+        for rel_path in contaminated_files:
+            src = self._root / rel_path
+            dst = wt_path / rel_path
+
+            if not src.exists():
+                continue
+
+            # 确保目标目录存在
+            dst.parent.mkdir(parents=True, exist_ok=True)
+
+            try:
+                shutil.copy2(str(src), str(dst))
+                migrated += 1
+                logger.info(f"{prefix} Rescued contaminated file: {rel_path}")
+            except OSError as e:
+                logger.warning(f"{prefix} Failed to rescue {rel_path}: {e}")
+
+        # 还原主仓库
+        if migrated > 0:
+            subprocess.run(
+                ["git", "checkout", "--"] + contaminated_files,
+                cwd=str(self._root), capture_output=True, text=True,
+            )
+            logger.warning(
+                f"{prefix} Repo contamination detected and rescued: "
+                f"{migrated}/{len(contaminated_files)} files migrated to worktree"
+            )
+
+        return migrated > 0
 
     def _save_structured_log(self, task: Task, stdout: str) -> None:
         """解析 stream-json 输出并保存为结构化 JSON 日志。"""

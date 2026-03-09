@@ -1,3 +1,4 @@
+import subprocess
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 from claude_flow.worker import Worker
@@ -46,3 +47,66 @@ class TestWorker:
         _, tm, _, worker = self._setup(git_repo)
         count = worker.run_loop()
         assert count == 0
+
+    def test_prompt_includes_worktree_path(self, git_repo):
+        """prompt 中应包含 worktree 路径约束和主仓库路径警告。"""
+        repo, tm, wt, worker = self._setup(git_repo)
+        task = tm.add("Test prompt constraint", "do something")
+        tm.update_status(task.id, TaskStatus.APPROVED)
+        claimed = tm.claim_next(worker_id=0)
+
+        captured_cmd = []
+
+        def fake_run_streaming(cmd, *, cwd, env, task, log_file, json_log_file):
+            captured_cmd.extend(cmd)
+            return 0
+
+        with patch.object(worker, "_run_streaming", side_effect=fake_run_streaming), \
+             patch("claude_flow.worker.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="done", stderr="")
+            worker.execute_task(claimed)
+
+        # prompt 是 cmd[2]（claude -p <prompt>）
+        prompt = captured_cmd[2]
+        wt_path = repo / ".claude-flow" / "worktrees" / claimed.id
+        assert str(wt_path) in prompt
+        assert str(repo) in prompt
+        assert "禁止操作" in prompt
+
+    def test_repo_contamination_detected(self, git_repo):
+        """主仓库有 unstaged 变更时，_check_repo_contamination 应返回文件列表。"""
+        repo, tm, wt, worker = self._setup(git_repo)
+        # 修改主仓库文件模拟污染
+        (repo / "README.md").write_text("contaminated content")
+        contaminated = worker._check_repo_contamination()
+        assert "README.md" in contaminated
+
+    def test_repo_contamination_rescued(self, git_repo):
+        """污染文件应被迁移到 worktree，主仓库应被还原。"""
+        repo, tm, wt, worker = self._setup(git_repo)
+
+        # 创建 worktree
+        wt_path = wt.create("task-rescue", "cf/task-rescue")
+
+        # 模拟主仓库污染
+        original_content = (repo / "README.md").read_text()
+        contaminated_content = "contaminated by claude"
+        (repo / "README.md").write_text(contaminated_content)
+
+        # 执行迁移
+        contaminated = worker._check_repo_contamination()
+        assert len(contaminated) > 0
+        rescued = worker._rescue_contaminated_changes(wt_path, contaminated)
+        assert rescued is True
+
+        # 验证：worktree 中应有污染内容
+        assert (wt_path / "README.md").read_text() == contaminated_content
+
+        # 验证：主仓库应被还原
+        assert (repo / "README.md").read_text() == original_content
+
+    def test_repo_no_contamination(self, git_repo):
+        """主仓库没有变更时，_check_repo_contamination 应返回空列表。"""
+        repo, tm, wt, worker = self._setup(git_repo)
+        contaminated = worker._check_repo_contamination()
+        assert contaminated == []
