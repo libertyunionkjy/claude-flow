@@ -223,8 +223,11 @@ class UsageManager:
             match = task_pattern.search(str(project_path))
             if match:
                 session["task_id"] = match.group(0)
+            elif session_id == "subagents":
+                session["task_id"] = "Subagent"
             else:
-                session["task_id"] = None
+                # Main project direct usage (sessionId is encoded project path)
+                session["task_id"] = "Direct (main)"
         return sessions
 
     # ------------------------------------------------------------------

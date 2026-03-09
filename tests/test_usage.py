@@ -175,11 +175,18 @@ class TestUsageManager:
         assert enriched[0]["task_id"] == "task-abc123"
 
     def test_enrich_with_tasks_no_match(self, usage_project: Path):
-        """Sessions without matching task get task_id=None."""
+        """Sessions without matching task get 'Direct (main)' label."""
         mgr = UsageManager(usage_project, Config())
         sessions = [{"sessionId": "unknown", "projectPath": "/some/other/path"}]
         enriched = mgr._enrich_with_tasks(sessions)
-        assert enriched[0]["task_id"] is None
+        assert enriched[0]["task_id"] == "Direct (main)"
+
+    def test_enrich_with_tasks_subagent(self, usage_project: Path):
+        """Subagent sessions get 'Subagent' as task_id."""
+        mgr = UsageManager(usage_project, Config())
+        sessions = [{"sessionId": "subagents", "projectPath": ""}]
+        enriched = mgr._enrich_with_tasks(sessions)
+        assert enriched[0]["task_id"] == "Subagent"
 
     def test_get_project_filter(self, usage_project: Path):
         """Project filter should be the string representation of project root."""
