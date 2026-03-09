@@ -411,3 +411,42 @@ class TestChatManager:
         assert "Hello" in prompt
         assert "Hi there" in prompt
         assert "Plan this" in prompt
+
+    def test_build_cmd_includes_allowed_tools(self, chat_dir):
+        """_build_cmd appends --allowedTools when plan_allowed_tools is set."""
+        cfg = Config(plan_allowed_tools=["Read", "Glob", "Grep"])
+        mgr = ChatManager(chat_dir, cfg)
+        cmd = mgr._build_cmd("test prompt")
+        assert "--allowedTools" in cmd
+        idx = cmd.index("--allowedTools")
+        assert cmd[idx + 1 :] == ["Read", "Glob", "Grep"]
+
+    def test_build_cmd_no_restriction_when_empty(self, chat_dir):
+        """_build_cmd omits --allowedTools when plan_allowed_tools is empty."""
+        cfg = Config(plan_allowed_tools=[])
+        mgr = ChatManager(chat_dir, cfg)
+        cmd = mgr._build_cmd("test prompt")
+        assert "--allowedTools" not in cmd
+
+    def test_build_cmd_custom_tools(self, chat_dir):
+        """_build_cmd supports project-specific tool configuration."""
+        cfg = Config(plan_allowed_tools=["Read", "Glob", "Grep", "Bash(python:*)"])
+        mgr = ChatManager(chat_dir, cfg)
+        cmd = mgr._build_cmd("test prompt")
+        assert "--allowedTools" in cmd
+        idx = cmd.index("--allowedTools")
+        assert "Bash(python:*)" in cmd[idx + 1 :]
+
+    def test_send_message_uses_allowed_tools(self, chat_dir):
+        """send_message passes --allowedTools to claude CLI."""
+        cfg = Config(plan_allowed_tools=["Read", "Glob"])
+        mgr = ChatManager(chat_dir, cfg)
+        mgr.create_session("task-tools-1")
+
+        with patch("claude_flow.chat.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=0, stdout="Analysis result", stderr=""
+            )
+            mgr.send_message("task-tools-1", "Analyze code")
+            cmd = mock_run.call_args[0][0]
+            assert "--allowedTools" in cmd

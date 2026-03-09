@@ -56,3 +56,43 @@ class TestPlanner:
         """reject() method should no longer exist on Planner."""
         planner = self._make_planner(tmp_path)
         assert not hasattr(planner, 'reject')
+
+    @patch("claude_flow.planner.subprocess.Popen")
+    def test_generate_includes_allowed_tools(self, mock_popen, tmp_path):
+        """generate() passes --allowedTools when plan_allowed_tools is set."""
+        mock_proc = MagicMock()
+        mock_proc.communicate.return_value = ("# Plan", "")
+        mock_proc.returncode = 0
+        mock_popen.return_value = mock_proc
+
+        plans_dir = tmp_path / ".claude-flow" / "plans"
+        plans_dir.mkdir(parents=True)
+        cfg = Config(plan_allowed_tools=["Read", "Glob", "Grep"])
+        planner = Planner(tmp_path, plans_dir, cfg)
+
+        task = Task(title="Test", prompt="Analyze X")
+        planner.generate(task)
+
+        cmd = mock_popen.call_args[0][0]
+        assert "--allowedTools" in cmd
+        idx = cmd.index("--allowedTools")
+        assert cmd[idx + 1 : idx + 4] == ["Read", "Glob", "Grep"]
+
+    @patch("claude_flow.planner.subprocess.Popen")
+    def test_generate_no_restriction_when_empty(self, mock_popen, tmp_path):
+        """generate() omits --allowedTools when plan_allowed_tools is empty."""
+        mock_proc = MagicMock()
+        mock_proc.communicate.return_value = ("# Plan", "")
+        mock_proc.returncode = 0
+        mock_popen.return_value = mock_proc
+
+        plans_dir = tmp_path / ".claude-flow" / "plans"
+        plans_dir.mkdir(parents=True)
+        cfg = Config(plan_allowed_tools=[])
+        planner = Planner(tmp_path, plans_dir, cfg)
+
+        task = Task(title="Test", prompt="Analyze X")
+        planner.generate(task)
+
+        cmd = mock_popen.call_args[0][0]
+        assert "--allowedTools" not in cmd

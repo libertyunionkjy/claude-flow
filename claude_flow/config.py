@@ -19,6 +19,8 @@ DEFAULT_CONFIG = {
     "plan_prompt_prefix": "请分析以下任务并输出实施计划，不要执行代码:",
     "task_prompt_prefix": "你的任务是（请直接实现，不要提问或等待确认，直接修改代码并完成任务）:",
     "task_timeout": 600,
+    # Plan-phase tool restrictions (empty list = no restriction)
+    "plan_allowed_tools": ["Read", "Glob", "Grep"],
     # Worktree symlink sharing
     "shared_symlinks": [],
     "forbidden_symlinks": ["PROGRESS.md"],
@@ -54,6 +56,10 @@ class Config:
     plan_prompt_prefix: str = "请分析以下任务并输出实施计划，不要执行代码:"
     task_prompt_prefix: str = "你的任务是（请直接实现，不要提问或等待确认，直接修改代码并完成任务）:"
     task_timeout: int = 600
+    # Plan-phase tool restrictions (empty list = no restriction)
+    plan_allowed_tools: List[str] = field(
+        default_factory=lambda: ["Read", "Glob", "Grep"]
+    )
     # Worktree symlink sharing
     shared_symlinks: List[str] = field(default_factory=list)
     forbidden_symlinks: List[str] = field(default_factory=lambda: ["PROGRESS.md"])

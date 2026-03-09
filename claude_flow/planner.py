@@ -69,13 +69,23 @@ class Planner:
     # 原有方法（保持签名不变）
     # ------------------------------------------------------------------
 
+    def _build_plan_cmd(self, prompt: str) -> list[str]:
+        """Build claude CLI command for plan-phase invocations.
+
+        Applies plan_allowed_tools restriction when configured.
+        """
+        cmd = ["claude", "-p", prompt, "--print", "--output-format", "text"]
+        if can_skip_permissions(self._config.skip_permissions):
+            cmd.append("--dangerously-skip-permissions")
+        if self._config.plan_allowed_tools:
+            cmd.extend(["--allowedTools"] + self._config.plan_allowed_tools)
+        return cmd
+
     def generate(self, task: Task) -> Optional[Path]:
         """调用 Claude Code 生成计划并保存为 .md 文件。"""
         task.status = TaskStatus.PLANNING
         prompt = f"{self._config.plan_prompt_prefix}\n\n{task.prompt}"
-        cmd = ["claude", "-p", prompt, "--print", "--output-format", "text"]
-        if can_skip_permissions(self._config.skip_permissions):
-            cmd.append("--dangerously-skip-permissions")
+        cmd = self._build_plan_cmd(prompt)
 
         try:
             result = self._run_claude(cmd)
@@ -145,9 +155,7 @@ class Planner:
         )
         prompt = "\n".join(prompt_parts)
 
-        cmd = ["claude", "-p", prompt, "--print", "--output-format", "text"]
-        if can_skip_permissions(self._config.skip_permissions):
-            cmd.append("--dangerously-skip-permissions")
+        cmd = self._build_plan_cmd(prompt)
 
         try:
             result = self._run_claude(cmd)

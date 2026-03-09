@@ -225,9 +225,7 @@ class ChatManager:
 
         # Build initial analysis prompt
         prompt = self._build_initial_prompt(task_prompt)
-        cmd = ["claude", "-p", prompt, "--print", "--output-format", "text"]
-        if can_skip_permissions(self._config.skip_permissions):
-            cmd.append("--dangerously-skip-permissions")
+        cmd = self._build_cmd(prompt)
 
         try:
             result = subprocess.run(
@@ -279,9 +277,7 @@ class ChatManager:
 
         # Build prompt and call Claude
         prompt = self._build_prompt(session, task_prompt)
-        cmd = ["claude", "-p", prompt, "--print", "--output-format", "text"]
-        if can_skip_permissions(self._config.skip_permissions):
-            cmd.append("--dangerously-skip-permissions")
+        cmd = self._build_cmd(prompt)
 
         try:
             result = subprocess.run(
@@ -384,10 +380,17 @@ class ChatManager:
         return True
 
     def _build_cmd(self, prompt: str) -> list[str]:
-        """Build the claude CLI command list."""
+        """Build the claude CLI command list.
+
+        When plan_allowed_tools is configured (non-empty), appends
+        --allowedTools to restrict Claude to read-only operations
+        during the planning phase.
+        """
         cmd = ["claude", "-p", prompt, "--print", "--output-format", "text"]
         if can_skip_permissions(self._config.skip_permissions):
             cmd.append("--dangerously-skip-permissions")
+        if self._config.plan_allowed_tools:
+            cmd.extend(["--allowedTools"] + self._config.plan_allowed_tools)
         return cmd
 
     def _async_claude_call(self, task_id: str, cmd: list[str]) -> None:
@@ -483,6 +486,16 @@ class ChatManager:
         requirements and produce initial thoughts/questions.
         """
         parts: list[str] = [
+            "## Important Constraints",
+            "",
+            "You are in PLANNING MODE. You MUST NOT:",
+            "- Execute, run, or modify any code or files",
+            "- Run any tests, commands, or scripts",
+            "- Make any changes to the codebase",
+            "",
+            "You may ONLY: read code for analysis, discuss, ask questions, "
+            "and help design the implementation plan.",
+            "",
             "## Task Description",
             task_prompt,
             "",
@@ -492,7 +505,8 @@ class ChatManager:
             "3. Initial thoughts on the implementation approach",
             "4. Questions for clarification (if any)",
             "",
-            "Focus on helping the user refine the implementation plan.",
+            "Focus on helping the user refine the implementation plan. "
+            "Do NOT execute any code or make any file modifications.",
         ]
         return "\n".join(parts)
 
@@ -500,7 +514,18 @@ class ChatManager:
         self, session: ChatSession, task_prompt: str = ""
     ) -> str:
         """Build a claude prompt from the full conversation history."""
-        parts: list[str] = []
+        parts: list[str] = [
+            "## Important Constraints",
+            "",
+            "You are in PLANNING MODE. You MUST NOT:",
+            "- Execute, run, or modify any code or files",
+            "- Run any tests, commands, or scripts",
+            "- Make any changes to the codebase",
+            "",
+            "You may ONLY: read code for analysis, discuss, ask questions, "
+            "and help design the implementation plan.",
+            "",
+        ]
 
         if task_prompt:
             parts.append(f"## Task Description\n{task_prompt}")
@@ -517,6 +542,7 @@ class ChatManager:
         parts.append(
             "Please continue the conversation by responding to the "
             "user's latest message. Focus on helping refine the "
-            "implementation plan for this task."
+            "implementation plan for this task. "
+            "Do NOT execute any code or make any file modifications."
         )
         return "\n".join(parts)
