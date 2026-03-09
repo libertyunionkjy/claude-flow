@@ -573,6 +573,281 @@
         .plan-content a:hover { text-decoration: underline; }
         .plan-content .task-checkbox { margin-right: 6px; }
 
+        /* -- Overview Dashboard ----------------------------------------------- */
+        .overview-page {
+            display: none;
+            padding: 24px;
+            max-width: 1100px;
+            margin: 0 auto;
+            overflow-y: auto;
+        }
+        .overview-page.active { display: block; }
+
+        .overview-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 24px;
+        }
+        .overview-header h2 {
+            font-size: 22px;
+            color: #00d4ff;
+            margin: 0;
+        }
+        .overview-refresh-hint {
+            font-size: 11px;
+            color: #6a6a8a;
+        }
+
+        .overview-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+            margin-bottom: 28px;
+        }
+
+        .overview-card {
+            background: #16213e;
+            border: 1px solid #2a2a4a;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            transition: border-color 0.2s ease;
+        }
+        .overview-card:hover { border-color: #3a3a6a; }
+        .overview-card-running { border-left: 3px solid #fdcb6e; }
+        .overview-card-queue { border-left: 3px solid #6c5ce7; }
+        .overview-card-done { border-left: 3px solid #00b894; }
+        .overview-card .overview-card-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+            color: #6a6a8a;
+            margin-bottom: 8px;
+        }
+        .overview-card .overview-card-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: #00d4ff;
+            line-height: 1.2;
+        }
+        .overview-card-running .overview-card-value { color: #fdcb6e; }
+        .overview-card-queue .overview-card-value { color: #a29bfe; }
+        .overview-card-done .overview-card-value { color: #00b894; }
+        .overview-card .overview-card-sub {
+            font-size: 12px;
+            color: #6a6a8a;
+            margin-top: 4px;
+        }
+
+        .overview-progress-section {
+            margin-bottom: 28px;
+        }
+        .overview-section-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: #8888aa;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 12px;
+        }
+        .overview-progress-bar {
+            display: flex;
+            height: 20px;
+            border-radius: 10px;
+            overflow: hidden;
+            background: #12122a;
+            border: 1px solid #2a2a4a;
+        }
+        .overview-progress-bar .progress-segment {
+            height: 100%;
+            transition: width 0.4s ease;
+            min-width: 0;
+        }
+        .overview-progress-legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 14px;
+            margin-top: 10px;
+        }
+        .overview-progress-legend .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 12px;
+            color: #b0b0cc;
+        }
+        .overview-progress-legend .legend-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .overview-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            margin-bottom: 28px;
+        }
+        @media (max-width: 800px) {
+            .overview-grid { grid-template-columns: 1fr; }
+        }
+
+        .overview-section {
+            background: #12122a;
+            border: 1px solid #2a2a4a;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 16px;
+        }
+        .overview-section .overview-section-title {
+            margin-bottom: 14px;
+        }
+
+        .overview-pipeline-group {
+            margin-bottom: 14px;
+        }
+        .overview-pipeline-group:last-child {
+            margin-bottom: 0;
+        }
+        .overview-pipeline-label {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .overview-pipeline-label .pl-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+        .overview-pipeline-items {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .overview-pipeline-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 10px;
+            background: #16213e;
+            border-radius: 6px;
+            font-size: 13px;
+            color: #c0c0d0;
+            cursor: pointer;
+            transition: background 0.15s ease;
+        }
+        .overview-pipeline-item:hover {
+            background: #1e2d50;
+        }
+        .overview-pipeline-item .pi-id {
+            font-size: 11px;
+            color: #6a6a8a;
+            font-family: monospace;
+        }
+        .overview-pipeline-item .pi-title {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .overview-pipeline-item .pi-badge {
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+
+        .overview-activity-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 10px;
+            border-bottom: 1px solid rgba(42, 42, 74, 0.4);
+            font-size: 13px;
+            cursor: pointer;
+            transition: background 0.15s ease;
+        }
+        .overview-activity-item:hover {
+            background: rgba(255, 255, 255, 0.02);
+        }
+        .overview-activity-item:last-child {
+            border-bottom: none;
+        }
+        .overview-activity-item .act-icon {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            flex-shrink: 0;
+        }
+        .overview-activity-item .act-icon.done {
+            background: rgba(0, 184, 148, 0.2);
+            color: #00b894;
+        }
+        .overview-activity-item .act-icon.failed {
+            background: rgba(255, 107, 107, 0.2);
+            color: #ff6b6b;
+        }
+        .overview-activity-item .act-title {
+            flex: 1;
+            color: #c0c0d0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .overview-activity-item .act-time {
+            font-size: 11px;
+            color: #6a6a8a;
+            white-space: nowrap;
+        }
+
+        .overview-worker-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 14px;
+            background: #16213e;
+            border-radius: 8px;
+            margin-bottom: 8px;
+        }
+        .overview-worker-item:last-child { margin-bottom: 0; }
+        .overview-worker-item .wk-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #fdcb6e;
+            animation: ready-pulse 2s infinite;
+        }
+        .overview-worker-item .wk-info {
+            flex: 1;
+        }
+        .overview-worker-item .wk-task {
+            font-size: 13px;
+            color: #e0e0e0;
+        }
+        .overview-worker-item .wk-meta {
+            font-size: 11px;
+            color: #6a6a8a;
+            margin-top: 2px;
+        }
+
+        .overview-empty {
+            text-align: center;
+            color: #6a6a8a;
+            padding: 20px;
+            font-size: 13px;
+        }
+
         /* -- Usage Dashboard ------------------------------------------------- */
         .usage-page {
             display: none;
@@ -1597,6 +1872,10 @@
 
         <nav class="sidebar-nav" id="sidebarNav">
             <div class="sidebar-section-label">Management</div>
+            <button class="nav-item" data-tab="overview" onclick="switchTab('overview')">
+                <span class="nav-dot" style="background: #00d4ff;"></span>
+                <span class="nav-label">Overview</span>
+            </button>
             <button class="nav-item" data-tab="all_tasks" onclick="switchTab('all_tasks')">
                 <span class="nav-dot" style="background: #00d4ff;"></span>
                 <span class="nav-label">All Tasks</span>
@@ -1812,6 +2091,70 @@
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <!-- Overview Dashboard (hidden by default) -->
+        <div class="overview-page" id="overviewPage">
+            <div class="overview-header">
+                <h2>Overview</h2>
+                <span class="overview-refresh-hint" id="overviewRefreshHint"></span>
+            </div>
+
+            <!-- Summary Cards -->
+            <div class="overview-cards">
+                <div class="overview-card">
+                    <div class="overview-card-label">Total Tasks</div>
+                    <div class="overview-card-value" id="ovTotalTasks">0</div>
+                    <div class="overview-card-sub" id="ovTotalTasksSub">-</div>
+                </div>
+                <div class="overview-card overview-card-running">
+                    <div class="overview-card-label">Running</div>
+                    <div class="overview-card-value" id="ovRunning">0</div>
+                    <div class="overview-card-sub" id="ovRunningSub">workers active</div>
+                </div>
+                <div class="overview-card overview-card-queue">
+                    <div class="overview-card-label">Queued</div>
+                    <div class="overview-card-value" id="ovQueued">0</div>
+                    <div class="overview-card-sub" id="ovQueuedSub">pending + approved</div>
+                </div>
+                <div class="overview-card overview-card-done">
+                    <div class="overview-card-label">Completed</div>
+                    <div class="overview-card-value" id="ovDone">0</div>
+                    <div class="overview-card-sub" id="ovDoneSub">-</div>
+                </div>
+            </div>
+
+            <!-- Progress Bar -->
+            <div class="overview-progress-section">
+                <div class="overview-section-title">Pipeline Progress</div>
+                <div class="overview-progress-bar" id="ovProgressBar"></div>
+                <div class="overview-progress-legend" id="ovProgressLegend"></div>
+            </div>
+
+            <!-- Two-Column Layout: Pipeline + Activity -->
+            <div class="overview-grid">
+                <!-- Pipeline Column -->
+                <div class="overview-section">
+                    <div class="overview-section-title">Active Pipeline</div>
+                    <div class="overview-pipeline" id="ovPipeline">
+                        <div class="overview-empty">No active tasks</div>
+                    </div>
+                </div>
+
+                <!-- Recent Activity Column -->
+                <div class="overview-section">
+                    <div class="overview-section-title">Recent Activity</div>
+                    <div class="overview-activity" id="ovActivity">
+                        <div class="overview-empty">No recent activity</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Workers Section -->
+            <div class="overview-section" id="ovWorkersSection" style="display:none;">
+                <div class="overview-section-title">Active Workers</div>
+                <div class="overview-workers" id="ovWorkers"></div>
             </div>
         </div>
 
@@ -2280,16 +2623,27 @@
             // Hide all views first
             document.getElementById('guidePage').classList.remove('active');
             document.getElementById('usagePage').classList.remove('active');
+            document.getElementById('overviewPage').classList.remove('active');
             document.getElementById('detailView').classList.remove('active');
             document.getElementById('allTasksPanel').classList.remove('active');
             guideVisible = false;
             usageVisible = false;
+            overviewVisible = false;
+            if (overviewRefreshTimer) { clearInterval(overviewRefreshTimer); overviewRefreshTimer = null; }
             var guideBtn = document.getElementById('guideToggleBtn');
             guideBtn.querySelector('.nav-label').textContent = 'Workflow Guide';
             var usageBtn = document.getElementById('usageToggleBtn');
             usageBtn.querySelector('.nav-label').textContent = 'Token Usage';
 
-            if (status === 'all_tasks') {
+            if (status === 'overview') {
+                // Show Overview page
+                document.getElementById('contentPanel').style.display = 'none';
+                document.getElementById('topBar').style.display = 'none';
+                document.getElementById('overviewPage').classList.add('active');
+                overviewVisible = true;
+                fetchOverviewData();
+                overviewRefreshTimer = setInterval(fetchOverviewData, 5000);
+            } else if (status === 'all_tasks') {
                 // Show All Tasks panel, hide normal list
                 document.getElementById('contentPanel').style.display = 'none';
                 document.getElementById('topBar').style.display = 'none';
@@ -3725,6 +4079,12 @@
                 document.getElementById('usageToggleBtn').querySelector('.nav-label').textContent = 'Token Usage';
                 usageVisible = false;
             }
+            // Close overview page if open
+            if (overviewVisible) {
+                document.getElementById('overviewPage').classList.remove('active');
+                overviewVisible = false;
+                if (overviewRefreshTimer) { clearInterval(overviewRefreshTimer); overviewRefreshTimer = null; }
+            }
 
             guideVisible = !guideVisible;
             var guidePage = document.getElementById('guidePage');
@@ -3773,6 +4133,12 @@
                 document.getElementById('guidePage').classList.remove('active');
                 document.getElementById('guideToggleBtn').querySelector('.nav-label').textContent = 'Workflow Guide';
                 guideVisible = false;
+            }
+            // Close overview page if open
+            if (overviewVisible) {
+                document.getElementById('overviewPage').classList.remove('active');
+                overviewVisible = false;
+                if (overviewRefreshTimer) { clearInterval(overviewRefreshTimer); overviewRefreshTimer = null; }
             }
 
             usageVisible = !usageVisible;
@@ -4033,6 +4399,187 @@
             _renderTimeTable(data, document.getElementById('usageMonthlyTable'), 'Month', 'month', 'date');
         }
 
+        /* -- Overview Dashboard ----------------------------------------------- */
+        var overviewVisible = false;
+        var overviewRefreshTimer = null;
+
+        async function fetchOverviewData() {
+            var data = await api('/overview');
+            if (data !== null) {
+                renderOverview(data);
+            }
+        }
+
+        function renderOverview(data) {
+            var c = data.counts;
+
+            // Summary cards
+            document.getElementById('ovTotalTasks').textContent = data.total;
+            var activeParts = [];
+            if (c.planning > 0) activeParts.push(c.planning + ' planning');
+            if (c.planned > 0) activeParts.push(c.planned + ' planned');
+            if (c.approved > 0) activeParts.push(c.approved + ' approved');
+            document.getElementById('ovTotalTasksSub').textContent = activeParts.length > 0 ? activeParts.join(', ') : 'all statuses';
+
+            document.getElementById('ovRunning').textContent = c.running || 0;
+            document.getElementById('ovRunningSub').textContent = data.workers.length + ' worker(s) active';
+
+            var queued = (c.pending || 0) + (c.approved || 0);
+            document.getElementById('ovQueued').textContent = queued;
+            document.getElementById('ovQueuedSub').textContent = (c.pending || 0) + ' pending, ' + (c.approved || 0) + ' approved';
+
+            document.getElementById('ovDone').textContent = c.done || 0;
+            if (data.success_rate !== null && data.success_rate !== undefined) {
+                document.getElementById('ovDoneSub').textContent = data.success_rate + '% success (' + data.failed_count + ' failed)';
+            } else {
+                document.getElementById('ovDoneSub').textContent = 'no completed tasks';
+            }
+
+            // Progress bar
+            renderOverviewProgress(data);
+
+            // Pipeline
+            renderOverviewPipeline(data.pipeline);
+
+            // Recent activity
+            renderOverviewActivity(data.recent_activity);
+
+            // Workers
+            renderOverviewWorkers(data.workers);
+
+            // Refresh timestamp
+            var now = new Date();
+            document.getElementById('overviewRefreshHint').textContent = 'Updated ' + now.toLocaleTimeString();
+        }
+
+        function renderOverviewProgress(data) {
+            var c = data.counts;
+            var total = data.total;
+            if (total === 0) {
+                document.getElementById('ovProgressBar').innerHTML = '';
+                document.getElementById('ovProgressLegend').innerHTML = '<span class="legend-item" style="color:#6a6a8a;">No tasks</span>';
+                return;
+            }
+
+            var segments = [
+                { key: 'done', label: 'Done', color: '#00b894' },
+                { key: 'running', label: 'Running', color: '#fdcb6e' },
+                { key: 'approved', label: 'Approved', color: '#00cec9' },
+                { key: 'planned', label: 'Planned', color: '#74b9ff' },
+                { key: 'planning', label: 'Planning', color: '#a29bfe' },
+                { key: 'pending', label: 'Pending', color: '#6c5ce7' },
+                { key: 'needs_input', label: 'Needs Input', color: '#e17055' },
+                { key: 'failed', label: 'Failed', color: '#ff6b6b' },
+            ];
+
+            var barHtml = '';
+            var legendHtml = '';
+            segments.forEach(function(seg) {
+                var count = c[seg.key] || 0;
+                if (count > 0) {
+                    var pct = (count / total * 100).toFixed(1);
+                    barHtml += '<div class="progress-segment" style="width:' + pct + '%; background:' + seg.color + ';" title="' + seg.label + ': ' + count + '"></div>';
+                    legendHtml += '<span class="legend-item"><span class="legend-dot" style="background:' + seg.color + ';"></span>' + seg.label + ' ' + count + '</span>';
+                }
+            });
+
+            document.getElementById('ovProgressBar').innerHTML = barHtml;
+            document.getElementById('ovProgressLegend').innerHTML = legendHtml;
+        }
+
+        function renderOverviewPipeline(pipeline) {
+            var el = document.getElementById('ovPipeline');
+            var hasItems = false;
+            var html = '';
+
+            var groups = [
+                { key: 'needs_input', label: 'Needs Input', color: '#e17055', items: pipeline.needs_input || [] },
+                { key: 'running', label: 'Running', color: '#fdcb6e', items: pipeline.running || [] },
+                { key: 'planning', label: 'Planning / Planned', color: '#a29bfe', items: pipeline.planning || [] },
+                { key: 'pending', label: 'Pending', color: '#6c5ce7', items: pipeline.pending || [] },
+            ];
+
+            groups.forEach(function(g) {
+                if (g.items.length === 0) return;
+                hasItems = true;
+                html += '<div class="overview-pipeline-group">';
+                html += '<div class="overview-pipeline-label" style="color:' + g.color + ';">';
+                html += '<span class="pl-dot" style="background:' + g.color + ';"></span>';
+                html += g.label + ' (' + g.items.length + ')</div>';
+                html += '<div class="overview-pipeline-items">';
+                g.items.forEach(function(item) {
+                    html += '<div class="overview-pipeline-item" onclick="navigateToTask(\'' + item.id + '\')">';
+                    html += '<span class="pi-id">' + item.id + '</span>';
+                    html += '<span class="pi-title">' + escapeHtml(item.title) + '</span>';
+                    if (item.worker_id != null) {
+                        html += '<span class="pi-badge" style="background:rgba(253,203,110,0.2);color:#fdcb6e;">W' + item.worker_id + '</span>';
+                    }
+                    if (item.priority && item.priority > 0) {
+                        html += '<span class="pi-badge" style="background:rgba(255,107,107,0.2);color:#ff6b6b;">P' + item.priority + '</span>';
+                    }
+                    html += '</div>';
+                });
+                html += '</div></div>';
+            });
+
+            el.innerHTML = hasItems ? html : '<div class="overview-empty">No active tasks in pipeline</div>';
+        }
+
+        function renderOverviewActivity(activity) {
+            var el = document.getElementById('ovActivity');
+            if (!activity || activity.length === 0) {
+                el.innerHTML = '<div class="overview-empty">No recent activity</div>';
+                return;
+            }
+
+            var html = '';
+            activity.forEach(function(item) {
+                var isDone = item.status === 'done';
+                var iconClass = isDone ? 'done' : 'failed';
+                var iconChar = isDone ? '\u2713' : '\u2717';
+                var timeStr = '';
+                if (item.completed_at) {
+                    var d = new Date(item.completed_at);
+                    timeStr = d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+                }
+                html += '<div class="overview-activity-item" onclick="navigateToTask(\'' + item.id + '\')">';
+                html += '<span class="act-icon ' + iconClass + '">' + iconChar + '</span>';
+                html += '<span class="act-title">' + escapeHtml(item.title) + '</span>';
+                html += '<span class="act-time">' + timeStr + '</span>';
+                html += '</div>';
+            });
+            el.innerHTML = html;
+        }
+
+        function renderOverviewWorkers(workers) {
+            var section = document.getElementById('ovWorkersSection');
+            var el = document.getElementById('ovWorkers');
+            if (!workers || workers.length === 0) {
+                section.style.display = 'none';
+                return;
+            }
+            section.style.display = '';
+            var html = '';
+            workers.forEach(function(w) {
+                var elapsed = '';
+                if (w.started_at) {
+                    var start = new Date(w.started_at);
+                    var now = new Date();
+                    var diffMs = now - start;
+                    var diffMin = Math.floor(diffMs / 60000);
+                    if (diffMin < 60) elapsed = diffMin + 'm ago';
+                    else elapsed = Math.floor(diffMin / 60) + 'h ' + (diffMin % 60) + 'm ago';
+                }
+                html += '<div class="overview-worker-item">';
+                html += '<span class="wk-indicator"></span>';
+                html += '<div class="wk-info">';
+                html += '<div class="wk-task">Worker #' + (w.worker_id != null ? w.worker_id : '?') + ' &mdash; ' + escapeHtml(w.task_title || w.task_id || 'unknown') + '</div>';
+                html += '<div class="wk-meta">Task ' + (w.task_id || '-') + (elapsed ? ' &bull; started ' + elapsed : '') + '</div>';
+                html += '</div></div>';
+            });
+            el.innerHTML = html;
+        }
+
         function navigateToTask(taskId) {
             if (usageVisible) {
                 usageVisible = false;
@@ -4040,6 +4587,13 @@
                 document.getElementById('contentPanel').style.display = '';
                 document.getElementById('topBar').style.display = '';
                 document.getElementById('usageToggleBtn').querySelector('.nav-label').textContent = 'Token Usage';
+            }
+            if (overviewVisible) {
+                overviewVisible = false;
+                document.getElementById('overviewPage').classList.remove('active');
+                document.getElementById('contentPanel').style.display = '';
+                document.getElementById('topBar').style.display = '';
+                if (overviewRefreshTimer) { clearInterval(overviewRefreshTimer); overviewRefreshTimer = null; }
             }
             var task = allTasks.find(function(t) { return t.id === taskId; });
             if (task) {

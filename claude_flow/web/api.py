@@ -448,6 +448,89 @@ def global_status():
     })
 
 
+@api_bp.route("/overview", methods=["GET"])
+def overview():
+    """Overview dashboard data: counts, workers, recent activity, timeline."""
+    from datetime import datetime, timedelta
+
+    tm = current_app.config["TASK_MANAGER"]
+    tasks = tm.list_tasks()
+
+    # -- Status counts
+    counts = {}
+    for status in TaskStatus:
+        counts[status.value] = 0
+    for t in tasks:
+        counts[t.status.value] += 1
+
+    # -- Active workers
+    project_root = current_app.config["PROJECT_ROOT"]
+    monitor_file = project_root / ".claude-flow" / "monitor.json"
+    workers = []
+    if monitor_file.exists():
+        try:
+            data = json.loads(monitor_file.read_text())
+            workers = data.get("workers", [])
+        except (json.JSONDecodeError, OSError):
+            pass
+    if not workers:
+        running = [t for t in tasks if t.status == TaskStatus.RUNNING]
+        for t in running:
+            if t.worker_id is not None:
+                workers.append({
+                    "worker_id": t.worker_id,
+                    "task_id": t.id,
+                    "task_title": t.title,
+                    "started_at": t.started_at.isoformat() if t.started_at else None,
+                })
+
+    # -- Recent activity (last 10 finished / failed tasks, sorted by time desc)
+    recent = sorted(
+        [t for t in tasks if t.status in (TaskStatus.DONE, TaskStatus.FAILED)
+         and t.completed_at is not None],
+        key=lambda t: t.completed_at,
+        reverse=True,
+    )[:10]
+    recent_list = []
+    for t in recent:
+        recent_list.append({
+            "id": t.id,
+            "title": t.title,
+            "status": t.status.value,
+            "completed_at": t.completed_at.isoformat() if t.completed_at else None,
+        })
+
+    # -- Pipeline: tasks currently in each active phase
+    pipeline = {
+        "pending": [{"id": t.id, "title": t.title, "priority": t.priority}
+                    for t in tasks if t.status == TaskStatus.PENDING],
+        "planning": [{"id": t.id, "title": t.title}
+                     for t in tasks if t.status in (TaskStatus.PLANNING, TaskStatus.PLANNED)],
+        "running": [{"id": t.id, "title": t.title, "worker_id": t.worker_id,
+                     "started_at": t.started_at.isoformat() if t.started_at else None}
+                    for t in tasks if t.status == TaskStatus.RUNNING],
+        "needs_input": [{"id": t.id, "title": t.title}
+                        for t in tasks if t.status == TaskStatus.NEEDS_INPUT],
+    }
+
+    # -- Completion rate
+    done_count = counts.get("done", 0)
+    failed_count = counts.get("failed", 0)
+    finished = done_count + failed_count
+    success_rate = round(done_count / finished * 100, 1) if finished > 0 else None
+
+    return _ok({
+        "total": len(tasks),
+        "counts": counts,
+        "workers": workers,
+        "recent_activity": recent_list,
+        "pipeline": pipeline,
+        "success_rate": success_rate,
+        "done_count": done_count,
+        "failed_count": failed_count,
+    })
+
+
 @api_bp.route("/workers", methods=["GET"])
 def worker_status():
     """获取 worker 状态（读取 monitor 状态文件）。"""

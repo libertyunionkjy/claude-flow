@@ -1,5 +1,35 @@
 # Progress Log
 
+## [2026-03-09 23:50:45] task-69dde9 - 优化
+**Status**: FAILED
+**Commit**: cf12488
+
+**错误信息**: needs_input: 实现完成。以下是所做更改的概述：
+
+## 变更总结
+
+### 1. 后端 API — `claude_flow/web/api.py`
+
+新增 `GET /api/overview` 端点，返回丰富的概览数据：
+- **counts**: 各状态任务计数
+- **workers**: 活跃 Worker 信息
+- **recent_activity**: 最近 10 条完成/失败的任务记录
+- **pipeline**: 当前活跃管线（pending / planning / running / needs_input 各分组的任务列表）
+- **success_rate**: 完成率百分比
+
+### 2. 前端 — `claude_flow/web/templates/index.html`
+
+#### 侧边栏
+在 MANAGEMENT 区域的 **All Tasks** 之前新增 **Overview** 导航按钮。
+
+#### HTML 结构
+新增 `#overviewPage` 容器，包含：
+- **4 张统计卡片**: Total Tasks / Running / Queu
+
+**任务 Prompt**: 在前端的侧边栏MANAGEMENT中，加入一个 OverView 栏，展示目前 claude flow 的总体状态
+
+---
+
 ## [2026-03-09 22:58:03] task-3744b8 - 增加LOGO
 **Status**: SUCCESS
 **Commit**: 4cb669e
