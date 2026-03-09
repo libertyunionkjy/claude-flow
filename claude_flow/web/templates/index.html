@@ -725,6 +725,45 @@
             font-size: 14px;
         }
 
+        .usage-pagination {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            margin-top: 16px;
+            padding: 12px 0;
+        }
+        .usage-pagination button {
+            background: #16213e;
+            border: 1px solid #2a2a4a;
+            color: #b0b0cc;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            font-family: inherit;
+            transition: all 0.15s ease;
+        }
+        .usage-pagination button:hover:not(:disabled) {
+            border-color: #00d4ff;
+            color: #00d4ff;
+        }
+        .usage-pagination button:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+        .usage-pagination button.active {
+            background: #00d4ff;
+            color: #0a0a1a;
+            border-color: #00d4ff;
+            font-weight: 600;
+        }
+        .usage-pagination .page-info {
+            font-size: 12px;
+            color: #6a6a8a;
+            margin: 0 8px;
+        }
+
         /* -- Guide Page ------------------------------------------------------ */
         .guide-page {
             display: none;
@@ -1822,6 +1861,7 @@
                 <div class="usage-table-wrap">
                     <div id="usageSessionsTable" class="usage-empty">Loading...</div>
                 </div>
+                <div id="usageSessionsPagination" class="usage-pagination"></div>
             </div>
 
             <!-- Daily Tab -->
@@ -3844,14 +3884,46 @@
 
         function _n(s, k, a) { return s[k] || s[a] || 0; }
 
+        // -- Session pagination state
+        var _usageSessionsAll = [];
+        var _usageSessionsPage = 1;
+        var _usageSessionsPerPage = 20;
+
         function renderUsageSessionsTable(sessions) {
             var el = document.getElementById('usageSessionsTable');
+            var pgEl = document.getElementById('usageSessionsPagination');
             if (!sessions || sessions.length === 0) {
                 el.innerHTML = '<div class="usage-empty">No session data available.</div>';
+                pgEl.innerHTML = '';
                 return;
             }
-            var tI = 0, tO = 0, tCC = 0, tCR = 0, tCost = 0;
-            var rows = sessions.map(function(s) {
+            _usageSessionsAll = sessions;
+            _usageSessionsPage = 1;
+            _renderSessionsPage();
+        }
+
+        function _renderSessionsPage() {
+            var el = document.getElementById('usageSessionsTable');
+            var pgEl = document.getElementById('usageSessionsPagination');
+            var sessions = _usageSessionsAll;
+            var totalPages = Math.ceil(sessions.length / _usageSessionsPerPage);
+            var page = Math.min(_usageSessionsPage, totalPages);
+            var start = (page - 1) * _usageSessionsPerPage;
+            var end = Math.min(start + _usageSessionsPerPage, sessions.length);
+            var pageItems = sessions.slice(start, end);
+
+            // Compute grand totals across ALL sessions (not just current page)
+            var gI = 0, gO = 0, gCC = 0, gCR = 0, gCost = 0;
+            sessions.forEach(function(s) {
+                gI += _n(s, 'input_tokens', 'inputTokens');
+                gO += _n(s, 'output_tokens', 'outputTokens');
+                gCC += _n(s, 'cache_creation_input_tokens', 'cacheCreationInputTokens');
+                gCR += _n(s, 'cache_read_input_tokens', 'cacheReadInputTokens');
+                gCost += (s.cost_usd || s.costUSD || s.total_cost_usd || 0);
+            });
+
+            // Build rows for current page
+            var rows = pageItems.map(function(s) {
                 var tid = s.task_id || s.sessionId || s.session_id || '-';
                 var i = _n(s, 'input_tokens', 'inputTokens');
                 var o = _n(s, 'output_tokens', 'outputTokens');
@@ -3859,21 +3931,65 @@
                 var cr = _n(s, 'cache_read_input_tokens', 'cacheReadInputTokens');
                 var tot = i + o + cc + cr;
                 var cost = s.cost_usd || s.costUSD || s.total_cost_usd || 0;
-                tI += i; tO += o; tCC += cc; tCR += cr; tCost += (cost || 0);
                 var tc = (tid && tid !== '-')
                     ? '<span class="task-link" onclick="navigateToTask(\'' + tid + '\')">' + tid + '</span>' : '-';
                 return _uRow([tc,{v:fmtTokFull(i),cls:'num'},{v:fmtTokFull(o),cls:'num'},
                     {v:fmtTokFull(cc),cls:'num'},{v:fmtTokFull(cr),cls:'num'},
                     {v:fmtTokFull(tot),cls:'num'},{v:fmtCost(cost),cls:'num cost'}]);
             });
-            var totalTok = tI + tO + tCC + tCR;
-            rows.push(_uRow(['Total ('+sessions.length+')',{v:fmtTokFull(tI),cls:'num'},{v:fmtTokFull(tO),cls:'num'},
-                {v:fmtTokFull(tCC),cls:'num'},{v:fmtTokFull(tCR),cls:'num'},
-                {v:fmtTokFull(totalTok),cls:'num'},{v:fmtCost(tCost),cls:'num cost'}], true));
+
+            // Grand total row
+            var gTot = gI + gO + gCC + gCR;
+            rows.push(_uRow(['Total (' + sessions.length + ')',{v:fmtTokFull(gI),cls:'num'},{v:fmtTokFull(gO),cls:'num'},
+                {v:fmtTokFull(gCC),cls:'num'},{v:fmtTokFull(gCR),cls:'num'},
+                {v:fmtTokFull(gTot),cls:'num'},{v:fmtCost(gCost),cls:'num cost'}], true));
+
             el.innerHTML = '<table class="usage-table">' +
                 _uHead([{l:'Task / Session'},{l:'Input',n:1},{l:'Output',n:1},
                     {l:'Cache Cr.',n:1},{l:'Cache Rd.',n:1},{l:'Total',n:1},{l:'Cost',n:1}]) +
                 '<tbody>' + rows.join('') + '</tbody></table>';
+
+            // Render pagination controls
+            if (totalPages <= 1) {
+                pgEl.innerHTML = '';
+                return;
+            }
+            var pgHtml = '';
+            pgHtml += '<button ' + (page <= 1 ? 'disabled' : '') + ' onclick="_usageSessionsGoPage(' + (page - 1) + ')">&#9664; Prev</button>';
+            // Show page numbers with ellipsis for large page counts
+            var pages = _paginationRange(page, totalPages);
+            pages.forEach(function(p) {
+                if (p === '...') {
+                    pgHtml += '<span class="page-info">...</span>';
+                } else {
+                    pgHtml += '<button class="' + (p === page ? 'active' : '') + '" onclick="_usageSessionsGoPage(' + p + ')">' + p + '</button>';
+                }
+            });
+            pgHtml += '<button ' + (page >= totalPages ? 'disabled' : '') + ' onclick="_usageSessionsGoPage(' + (page + 1) + ')">Next &#9654;</button>';
+            pgHtml += '<span class="page-info">' + start + '-' + end + ' / ' + sessions.length + '</span>';
+            pgEl.innerHTML = pgHtml;
+        }
+
+        function _usageSessionsGoPage(p) {
+            var totalPages = Math.ceil(_usageSessionsAll.length / _usageSessionsPerPage);
+            _usageSessionsPage = Math.max(1, Math.min(p, totalPages));
+            _renderSessionsPage();
+        }
+
+        function _paginationRange(current, total) {
+            if (total <= 7) {
+                var r = [];
+                for (var i = 1; i <= total; i++) r.push(i);
+                return r;
+            }
+            var pages = [1];
+            if (current > 3) pages.push('...');
+            for (var i = Math.max(2, current - 1); i <= Math.min(total - 1, current + 1); i++) {
+                pages.push(i);
+            }
+            if (current < total - 2) pages.push('...');
+            pages.push(total);
+            return pages;
         }
 
         function _renderTimeTable(data, el, timeLabel, timeKey, altTimeKey) {

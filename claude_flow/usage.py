@@ -22,6 +22,11 @@ class UsageManager:
     2. Fallback: parse stream-json logs from .claude-flow/logs/
     """
 
+    # Class-level cache for ccusage availability check
+    _ccusage_available: Optional[bool] = None
+    _ccusage_checked_at: Optional[float] = None
+    _CCUSAGE_CACHE_TTL = 300  # 5 minutes
+
     def __init__(self, project_root: Path, config: Optional[Config] = None):
         self._root = project_root
         self._config = config or Config()
@@ -32,17 +37,32 @@ class UsageManager:
     # ------------------------------------------------------------------
 
     def _check_ccusage(self) -> bool:
-        """Check if ccusage is available via npx."""
+        """Check if ccusage is available via npx (cached for 5 minutes)."""
+        import time
+
+        now = time.time()
+        if (
+            UsageManager._ccusage_available is not None
+            and UsageManager._ccusage_checked_at is not None
+            and now - UsageManager._ccusage_checked_at < UsageManager._CCUSAGE_CACHE_TTL
+        ):
+            return UsageManager._ccusage_available
+
         if not shutil.which("npx"):
+            UsageManager._ccusage_available = False
+            UsageManager._ccusage_checked_at = now
             return False
         try:
             result = subprocess.run(
                 ["npx", "ccusage@latest", "--version"],
                 capture_output=True, text=True, timeout=30,
             )
-            return result.returncode == 0
+            UsageManager._ccusage_available = result.returncode == 0
         except (subprocess.TimeoutExpired, OSError):
-            return False
+            UsageManager._ccusage_available = False
+
+        UsageManager._ccusage_checked_at = now
+        return UsageManager._ccusage_available
 
     def _get_project_filter(self) -> str:
         """Generate --project filter based on project root path.

@@ -28,6 +28,9 @@ def usage_project(tmp_path: Path) -> Path:
 @pytest.fixture
 def usage_mgr(usage_project: Path) -> UsageManager:
     """Create a UsageManager with ccusage disabled (fallback mode)."""
+    # Reset class-level ccusage cache to ensure test isolation
+    UsageManager._ccusage_available = None
+    UsageManager._ccusage_checked_at = None
     return UsageManager(usage_project, Config())
 
 
