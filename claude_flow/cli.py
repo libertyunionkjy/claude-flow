@@ -862,6 +862,90 @@ def respond(ctx, task_id, message):
         click.echo(f"Failed to respond to {task_id}")
 
 
+# -- Usage commands ---------------------------------------------------------
+
+@main.group(invoke_without_command=True)
+@click.option("--since", default=None, help="Start date (YYYY-MM-DD)")
+@click.option("--until", default=None, help="End date (YYYY-MM-DD)")
+@click.pass_context
+def usage(ctx, since, until):
+    """Show token usage statistics.
+
+    Default: per-session/task usage report.
+    Subcommands: daily, monthly, summary.
+    """
+    ctx.ensure_object(dict)
+    ctx.obj["since"] = since
+    ctx.obj["until"] = until
+
+    if ctx.invoked_subcommand is not None:
+        return
+
+    from .usage import UsageManager, format_session_table
+
+    root = ctx.obj["root"]
+    cfg = Config.load(root)
+    mgr = UsageManager(root, cfg)
+    sessions = mgr.get_session_usage(since=since, until=until)
+    click.echo(format_session_table(sessions))
+
+
+@usage.command("daily")
+@click.pass_context
+def usage_daily(ctx):
+    """Show daily aggregated usage (requires ccusage)."""
+    from .usage import UsageManager, format_daily_table
+
+    root = ctx.obj["root"]
+    cfg = Config.load(root)
+    mgr = UsageManager(root, cfg)
+    data = mgr.get_daily_usage(
+        since=ctx.obj.get("since"), until=ctx.obj.get("until"),
+    )
+    if data is None:
+        click.echo("Daily report requires ccusage (npx ccusage@latest).")
+        click.echo("Falling back to session usage from logs:")
+        sessions = mgr.get_session_usage()
+        from .usage import format_session_table
+        click.echo(format_session_table(sessions))
+        return
+    click.echo(format_daily_table(data))
+
+
+@usage.command("monthly")
+@click.pass_context
+def usage_monthly(ctx):
+    """Show monthly aggregated usage (requires ccusage)."""
+    from .usage import UsageManager, format_daily_table
+
+    root = ctx.obj["root"]
+    cfg = Config.load(root)
+    mgr = UsageManager(root, cfg)
+    data = mgr.get_monthly_usage(
+        since=ctx.obj.get("since"), until=ctx.obj.get("until"),
+    )
+    if data is None:
+        click.echo("Monthly report requires ccusage (npx ccusage@latest).")
+        return
+    # Reuse daily table format (same columns)
+    click.echo(format_daily_table(data))
+
+
+@usage.command("summary")
+@click.pass_context
+def usage_summary(ctx):
+    """Show overall usage summary."""
+    from .usage import UsageManager, format_summary
+
+    root = ctx.obj["root"]
+    cfg = Config.load(root)
+    mgr = UsageManager(root, cfg)
+    summary = mgr.get_summary(
+        since=ctx.obj.get("since"), until=ctx.obj.get("until"),
+    )
+    click.echo(format_summary(summary))
+
+
 # -- Progress command -------------------------------------------------------
 
 @main.command()
