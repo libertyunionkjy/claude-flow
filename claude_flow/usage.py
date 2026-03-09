@@ -111,12 +111,21 @@ class UsageManager:
             return None
 
     def _parse_json_output(self, stdout: str) -> Optional[List[Dict[str, Any]]]:
-        """Parse ccusage --json output into a list of dicts."""
+        """Parse ccusage --json output into a list of dicts.
+
+        Handles both direct arrays and wrapped structures like
+        {"sessions": [...]} or {"daily": [...]}.
+        """
         try:
             data = json.loads(stdout)
             if isinstance(data, list):
                 return data
             if isinstance(data, dict):
+                # ccusage wraps results: {"sessions": [...], "totals": {...}}
+                for key in ("sessions", "daily", "monthly", "data"):
+                    if key in data and isinstance(data[key], list):
+                        return data[key]
+                # Single object (not a wrapper)
                 return [data]
             return None
         except (json.JSONDecodeError, ValueError):
@@ -152,12 +161,42 @@ class UsageManager:
                     continue
         return mapping
 
+    @staticmethod
+    def _normalize_session(session: Dict[str, Any]) -> Dict[str, Any]:
+        """Normalize ccusage field names to snake_case standard keys.
+
+        ccusage uses camelCase (inputTokens, cacheCreationTokens, totalCost),
+        while our internal format uses snake_case (input_tokens, cost_usd).
+        This ensures a single consistent format downstream.
+        """
+        _get = session.get
+
+        session.setdefault("input_tokens",
+                           _get("inputTokens", 0))
+        session.setdefault("output_tokens",
+                           _get("outputTokens", 0))
+        session.setdefault("cache_creation_input_tokens",
+                           _get("cacheCreationInputTokens",
+                                _get("cacheCreationTokens", 0)))
+        session.setdefault("cache_read_input_tokens",
+                           _get("cacheReadInputTokens",
+                                _get("cacheReadTokens", 0)))
+        session.setdefault("cost_usd",
+                           _get("costUSD",
+                                _get("totalCost",
+                                     _get("total_cost_usd", 0))))
+        session.setdefault("total_tokens",
+                           _get("totalTokens", 0))
+        session.setdefault("models",
+                           _get("modelsUsed", []))
+        return session
+
     def _enrich_with_tasks(
         self, sessions: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
-        """Associate session data with task IDs.
+        """Associate session data with task IDs and normalize field names.
 
-        Uses two strategies:
+        Uses two strategies for task mapping:
         1. session_id -> task_id mapping from log files
         2. session directory name containing task-{id} pattern
         """
@@ -165,12 +204,21 @@ class UsageManager:
         task_pattern = re.compile(r"task-[0-9a-f]{6}")
 
         for session in sessions:
+            # Normalize field names first
+            self._normalize_session(session)
+
             session_id = session.get("sessionId", session.get("session_id", ""))
             # Strategy 1: direct mapping
             if session_id in task_map:
                 session["task_id"] = task_map[session_id]
                 continue
-            # Strategy 2: extract from project path / directory name
+            # Strategy 2: extract from session ID or project path
+            # ccusage sessionId encodes the worktree path, e.g.
+            # "-opt-shared-claude-flow--claude-flow-worktrees-task-c9c2fb"
+            match = task_pattern.search(str(session_id))
+            if match:
+                session["task_id"] = match.group(0)
+                continue
             project_path = session.get("projectPath", session.get("project", ""))
             match = task_pattern.search(str(project_path))
             if match:
