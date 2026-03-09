@@ -14,3 +14,10 @@ cf = "claude_flow.cli:main"
 
 [project.optional-dependencies]
 dev = ["pytest>=7.0", "pytest-cov"]
+web = ["flask>=2.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "smoke: marks tests that require real claude CLI (deselect with '-m \"not smoke\"')",
+]
