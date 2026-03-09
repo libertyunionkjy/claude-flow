@@ -1,5 +1,54 @@
 # Progress Log
 
+## [2026-03-09 15:39:49] task-e8abf8 - claude flow 工作流优化
+**Status**: FAILED
+**Commit**: 0959e6f
+
+**错误信息**: Merge conflict
+
+**任务 Prompt**: 想象一个场景：
+我创建一个新的 task ，然后进行 plan ，得到了一个实施方案，这个方案 AI 只是询问我哪个方案更好，那此时我选择 feedback 似乎不合适？还有，AI问我答案之后，我也不知道 AI 还要不要继续问我的答案，那我也不知道该选 approve 和 feedback，这会导致有点尴尬的情况，我该怎么解决这个问题
+
+---
+
+## [2026-03-09 15:35:57] task-03dc9a - 在 root 用户底下运行出现 Error
+**Status**: FAILED
+**Commit**: 7edfc5c
+
+**错误信息**: Merge conflict
+
+**任务 Prompt**: Error: Plan generation failed: -dangerously-skip-permissions cannot be used with root/sudo privileges for security reasonsCreated: 03/09 14-56-00
+
+---
+
+## [2026-03-09 15:02:12] task-c9c2fb - 画一整个流程图
+**Status**: SUCCESS
+**Commit**: c7afd86
+
+以下是该任务的经验总结：
+
+---
+
+**任务**: 画一整个流程图 (`c7afd86`)
+
+**做了什么**: 在 `docs/flowchart.md` 中创建了 357 行的 Mermaid 流程图文档，涵盖 9 个视图：系统架构总览、任务生命周期状态机、端到端用户操作流、Worker 单任务执行流、计划生成与审批流、并发安全模型、合并策略对比、数据存储结构、CLI 命令到模块的映射关系。
+
+**遇到的问题**: 需要将分散在多个模块（7 个核心文件 + CLI）中的复杂逻辑梳理清楚，特别是 Worker 执行中的多层分支（测试重试、冲突解决、auto_merge/auto_push）和 plan review 的多轮 feedback 循环。
+
+**解决方案**: 按职责层次从宏观到微观逐步细化——先画架构总览确定组件关系，再用 `stateDiagram-v2` 表达任务状态机，最后分别为 Worker 执行、计划审批等复杂子流程画独立的 `flowchart`，避免单图过于庞大。
+
+**经验教训**: 对于复杂系统的全景流程图，拆分为多个独立的 Mermaid 图（每个聚焦一个关注点）比画一张巨型图更清晰、更易维护。状态图（`stateDiagram-v2`）适合表达生命周期，`flowchart` 适合表达执行路径和分支决策。
+
+---
+
+## [2026-03-06 18:16:06] task-86c929 - 在前端中加入全流程图
+**Status**: SUCCESS
+**Commit**: 42e3ba2
+
+经验总结已生成并发送。
+
+---
+
 ## [2026-03-06 17:17:59] task-db3392 - 为前端页面加入 markdown 功能
 **Status**: SUCCESS
 **Commit**: fa12397

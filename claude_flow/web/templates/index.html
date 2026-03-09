@@ -1173,10 +1173,10 @@
                         </div>
                         <div class="guide-cmd-box">
                             <span class="cmd-label web">Web</span>
-                            <span class="cmd-text">Click <strong>View Plan</strong> to read, then <strong>Approve</strong> or <strong>Feedback</strong></span>
+                            <span class="cmd-text">Click <strong>View Plan</strong> to read, then <strong>Approve</strong> or <strong>Reply</strong></span>
                         </div>
                     </div>
-                    <div class="guide-tip"><strong>Feedback: </strong>If a plan needs revision, submit feedback and Claude Code will regenerate the plan incorporating your comments. The task returns to <strong>Planning</strong>.</div>
+                    <div class="guide-tip"><strong>Reply: </strong>Use Reply to answer AI's questions (e.g. choosing between options) or to provide revision feedback. Claude Code will regenerate the plan incorporating your reply. The task returns to <strong>Planning</strong>.</div>
                 </div>
             </div>
 
@@ -1324,17 +1324,17 @@
         </div>
     </div>
 
-    <!-- Feedback modal -->
-    <div class="modal-overlay" id="feedbackModal">
+    <!-- Reply modal -->
+    <div class="modal-overlay" id="replyModal">
         <div class="modal">
-            <h2>Feedback</h2>
+            <h2>Reply</h2>
             <div class="form-group">
-                <label for="feedbackMessage">Your feedback</label>
-                <textarea id="feedbackMessage" placeholder="Enter your feedback or reply..."></textarea>
+                <label for="replyMessage">Your reply (answer questions or provide revision notes)</label>
+                <textarea id="replyMessage" placeholder="Answer AI's question or provide revision feedback..."></textarea>
             </div>
             <div class="modal-actions">
-                <button class="btn btn-cancel" onclick="closeFeedbackModal()">Cancel</button>
-                <button class="btn btn-warning" onclick="submitFeedback()">Submit</button>
+                <button class="btn btn-cancel" onclick="closeReplyModal()">Cancel</button>
+                <button class="btn btn-warning" onclick="submitReply()">Submit</button>
             </div>
         </div>
     </div>
@@ -1363,7 +1363,7 @@
             <div class="modal-actions">
                 <button class="btn btn-cancel" onclick="closePlanModal()">Close</button>
                 <button class="btn btn-success" id="planApproveBtn" onclick="approveFromPlan()" style="display:none;">Approve</button>
-                <button class="btn btn-warning" id="planFeedbackBtn" onclick="feedbackFromPlan()" style="display:none;">Feedback</button>
+                <button class="btn btn-warning" id="planReplyBtn" onclick="replyFromPlan()" style="display:none;">Reply</button>
             </div>
         </div>
     </div>
@@ -1387,7 +1387,7 @@
         /* -- 全局状态 -------------------------------------------------------- */
         let allTasks = [];
         let expandedCards = new Set();
-        let feedbackTaskId = null;
+        let replyTaskId = null;
         let respondingTaskId = null;
         let viewingPlanTaskId = null;
         let viewingLogTaskId = null;
@@ -1588,7 +1588,7 @@
 
                 case 'planned':
                     btns.push(actionBtn('Approve', 'success', 'approveTask', id));
-                    btns.push(actionBtn('Feedback', 'warning', 'openFeedbackModal', id));
+                    btns.push(actionBtn('Reply', 'warning', 'openReplyModal', id));
                     break;
 
                 case 'approved':
@@ -1655,7 +1655,7 @@
             }
         }
 
-        /* -- 任务操作: Approve / Feedback -------------------------------------- */
+        /* -- 任务操作: Approve / Reply ---------------------------------------- */
         async function approveTask(event, taskId) {
             event.stopPropagation();
             const data = await api('/tasks/' + taskId + '/approve', { method: 'POST' });
@@ -1673,33 +1673,33 @@
             }
         }
 
-        /* -- Task action: Feedback ----------------------------------------- */
-        function openFeedbackModal(event, taskId) {
+        /* -- Task action: Reply ------------------------------------------- */
+        function openReplyModal(event, taskId) {
             event.stopPropagation();
-            feedbackTaskId = taskId;
-            document.getElementById('feedbackMessage').value = '';
-            document.getElementById('feedbackModal').classList.add('active');
+            replyTaskId = taskId;
+            document.getElementById('replyMessage').value = '';
+            document.getElementById('replyModal').classList.add('active');
         }
 
-        function closeFeedbackModal() {
-            feedbackTaskId = null;
-            document.getElementById('feedbackModal').classList.remove('active');
+        function closeReplyModal() {
+            replyTaskId = null;
+            document.getElementById('replyModal').classList.remove('active');
         }
 
-        async function submitFeedback() {
-            if (!feedbackTaskId) return;
-            const message = document.getElementById('feedbackMessage').value.trim();
+        async function submitReply() {
+            if (!replyTaskId) return;
+            const message = document.getElementById('replyMessage').value.trim();
             if (!message) {
-                showToast('Please enter feedback');
+                showToast('Please enter your reply');
                 return;
             }
-            const data = await api('/tasks/' + feedbackTaskId + '/feedback', {
+            const data = await api('/tasks/' + replyTaskId + '/reply', {
                 method: 'POST',
                 body: JSON.stringify({ message: message }),
             });
             if (data !== null) {
-                showToast('Feedback submitted, regenerating plan...');
-                closeFeedbackModal();
+                showToast('Reply submitted, regenerating plan...');
+                closeReplyModal();
                 fetchTasks();
             }
         }
@@ -1914,10 +1914,10 @@
             document.getElementById('planModalTitle').textContent = 'Plan: ' + (task ? task.title : taskId);
             document.getElementById('planContent').innerHTML = '<p style="color:#8888aa;">Loading...</p>';
 
-            // 显示/隐藏 approve/feedback 按钮
+            // 显示/隐藏 approve/reply 按钮
             const isPlanned = task && task.status === 'planned';
             document.getElementById('planApproveBtn').style.display = isPlanned ? 'inline-block' : 'none';
-            document.getElementById('planFeedbackBtn').style.display = isPlanned ? 'inline-block' : 'none';
+            document.getElementById('planReplyBtn').style.display = isPlanned ? 'inline-block' : 'none';
 
             document.getElementById('planModal').classList.add('active');
 
@@ -1944,12 +1944,12 @@
             }
         }
 
-        async function feedbackFromPlan() {
+        async function replyFromPlan() {
             if (!viewingPlanTaskId) return;
-            feedbackTaskId = viewingPlanTaskId;
+            replyTaskId = viewingPlanTaskId;
             closePlanModal();
-            document.getElementById('feedbackMessage').value = '';
-            document.getElementById('feedbackModal').classList.add('active');
+            document.getElementById('replyMessage').value = '';
+            document.getElementById('replyModal').classList.add('active');
         }
 
         /* -- Log 查看 -------------------------------------------------------- */
@@ -2109,7 +2109,7 @@
         document.addEventListener('keydown', function (e) {
             if (e.key === 'Escape') {
                 closeNewTaskModal();
-                closeFeedbackModal();
+                closeReplyModal();
                 closeRespondModal();
                 closePlanModal();
                 closeLogModal();
@@ -2122,7 +2122,7 @@
         });
 
         /* -- 模态框外部点击关闭 ------------------------------------------------ */
-        ['newTaskModal', 'feedbackModal', 'respondModal', 'planModal', 'logModal'].forEach(function(id) {
+        ['newTaskModal', 'replyModal', 'respondModal', 'planModal', 'logModal'].forEach(function(id) {
             document.getElementById(id).addEventListener('click', function(e) {
                 if (e.target === this) {
                     this.classList.remove('active');

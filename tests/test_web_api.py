@@ -103,10 +103,10 @@ class TestTaskCRUD:
         assert data["data"]["priority"] == 5
 
 
-# -- Approve / Feedback ------------------------------------------------------
+# -- Approve / Reply ---------------------------------------------------------
 
 
-class TestApproveFeedback:
+class TestApproveReply:
     def test_approve_task(self, client, tm, web_app):
         task = tm.add("T1", "P1")
         tm.update_status(task.id, TaskStatus.PLANNED)
@@ -121,12 +121,36 @@ class TestApproveFeedback:
         data = resp.get_json()
         assert data["ok"] is False
 
-    def test_feedback_task(self, client, tm, web_app):
-        """Feedback triggers re-planning with user message."""
+    def test_reply_task(self, client, tm, web_app):
+        """Reply triggers re-planning with user message (new /reply route)."""
         task = tm.add("T1", "P1")
         tm.update_status(task.id, TaskStatus.PLANNED)
 
-        # Mock generate_interactive to avoid calling Claude
+        planner = web_app.config["PLANNER"]
+        plans_dir = web_app.config["PROJECT_ROOT"] / ".claude-flow" / "plans"
+        plans_dir.mkdir(parents=True, exist_ok=True)
+
+        def fake_generate_interactive(t, feedback=None):
+            plan_file = plans_dir / f"{t.id}.md"
+            plan_file.write_text(f"# Plan with reply: {feedback}")
+            t.status = TaskStatus.PLANNED
+            t.plan_file = str(plan_file)
+            return plan_file
+
+        with patch.object(planner, 'generate_interactive', side_effect=fake_generate_interactive):
+            resp = client.post(
+                f"/api/tasks/{task.id}/reply",
+                json={"message": "Use option B"},
+            )
+            data = resp.get_json()
+            assert data["ok"] is True
+            assert data["data"]["status"] == "planning"
+
+    def test_feedback_route_backward_compat(self, client, tm, web_app):
+        """Old /feedback route still works (backward compatibility)."""
+        task = tm.add("T1", "P1")
+        tm.update_status(task.id, TaskStatus.PLANNED)
+
         planner = web_app.config["PLANNER"]
         plans_dir = web_app.config["PROJECT_ROOT"] / ".claude-flow" / "plans"
         plans_dir.mkdir(parents=True, exist_ok=True)
@@ -141,28 +165,28 @@ class TestApproveFeedback:
         with patch.object(planner, 'generate_interactive', side_effect=fake_generate_interactive):
             resp = client.post(
                 f"/api/tasks/{task.id}/feedback",
-                json={"message": "Use option B"},
+                json={"message": "Use option A"},
             )
             data = resp.get_json()
             assert data["ok"] is True
             assert data["data"]["status"] == "planning"
 
-    def test_feedback_task_wrong_status(self, client, tm, web_app):
-        """Feedback only works on planned tasks."""
+    def test_reply_task_wrong_status(self, client, tm, web_app):
+        """Reply only works on planned tasks."""
         task = tm.add("T1", "P1")
         resp = client.post(
-            f"/api/tasks/{task.id}/feedback",
-            json={"message": "some feedback"},
+            f"/api/tasks/{task.id}/reply",
+            json={"message": "some reply"},
         )
         data = resp.get_json()
         assert data["ok"] is False
 
-    def test_feedback_task_empty_message(self, client, tm, web_app):
-        """Feedback requires non-empty message."""
+    def test_reply_task_empty_message(self, client, tm, web_app):
+        """Reply requires non-empty message."""
         task = tm.add("T1", "P1")
         tm.update_status(task.id, TaskStatus.PLANNED)
         resp = client.post(
-            f"/api/tasks/{task.id}/feedback",
+            f"/api/tasks/{task.id}/reply",
             json={"message": ""},
         )
         data = resp.get_json()

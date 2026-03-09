@@ -374,17 +374,17 @@ def plan_review(ctx):
 
             _reset_terminal()
             action = click.prompt(
-                "[a]pprove  [f]eedback  [s]kip  [e]dit  [q]uit",
+                "[a]pprove  [r]eply  [s]kip  [e]dit  [q]uit",
                 type=str, default="s"
             )
             if action == "a":
                 planner.approve(t)
                 tm.update_status(t.id, TaskStatus.APPROVED)
                 click.echo(f"  {t.id} approved")
-            elif action == "f":
-                # 多轮对话：提供反馈后重新生成
+            elif action in ("r", "f"):
+                # 多轮对话：回复 AI 的问题或提供修改意见后重新生成
                 _reset_terminal()
-                feedback = click.prompt("Your feedback", default="")
+                feedback = click.prompt("Your reply", default="")
                 click.echo(f"  Regenerating plan with feedback...")
                 tm.update_status(t.id, TaskStatus.PLANNING)
                 try:
@@ -632,11 +632,23 @@ def reset(ctx, task_id):
     root = ctx.obj["root"]
     tm = TaskManager(root)
     t = tm.get(task_id)
-    if t and t.status in (TaskStatus.FAILED, TaskStatus.NEEDS_INPUT):
+    if not t:
+        click.echo(f"Task {task_id} not found")
+        return
+    if t.status in (TaskStatus.FAILED, TaskStatus.NEEDS_INPUT):
         tm.update_status(task_id, TaskStatus.PENDING)
         click.echo(f"Reset {task_id} to pending")
+    elif t.status == TaskStatus.RUNNING:
+        # Reset zombie running task (worker crashed without updating status)
+        target = TaskStatus.PLANNED if t.plan_file else TaskStatus.PENDING
+        tm.update_status(task_id, target)
+        # Clean up orphaned worktree and branch
+        cfg = Config.load(root)
+        wt = WorktreeManager(root, root / cfg.worktree_dir)
+        wt.remove(task_id, t.branch)
+        click.echo(f"Reset zombie running task {task_id} to {target.value}")
     else:
-        click.echo(f"Task {task_id} not found or not in failed/needs_input status")
+        click.echo(f"Task {task_id} is in {t.status.value} status, cannot reset")
 
 
 @main.command()

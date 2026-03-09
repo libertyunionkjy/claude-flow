@@ -1,11 +1,19 @@
 from __future__ import annotations
 
+import logging
 import subprocess
 from pathlib import Path
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, List, Optional
+
+from .utils import can_skip_permissions
 
 if TYPE_CHECKING:
     from claude_flow.config import Config
+
+logger = logging.getLogger(__name__)
+
+# Default timeout for network operations (fetch/push) in seconds
+NETWORK_TIMEOUT = 30
 
 
 class WorktreeManager:
@@ -13,11 +21,19 @@ class WorktreeManager:
         self._repo = repo_root
         self._wt_dir = worktree_dir
 
-    def _run(self, args: List[str], cwd: Path | None = None, check: bool = True) -> subprocess.CompletedProcess:
-        return subprocess.run(
-            args, cwd=cwd or self._repo,
-            capture_output=True, text=True, check=check,
-        )
+    def _run(self, args: List[str], cwd: Path | None = None, check: bool = True,
+             timeout: Optional[int] = None) -> subprocess.CompletedProcess:
+        try:
+            return subprocess.run(
+                args, cwd=cwd or self._repo,
+                capture_output=True, text=True, check=check,
+                timeout=timeout,
+            )
+        except subprocess.TimeoutExpired:
+            cmd_str = " ".join(args)
+            logger.warning(f"Command timed out after {timeout}s: {cmd_str}")
+            # Return a failed CompletedProcess so callers with check=False still work
+            return subprocess.CompletedProcess(args, returncode=124, stdout="", stderr=f"Timeout after {timeout}s")
 
     # ------------------------------------------------------------------
     # Symlink 共享文件
@@ -129,9 +145,9 @@ class WorktreeManager:
         # 找到该 branch 对应的 worktree 路径
         wt_path = self._find_worktree_path(branch)
 
-        # 步骤 1: fetch（如果有 remote）
+        # 步骤 1: fetch（如果有 remote，设置超时防止网络挂起）
         if has_remote:
-            self._run(["git", "fetch", "origin"], check=False)
+            self._run(["git", "fetch", "origin"], check=False, timeout=NETWORK_TIMEOUT)
 
         # 步骤 2: 在 worktree 中执行 rebase
         rebase_result = self._run(
@@ -144,16 +160,19 @@ class WorktreeManager:
             return self._ff_merge(branch, main_branch)
 
         # 步骤 4: 冲突处理 — 最多重试 max_retries 次
-        skip_permissions = config is not None and getattr(config, "skip_permissions", False)
+        skip_ok = config is not None and can_skip_permissions(
+            getattr(config, "skip_permissions", False)
+        )
 
         for _ in range(max_retries):
-            if not skip_permissions:
-                # 没有 skip_permissions 权限，无法自动解决冲突
+            if not skip_ok:
+                # 没有 skip_permissions 权限（或以 root 运行），无法自动解决冲突
                 break
 
             # 调用 claude 解决冲突
+            claude_cmd = ["claude", "-p", "resolve rebase conflict", "--dangerously-skip-permissions"]
             claude_result = self._run(
-                ["claude", "-p", "resolve rebase conflict", "--dangerously-skip-permissions"],
+                claude_cmd,
                 cwd=wt_path, check=False,
             )
 
@@ -217,7 +236,7 @@ class WorktreeManager:
 
     def push(self, main_branch: str) -> bool:
         """将主分支推送到远程仓库。"""
-        result = self._run(["git", "push", "origin", main_branch], check=False)
+        result = self._run(["git", "push", "origin", main_branch], check=False, timeout=NETWORK_TIMEOUT)
         return result.returncode == 0
 
     # ------------------------------------------------------------------

@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, List, Optional
 
 from .config import Config
 from .models import Task, TaskStatus
+from .utils import can_skip_permissions
 
 if TYPE_CHECKING:
     from .task_manager import TaskManager
@@ -73,7 +74,7 @@ class Planner:
         task.status = TaskStatus.PLANNING
         prompt = f"{self._config.plan_prompt_prefix}\n\n{task.prompt}"
         cmd = ["claude", "-p", prompt, "--print", "--output-format", "text"]
-        if self._config.skip_permissions:
+        if can_skip_permissions(self._config.skip_permissions):
             cmd.append("--dangerously-skip-permissions")
 
         try:
@@ -144,7 +145,7 @@ class Planner:
         prompt = "\n".join(prompt_parts)
 
         cmd = ["claude", "-p", prompt, "--print", "--output-format", "text"]
-        if self._config.skip_permissions:
+        if can_skip_permissions(self._config.skip_permissions):
             cmd.append("--dangerously-skip-permissions")
 
         try:

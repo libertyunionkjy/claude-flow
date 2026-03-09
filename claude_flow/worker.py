@@ -12,6 +12,7 @@ from typing import Optional
 from .config import Config
 from .models import Task, TaskStatus
 from .task_manager import TaskManager
+from .utils import can_skip_permissions
 from .worktree import WorktreeManager
 
 logger = logging.getLogger(__name__)
@@ -45,6 +46,17 @@ class Worker:
         prefix = self._log_prefix()
         logger.info(f"{prefix} Executing: {task.title} ({task.id})")
 
+        try:
+            return self._execute_task_inner(task)
+        except Exception as e:
+            error_msg = f"Unexpected error: {e}"
+            logger.error(f"{prefix} {error_msg}")
+            self._tm.update_status(task.id, TaskStatus.FAILED, error_msg)
+            return False
+
+    def _execute_task_inner(self, task: Task) -> bool:
+        prefix = self._log_prefix()
+
         # 创建 worktree（传入 config 自动设置 symlink 共享文件）
         try:
             wt_path = self._wt.create(task.id, task.branch, config=self._cfg)
@@ -55,7 +67,7 @@ class Worker:
         # 运行 Claude Code
         prompt = f"{self._cfg.task_prompt_prefix}\n\n{task.prompt}"
         cmd = ["claude", "-p", prompt, "--output-format", "stream-json", "--verbose"]
-        if self._cfg.skip_permissions:
+        if can_skip_permissions(self._cfg.skip_permissions):
             cmd.append("--dangerously-skip-permissions")
         cmd.extend(self._cfg.claude_args)
 
@@ -153,7 +165,12 @@ class Worker:
             if task is None:
                 logger.info(f"{self._log_prefix()} No more tasks, exiting")
                 break
-            success = self.execute_task(task)
+            try:
+                success = self.execute_task(task)
+            except Exception as e:
+                logger.error(f"{self._log_prefix()} Task {task.id} crashed: {e}")
+                self._tm.update_status(task.id, TaskStatus.FAILED, f"Worker crash: {e}")
+                success = False
             if success:
                 completed += 1
         return completed
@@ -181,7 +198,12 @@ class Worker:
                     time.sleep(self._cfg.daemon_poll_interval)
                     continue
 
-                success = self.execute_task(task)
+                try:
+                    success = self.execute_task(task)
+                except Exception as e:
+                    logger.error(f"{prefix} Task {task.id} crashed: {e}")
+                    self._tm.update_status(task.id, TaskStatus.FAILED, f"Worker crash: {e}")
+                    success = False
                 if success:
                     completed += 1
                     logger.info(f"{prefix} Completed {completed} tasks so far")
@@ -221,7 +243,7 @@ class Worker:
                         f"请修复代码使测试通过。"
                     )
                     fix_cmd = ["claude", "-p", fix_prompt, "--output-format", "stream-json", "--verbose"]
-                    if self._cfg.skip_permissions:
+                    if can_skip_permissions(self._cfg.skip_permissions):
                         fix_cmd.append("--dangerously-skip-permissions")
                     subprocess.run(
                         fix_cmd, cwd=str(wt_path),

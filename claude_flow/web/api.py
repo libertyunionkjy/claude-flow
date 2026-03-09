@@ -12,7 +12,9 @@ except ImportError:
         "Flask 未安装。请运行 `pip install flask` 以启用 Web Manager 功能。"
     )
 
+from ..config import Config
 from ..models import TaskStatus
+from ..worktree import WorktreeManager
 
 api_bp = Blueprint("api", __name__, url_prefix="/api")
 
@@ -160,12 +162,14 @@ def approve_task(task_id: str):
     return _ok(updated.to_dict())
 
 
+@api_bp.route("/tasks/<task_id>/reply", methods=["POST"])
 @api_bp.route("/tasks/<task_id>/feedback", methods=["POST"])
-def feedback_task(task_id: str):
-    """Provide feedback on a plan to trigger re-generation.
+def reply_task(task_id: str):
+    """Reply to a plan (answer AI's questions or provide revision feedback).
 
     body: {message}. Only works on planned tasks.
     Status flow: planned -> planning -> planned (async).
+    The /feedback route is kept for backward compatibility.
     """
     tm = current_app.config["TASK_MANAGER"]
     planner = current_app.config["PLANNER"]
@@ -496,8 +500,20 @@ def reset_task(task_id: str):
     if not task:
         return _err(f"任务 {task_id} 不存在", 404)
 
+    if task.status == TaskStatus.RUNNING:
+        # Reset zombie running task (worker crashed without updating status)
+        target = TaskStatus.PLANNED if task.plan_file else TaskStatus.PENDING
+        tm.update_status(task_id, target)
+        # Clean up orphaned worktree and branch
+        root = current_app.config["PROJECT_ROOT"]
+        cfg = current_app.config["CF_CONFIG"]
+        wt = WorktreeManager(root, root / cfg.worktree_dir)
+        wt.remove(task_id, task.branch)
+        updated = tm.get(task_id)
+        return _ok(updated.to_dict())
+
     if task.status not in (TaskStatus.FAILED, TaskStatus.NEEDS_INPUT):
-        return _err(f"任务 {task_id} 当前状态为 {task.status.value}，仅 failed/needs_input 可重置")
+        return _err(f"任务 {task_id} 当前状态为 {task.status.value}，仅 failed/needs_input/running 可重置")
 
     tm.update_status(task_id, TaskStatus.PENDING)
     updated = tm.get(task_id)
