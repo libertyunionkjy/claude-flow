@@ -12,9 +12,38 @@ except ImportError:
 
 from ..chat import ChatManager
 from ..config import Config
+from ..models import TaskStatus
 from ..planner import Planner
 from ..task_manager import TaskManager
 from ..usage import UsageManager
+
+
+def _recover_stuck_planning_tasks(
+    task_manager: TaskManager,
+    chat_manager: ChatManager,
+    plans_dir: Path,
+) -> None:
+    """Recover tasks stuck in PLANNING state due to interrupted finalize.
+
+    When the server restarts, daemon threads running generate_from_chat
+    are killed without updating task status.  This finds tasks in PLANNING
+    state whose chat session is already finalized but have no plan file,
+    and resets the chat session to 'active' so the user can re-trigger
+    finalize.
+    """
+    tasks = task_manager.list_tasks()
+    for task in tasks:
+        if task.status != TaskStatus.PLANNING:
+            continue
+        session = chat_manager.get_session(task.id)
+        if not session:
+            continue
+        plan_file = plans_dir / f"{task.id}.md"
+        if session.status == "finalized" and not plan_file.exists():
+            # Chat was finalized but plan generation was interrupted
+            session.status = "active"
+            session.thinking = False
+            chat_manager._save_session(session)
 
 
 def create_app(project_root: Path, config: Config) -> Flask:
@@ -48,6 +77,9 @@ def create_app(project_root: Path, config: Config) -> Flask:
     app.config["PLANNER"] = planner
     app.config["CHAT_MANAGER"] = chat_manager
     app.config["USAGE_MANAGER"] = UsageManager(project_root, config)
+
+    # Recover tasks stuck in PLANNING state due to interrupted finalize
+    _recover_stuck_planning_tasks(task_manager, chat_manager, plans_dir)
 
     # 注册 API 蓝图
     from .api import api_bp

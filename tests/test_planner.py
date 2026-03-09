@@ -76,7 +76,13 @@ class TestPlanner:
         cmd = mock_popen.call_args[0][0]
         assert "--allowedTools" in cmd
         idx = cmd.index("--allowedTools")
-        assert cmd[idx + 1 : idx + 4] == ["Read", "Glob", "Grep"]
+        disallow_idx = cmd.index("--disallowedTools")
+        assert cmd[idx + 1 : disallow_idx] == ["Read", "Glob", "Grep"]
+        # Verify disallowed tools are always present
+        disallowed = cmd[disallow_idx + 1 :]
+        assert "Write" in disallowed
+        assert "Edit" in disallowed
+        assert "Bash" in disallowed
 
     @patch("claude_flow.planner.subprocess.Popen")
     def test_generate_no_restriction_when_empty(self, mock_popen, tmp_path):
@@ -96,3 +102,5 @@ class TestPlanner:
 
         cmd = mock_popen.call_args[0][0]
         assert "--allowedTools" not in cmd
+        # --disallowedTools should still be present
+        assert "--disallowedTools" in cmd

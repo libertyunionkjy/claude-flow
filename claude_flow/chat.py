@@ -379,18 +379,25 @@ class ChatManager:
         thread.start()
         return True
 
+    # Tools that must never be used during the planning/chat phase
+    _PLANNING_DISALLOWED_TOOLS = ["Write", "Edit", "Bash", "NotebookEdit"]
+
     def _build_cmd(self, prompt: str) -> list[str]:
         """Build the claude CLI command list.
 
         When plan_allowed_tools is configured (non-empty), appends
         --allowedTools to restrict Claude to read-only operations
-        during the planning phase.
+        during the planning phase.  Additionally, always appends
+        --disallowedTools to explicitly block write/execute tools,
+        preventing AI from writing files even when
+        --dangerously-skip-permissions is active.
         """
         cmd = ["claude", "-p", prompt, "--print", "--output-format", "text"]
         if can_skip_permissions(self._config.skip_permissions):
             cmd.append("--dangerously-skip-permissions")
         if self._config.plan_allowed_tools:
             cmd.extend(["--allowedTools"] + self._config.plan_allowed_tools)
+        cmd.extend(["--disallowedTools"] + self._PLANNING_DISALLOWED_TOOLS)
         return cmd
 
     def _async_claude_call(self, task_id: str, cmd: list[str]) -> None:

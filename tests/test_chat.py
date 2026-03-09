@@ -419,7 +419,8 @@ class TestChatManager:
         cmd = mgr._build_cmd("test prompt")
         assert "--allowedTools" in cmd
         idx = cmd.index("--allowedTools")
-        assert cmd[idx + 1 :] == ["Read", "Glob", "Grep"]
+        disallow_idx = cmd.index("--disallowedTools")
+        assert cmd[idx + 1 : disallow_idx] == ["Read", "Glob", "Grep"]
 
     def test_build_cmd_no_restriction_when_empty(self, chat_dir):
         """_build_cmd omits --allowedTools when plan_allowed_tools is empty."""
@@ -428,6 +429,19 @@ class TestChatManager:
         cmd = mgr._build_cmd("test prompt")
         assert "--allowedTools" not in cmd
 
+    def test_build_cmd_always_includes_disallowed_tools(self, chat_dir):
+        """_build_cmd always appends --disallowedTools to block writes."""
+        cfg = Config(plan_allowed_tools=[])
+        mgr = ChatManager(chat_dir, cfg)
+        cmd = mgr._build_cmd("test prompt")
+        assert "--disallowedTools" in cmd
+        idx = cmd.index("--disallowedTools")
+        disallowed = cmd[idx + 1 :]
+        assert "Write" in disallowed
+        assert "Edit" in disallowed
+        assert "Bash" in disallowed
+        assert "NotebookEdit" in disallowed
+
     def test_build_cmd_custom_tools(self, chat_dir):
         """_build_cmd supports project-specific tool configuration."""
         cfg = Config(plan_allowed_tools=["Read", "Glob", "Grep", "Bash(python:*)"])
@@ -435,7 +449,8 @@ class TestChatManager:
         cmd = mgr._build_cmd("test prompt")
         assert "--allowedTools" in cmd
         idx = cmd.index("--allowedTools")
-        assert "Bash(python:*)" in cmd[idx + 1 :]
+        disallow_idx = cmd.index("--disallowedTools")
+        assert "Bash(python:*)" in cmd[idx + 1 : disallow_idx]
 
     def test_send_message_uses_allowed_tools(self, chat_dir):
         """send_message passes --allowedTools to claude CLI."""

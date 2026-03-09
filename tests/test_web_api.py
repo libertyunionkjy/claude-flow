@@ -458,3 +458,67 @@ class TestRunAPI:
         data = resp.get_json()
         assert data["ok"] is True
         assert data["data"]["started"] == 0
+
+
+class TestRecoverStuckPlanningTasks:
+    """Tests for _recover_stuck_planning_tasks startup recovery."""
+
+    def test_recovers_finalized_session_without_plan(self, cf_project):
+        """A task in PLANNING with finalized chat but no plan file
+        should have its chat session reset to active on app startup."""
+        from claude_flow.chat import ChatManager
+        from claude_flow.web.app import _recover_stuck_planning_tasks
+
+        cfg = Config.load(cf_project)
+        tm = TaskManager(cf_project)
+        chat_mgr = ChatManager(cf_project, cfg)
+        plans_dir = cf_project / ".claude-flow" / "plans"
+
+        # Create a task in PLANNING state
+        task = tm.add(title="Stuck task", prompt="Do something")
+        tm.update_status(task.id, TaskStatus.PLANNING)
+
+        # Create and finalize a chat session (simulating interrupted finalize)
+        chat_mgr.create_session(task.id)
+        chat_mgr.add_message(task.id, "user", "hello")
+        chat_mgr.finalize(task.id)
+
+        # Verify precondition: session is finalized, no plan file
+        session = chat_mgr.get_session(task.id)
+        assert session.status == "finalized"
+        assert not (plans_dir / f"{task.id}.md").exists()
+
+        # Run recovery
+        _recover_stuck_planning_tasks(tm, chat_mgr, plans_dir)
+
+        # Session should be reset to active
+        recovered = chat_mgr.get_session(task.id)
+        assert recovered.status == "active"
+        assert recovered.thinking is False
+
+    def test_does_not_reset_if_plan_exists(self, cf_project):
+        """A finalized chat session with an existing plan file should
+        not be reset (plan was generated successfully)."""
+        from claude_flow.chat import ChatManager
+        from claude_flow.web.app import _recover_stuck_planning_tasks
+
+        cfg = Config.load(cf_project)
+        tm = TaskManager(cf_project)
+        chat_mgr = ChatManager(cf_project, cfg)
+        plans_dir = cf_project / ".claude-flow" / "plans"
+
+        task = tm.add(title="Complete task", prompt="Done")
+        tm.update_status(task.id, TaskStatus.PLANNING)
+
+        chat_mgr.create_session(task.id)
+        chat_mgr.finalize(task.id)
+
+        # Create plan file (simulating successful generate_from_chat)
+        plans_dir.mkdir(parents=True, exist_ok=True)
+        (plans_dir / f"{task.id}.md").write_text("# Plan")
+
+        _recover_stuck_planning_tasks(tm, chat_mgr, plans_dir)
+
+        # Session should remain finalized
+        session = chat_mgr.get_session(task.id)
+        assert session.status == "finalized"

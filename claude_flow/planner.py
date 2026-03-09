@@ -69,16 +69,23 @@ class Planner:
     # 原有方法（保持签名不变）
     # ------------------------------------------------------------------
 
+    # Tools that must never be used during the planning phase
+    _PLANNING_DISALLOWED_TOOLS = ["Write", "Edit", "Bash", "NotebookEdit"]
+
     def _build_plan_cmd(self, prompt: str) -> list[str]:
         """Build claude CLI command for plan-phase invocations.
 
         Applies plan_allowed_tools restriction when configured.
+        Additionally, always appends --disallowedTools to explicitly
+        block write/execute tools, preventing AI from writing files
+        even when --dangerously-skip-permissions is active.
         """
         cmd = ["claude", "-p", prompt, "--print", "--output-format", "text"]
         if can_skip_permissions(self._config.skip_permissions):
             cmd.append("--dangerously-skip-permissions")
         if self._config.plan_allowed_tools:
             cmd.extend(["--allowedTools"] + self._config.plan_allowed_tools)
+        cmd.extend(["--disallowedTools"] + self._PLANNING_DISALLOWED_TOOLS)
         return cmd
 
     def generate(self, task: Task) -> Optional[Path]:
