@@ -96,37 +96,6 @@ class WorktreeManager:
             target.symlink_to(source.resolve())
 
     # ------------------------------------------------------------------
-    # Worktree CLAUDE.md 路径约束注入
-    # ------------------------------------------------------------------
-
-    def _inject_worktree_claude_md(self, wt_path: Path, task_id: str) -> None:
-        """在 worktree 的 CLAUDE.md 末尾追加工作目录约束指令。
-
-        确保 Claude Code 在 worktree 中启动时能识别正确的项目根路径，
-        防止使用主仓库绝对路径操作文件。
-        """
-        constraint = (
-            "\n\n"
-            "## Worktree 工作目录约束（自动生成）\n"
-            "\n"
-            "你当前工作在一个 Git Worktree 隔离环境中：\n"
-            f"- **工作目录**：`{wt_path}`\n"
-            f"- **任务 ID**：`{task_id}`\n"
-            f"- **主仓库**：`{self._repo}`（禁止直接修改）\n"
-            "\n"
-            "**强制规则**：\n"
-            f"1. 所有文件读写操作必须限定在 `{wt_path}` 目录内\n"
-            f"2. 禁止使用 `{self._repo}` 的绝对路径操作文件\n"
-            f"3. 使用相对路径或以 `{wt_path}` 为前缀的绝对路径\n"
-        )
-
-        claude_md = wt_path / "CLAUDE.md"
-        if claude_md.exists():
-            claude_md.write_text(claude_md.read_text() + constraint)
-        else:
-            claude_md.write_text(constraint.lstrip())
-
-    # ------------------------------------------------------------------
     # 创建 worktree
     # ------------------------------------------------------------------
 
@@ -150,9 +119,6 @@ class WorktreeManager:
                 shared=config.shared_symlinks,
                 forbidden=config.forbidden_symlinks,
             )
-
-        # 注入工作目录约束到 CLAUDE.md
-        self._inject_worktree_claude_md(wt_path, task_id)
 
         return wt_path
 

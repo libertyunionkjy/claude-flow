@@ -113,33 +113,3 @@ class TestWorktreeManager:
         # 锁文件应被创建
         assert (wt_dir / MERGE_LOCK_FILE).exists()
 
-    def test_create_injects_claude_md(self, git_repo):
-        """worktree 创建后，CLAUDE.md 应包含工作目录约束指令。"""
-        wt_dir = git_repo / ".claude-flow" / "worktrees"
-        mgr = WorktreeManager(git_repo, wt_dir)
-        wt_path = mgr.create("task-inject", "cf/task-inject")
-        claude_md = wt_path / "CLAUDE.md"
-        assert claude_md.exists()
-        content = claude_md.read_text()
-        assert "Worktree 工作目录约束" in content
-        assert str(wt_path) in content
-        assert str(git_repo) in content
-        assert "禁止直接修改" in content
-
-    def test_create_injects_claude_md_when_no_existing(self, git_repo):
-        """即使原项目没有 CLAUDE.md，worktree 中也应生成约束文件。"""
-        # 删除主仓库的 CLAUDE.md（如果存在）
-        main_claude = git_repo / "CLAUDE.md"
-        if main_claude.exists():
-            main_claude.unlink()
-            subprocess.run(["git", "-C", str(git_repo), "add", "."], check=True, capture_output=True)
-            subprocess.run(["git", "-C", str(git_repo), "commit", "-m", "remove CLAUDE.md"],
-                           check=True, capture_output=True)
-
-        wt_dir = git_repo / ".claude-flow" / "worktrees"
-        mgr = WorktreeManager(git_repo, wt_dir)
-        wt_path = mgr.create("task-no-md", "cf/task-no-md")
-        claude_md = wt_path / "CLAUDE.md"
-        assert claude_md.exists()
-        content = claude_md.read_text()
-        assert "Worktree 工作目录约束" in content
