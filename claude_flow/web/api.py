@@ -167,28 +167,40 @@ def approve_task(task_id: str):
 
 @api_bp.route("/tasks/<task_id>/chat", methods=["GET"])
 def get_chat(task_id: str):
-    """Get chat session history for a task."""
+    """Get chat session history for a task.
+
+    Returns thinking=true when AI is generating a response,
+    allowing the frontend to poll for completion.
+    """
     chat_mgr = current_app.config["CHAT_MANAGER"]
     session = chat_mgr.get_session(task_id)
 
     if not session:
-        return _ok({"task_id": task_id, "exists": False, "messages": []})
+        return _ok({
+            "task_id": task_id,
+            "exists": False,
+            "thinking": False,
+            "messages": [],
+        })
 
     return _ok({
         "task_id": task_id,
         "exists": True,
         "mode": session.mode,
         "status": session.status,
+        "thinking": session.thinking,
         "messages": [m.to_dict() for m in session.messages],
     })
 
 
 @api_bp.route("/tasks/<task_id>/chat", methods=["POST"])
 def send_chat(task_id: str):
-    """Send a message in the chat session and get AI response.
+    """Send a message in the chat session (non-blocking).
 
     body: {message}. Creates a session if one doesn't exist.
-    The AI response is returned synchronously.
+    Returns immediately with accepted=true. The AI response is generated
+    in a background thread. Poll GET /tasks/<task_id>/chat to check
+    thinking status and retrieve the response when ready.
     """
     tm = current_app.config["TASK_MANAGER"]
     chat_mgr = current_app.config["CHAT_MANAGER"]
@@ -206,28 +218,30 @@ def send_chat(task_id: str):
     session = chat_mgr.get_session(task_id)
     if not session:
         session = chat_mgr.create_session(task_id, mode="interactive")
-        # Update task plan_mode
         _update_plan_mode(tm, task_id, "interactive")
 
     if session.status != "active":
         return _err("Chat session is finalized, cannot send new messages")
 
+    if session.thinking:
+        return _err("AI is still processing the previous message, please wait")
+
     # Ensure task is in planning state
     if task.status == TaskStatus.PENDING:
         tm.update_status(task_id, TaskStatus.PLANNING)
 
-    # Send message and get AI response (synchronous)
-    ai_response = chat_mgr.send_message(task_id, message, task_prompt=task.prompt)
+    # Send message asynchronously (returns immediately)
+    accepted = chat_mgr.send_message_async(
+        task_id, message, task_prompt=task.prompt
+    )
 
-    if ai_response is None:
-        return _err("Failed to get AI response")
+    if not accepted:
+        return _err("Failed to start AI response generation")
 
-    # Return updated session
-    updated_session = chat_mgr.get_session(task_id)
     return _ok({
         "task_id": task_id,
-        "ai_response": ai_response,
-        "messages": [m.to_dict() for m in updated_session.messages],
+        "accepted": True,
+        "thinking": True,
     })
 
 

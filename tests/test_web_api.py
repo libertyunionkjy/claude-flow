@@ -130,7 +130,7 @@ class TestApproveChat:
         assert data["data"]["exists"] is False
 
     def test_chat_send_creates_session(self, client, tm, web_app):
-        """POST /chat creates a session and returns AI response."""
+        """POST /chat creates a session and returns accepted (async mode)."""
         task = tm.add("T1", "P1")
 
         with patch("claude_flow.chat.subprocess.run") as mock_run:
@@ -143,11 +143,23 @@ class TestApproveChat:
             )
             data = resp.get_json()
             assert data["ok"] is True
-            assert data["data"]["ai_response"] == "AI response here"
-            assert len(data["data"]["messages"]) == 2  # user + assistant
+            assert data["data"]["accepted"] is True
+            assert data["data"]["thinking"] is True
+
+        # Wait for background thread to complete
+        import time
+        time.sleep(0.5)
+
+        # Verify the AI response arrived via GET
+        resp = client.get(f"/api/tasks/{task.id}/chat")
+        data = resp.get_json()
+        assert data["ok"] is True
+        assert data["data"]["thinking"] is False
+        assert len(data["data"]["messages"]) == 2  # user + assistant
+        assert data["data"]["messages"][1]["content"] == "AI response here"
 
     def test_chat_get_with_history(self, client, tm, web_app):
-        """GET /chat returns messages after a send."""
+        """GET /chat returns messages and thinking status after a send."""
         task = tm.add("T1", "P1")
 
         with patch("claude_flow.chat.subprocess.run") as mock_run:
@@ -159,10 +171,15 @@ class TestApproveChat:
                 json={"message": "Hello"},
             )
 
+            # Wait for background thread to complete
+            import time
+            time.sleep(0.5)
+
         resp = client.get(f"/api/tasks/{task.id}/chat")
         data = resp.get_json()
         assert data["ok"] is True
         assert data["data"]["exists"] is True
+        assert data["data"]["thinking"] is False
         assert len(data["data"]["messages"]) == 2
 
     def test_chat_send_empty_message(self, client, tm):
@@ -177,6 +194,7 @@ class TestApproveChat:
 
     def test_chat_finalize(self, client, tm, web_app):
         """POST /chat/finalize triggers plan generation from chat."""
+        import time
         task = tm.add("T1", "P1")
 
         # First create a chat session with messages
@@ -188,6 +206,8 @@ class TestApproveChat:
                 f"/api/tasks/{task.id}/chat",
                 json={"message": "Plan this feature"},
             )
+            # Wait for async response to complete
+            time.sleep(0.5)
 
         # Then finalize
         with patch.object(

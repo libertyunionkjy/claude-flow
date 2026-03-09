@@ -1,6 +1,7 @@
 """Tests for ChatSession model and ChatManager."""
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -51,12 +52,28 @@ class TestChatModels:
         d = session.to_dict()
         assert d["task_id"] == "task-abc123"
         assert len(d["messages"]) == 2
+        assert d["thinking"] is False
 
         restored = ChatSession.from_dict(d)
         assert restored.task_id == "task-abc123"
         assert restored.mode == "interactive"
+        assert restored.thinking is False
         assert len(restored.messages) == 2
         assert restored.messages[0].role == "user"
+
+    def test_chat_session_thinking_flag(self):
+        session = ChatSession(task_id="task-t1", thinking=True)
+        d = session.to_dict()
+        assert d["thinking"] is True
+
+        restored = ChatSession.from_dict(d)
+        assert restored.thinking is True
+
+    def test_chat_session_thinking_default_false(self):
+        """thinking defaults to False when not present in dict (backward compat)."""
+        d = {"task_id": "task-old", "mode": "interactive", "status": "active", "messages": []}
+        restored = ChatSession.from_dict(d)
+        assert restored.thinking is False
 
 
 # -- ChatManager tests -------------------------------------------------------
@@ -224,6 +241,124 @@ class TestChatManager:
         assert "Build a REST API" in prompt
         assert "Task Description" in prompt
         assert "requirements" in prompt.lower()
+
+    def test_send_message_async(self, chat_mgr):
+        """send_message_async records user message, sets thinking=True, returns True."""
+        chat_mgr.create_session("task-async-1")
+
+        with patch("claude_flow.chat.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=0, stdout="Async AI response", stderr=""
+            )
+            accepted = chat_mgr.send_message_async("task-async-1", "Hello async")
+
+        assert accepted is True
+        # Session should have user message and thinking=True initially
+        # (the background thread may or may not have completed)
+        import time
+        time.sleep(0.5)  # Wait for background thread
+
+        session = chat_mgr.get_session("task-async-1")
+        assert len(session.messages) == 2  # user + assistant
+        assert session.messages[0].role == "user"
+        assert session.messages[0].content == "Hello async"
+        assert session.messages[1].role == "assistant"
+        assert session.messages[1].content == "Async AI response"
+        assert session.thinking is False
+
+    def test_send_message_async_rejects_when_thinking(self, chat_mgr):
+        """send_message_async rejects if session is already thinking."""
+        chat_mgr.create_session("task-async-2")
+
+        # Manually set thinking=True
+        session = chat_mgr.get_session("task-async-2")
+        session.thinking = True
+        chat_mgr._save_session(session)
+
+        accepted = chat_mgr.send_message_async("task-async-2", "Another message")
+        assert accepted is False
+
+    def test_send_message_async_no_session(self, chat_mgr):
+        """send_message_async returns False for nonexistent session."""
+        accepted = chat_mgr.send_message_async("nonexistent", "Hello")
+        assert accepted is False
+
+    def test_send_initial_prompt_async(self, chat_mgr):
+        """send_initial_prompt_async starts background AI analysis."""
+        chat_mgr.create_session("task-async-3")
+
+        with patch("claude_flow.chat.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=0, stdout="Initial analysis complete", stderr=""
+            )
+            accepted = chat_mgr.send_initial_prompt_async(
+                "task-async-3", "Build a REST API"
+            )
+
+        assert accepted is True
+        import time
+        time.sleep(0.5)  # Wait for background thread
+
+        session = chat_mgr.get_session("task-async-3")
+        assert len(session.messages) == 1
+        assert session.messages[0].role == "assistant"
+        assert session.messages[0].content == "Initial analysis complete"
+        assert session.thinking is False
+
+    def test_send_initial_prompt_async_rejects_when_thinking(self, chat_mgr):
+        """send_initial_prompt_async rejects if already thinking."""
+        chat_mgr.create_session("task-async-4")
+        session = chat_mgr.get_session("task-async-4")
+        session.thinking = True
+        chat_mgr._save_session(session)
+
+        accepted = chat_mgr.send_initial_prompt_async("task-async-4", "Do something")
+        assert accepted is False
+
+    def test_async_claude_call_error(self, chat_mgr):
+        """_async_claude_call handles subprocess errors gracefully."""
+        chat_mgr.create_session("task-async-5")
+
+        with patch("claude_flow.chat.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=1, stdout="", stderr="Some error"
+            )
+            chat_mgr._async_claude_call(
+                "task-async-5",
+                ["claude", "-p", "test", "--print", "--output-format", "text"],
+            )
+
+        session = chat_mgr.get_session("task-async-5")
+        assert len(session.messages) == 1
+        assert "Chat error" in session.messages[0].content
+        assert session.thinking is False
+
+    def test_async_claude_call_timeout(self, chat_mgr):
+        """_async_claude_call handles timeout gracefully."""
+        chat_mgr.create_session("task-async-6")
+
+        with patch("claude_flow.chat.subprocess.run") as mock_run:
+            mock_run.side_effect = subprocess.TimeoutExpired(cmd="claude", timeout=600)
+            chat_mgr._async_claude_call(
+                "task-async-6",
+                ["claude", "-p", "test", "--print", "--output-format", "text"],
+            )
+
+        session = chat_mgr.get_session("task-async-6")
+        assert len(session.messages) == 1
+        assert "Chat error" in session.messages[0].content
+        assert session.thinking is False
+
+    def test_finalize_clears_thinking(self, chat_mgr):
+        """finalize should clear thinking flag."""
+        chat_mgr.create_session("task-fin-1")
+        session = chat_mgr.get_session("task-fin-1")
+        session.thinking = True
+        chat_mgr._save_session(session)
+
+        finalized = chat_mgr.finalize("task-fin-1")
+        assert finalized.status == "finalized"
+        assert finalized.thinking is False
 
     def test_build_prompt(self, chat_mgr):
         session = ChatSession(

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import threading
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -45,6 +46,7 @@ class ChatSession:
     task_id: str
     mode: str = "interactive"  # "auto" | "interactive"
     status: str = "active"  # "active" | "finalized"
+    thinking: bool = False  # True when AI is generating a response
     messages: List[ChatMessage] = field(default_factory=list)
 
     def to_dict(self) -> dict:
@@ -52,6 +54,7 @@ class ChatSession:
             "task_id": self.task_id,
             "mode": self.mode,
             "status": self.status,
+            "thinking": self.thinking,
             "messages": [m.to_dict() for m in self.messages],
         }
 
@@ -61,6 +64,7 @@ class ChatSession:
             task_id=d["task_id"],
             mode=d.get("mode", "interactive"),
             status=d.get("status", "active"),
+            thinking=d.get("thinking", False),
             messages=[ChatMessage.from_dict(m) for m in d.get("messages", [])],
         )
 
@@ -239,12 +243,117 @@ class ChatManager:
         self._save_session(session)
         return ai_response
 
+    # ------------------------------------------------------------------
+    # Async messaging (non-blocking, for web API)
+    # ------------------------------------------------------------------
+
+    def send_message_async(
+        self, task_id: str, content: str, task_prompt: str = ""
+    ) -> bool:
+        """Send a user message and start AI response generation in background.
+
+        Records the user message immediately and sets thinking=True.
+        The AI response is generated in a background thread, which updates
+        the session when complete and sets thinking=False.
+
+        Returns True if the message was accepted, False otherwise.
+        """
+        session = self._load_session(task_id)
+        if not session or session.status != "active":
+            return False
+        if session.thinking:
+            return False  # Already processing a message
+
+        # Record user message and set thinking flag
+        session.messages.append(ChatMessage(role="user", content=content))
+        session.thinking = True
+        self._save_session(session)
+
+        # Build prompt and start background thread
+        prompt = self._build_prompt(session, task_prompt)
+        cmd = self._build_cmd(prompt)
+
+        thread = threading.Thread(
+            target=self._async_claude_call,
+            args=(task_id, cmd),
+            daemon=True,
+        )
+        thread.start()
+        return True
+
+    def send_initial_prompt_async(
+        self, task_id: str, task_prompt: str
+    ) -> bool:
+        """Start initial AI analysis in background (non-blocking).
+
+        Sets thinking=True and generates the initial AI response in a
+        background thread. Returns True if accepted.
+        """
+        session = self._load_session(task_id)
+        if not session or session.status != "active":
+            return False
+        if session.thinking:
+            return False
+
+        session.thinking = True
+        self._save_session(session)
+
+        prompt = self._build_initial_prompt(task_prompt)
+        cmd = self._build_cmd(prompt)
+
+        thread = threading.Thread(
+            target=self._async_claude_call,
+            args=(task_id, cmd),
+            daemon=True,
+        )
+        thread.start()
+        return True
+
+    def _build_cmd(self, prompt: str) -> list[str]:
+        """Build the claude CLI command list."""
+        cmd = ["claude", "-p", prompt, "--print", "--output-format", "text"]
+        if can_skip_permissions(self._config.skip_permissions):
+            cmd.append("--dangerously-skip-permissions")
+        return cmd
+
+    def _async_claude_call(self, task_id: str, cmd: list[str]) -> None:
+        """Execute claude CLI in background and update session with result.
+
+        This runs in a daemon thread. On completion (success or error),
+        it appends the AI response and clears the thinking flag.
+        """
+        try:
+            result = subprocess.run(
+                cmd,
+                cwd=str(self._root),
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                text=True,
+                timeout=self._config.task_timeout,
+            )
+            if result.returncode != 0:
+                ai_response = f"Chat error: {result.stderr.strip()}"
+            else:
+                ai_response = result.stdout.strip()
+        except (subprocess.TimeoutExpired, OSError) as e:
+            ai_response = f"Chat error: {e}"
+
+        # Update session: append response and clear thinking flag
+        session = self._load_session(task_id)
+        if session:
+            session.messages.append(
+                ChatMessage(role="assistant", content=ai_response)
+            )
+            session.thinking = False
+            self._save_session(session)
+
     def finalize(self, task_id: str) -> Optional[ChatSession]:
         """Mark the session as finalized (plan generated)."""
         session = self._load_session(task_id)
         if not session:
             return None
         session.status = "finalized"
+        session.thinking = False
         self._save_session(session)
         return session
 

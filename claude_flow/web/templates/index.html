@@ -1871,6 +1871,7 @@
         /* -- Task action: Chat -------------------------------------------- */
         async function openChatModal(event, taskId) {
             if (event) event.stopPropagation();
+            stopChatPolling();
             chatTaskId = taskId;
             const task = allTasks.find(t => t.id === taskId);
             document.getElementById('chatModalTitle').textContent =
@@ -1878,6 +1879,8 @@
             document.getElementById('chatMessages').innerHTML = '';
             document.getElementById('chatInput').value = '';
             document.getElementById('chatTyping').style.display = 'none';
+            document.getElementById('chatSendBtn').disabled = false;
+            document.getElementById('chatInput').disabled = false;
             document.getElementById('chatModal').classList.add('active');
 
             // Load existing chat history
@@ -1885,10 +1888,20 @@
             if (data !== null && data.exists && data.messages.length > 0) {
                 renderChatMessages(data.messages);
             }
+
+            // If AI is currently thinking, resume polling
+            if (data !== null && data.thinking) {
+                document.getElementById('chatSendBtn').disabled = true;
+                document.getElementById('chatInput').disabled = true;
+                document.getElementById('chatTyping').style.display = 'block';
+                startChatPolling(taskId);
+            }
+
             document.getElementById('chatInput').focus();
         }
 
         function closeChatModal() {
+            stopChatPolling();
             chatTaskId = null;
             document.getElementById('chatModal').classList.remove('active');
         }
@@ -1907,6 +1920,10 @@
             container.scrollTop = container.scrollHeight;
         }
 
+        // Track polling state per task to avoid duplicate polls
+        let chatPollingTimer = null;
+        let chatLastMessageCount = 0;
+
         async function sendChatMessage() {
             if (!chatTaskId) return;
             const input = document.getElementById('chatInput');
@@ -1924,6 +1941,7 @@
 
             input.value = '';
             document.getElementById('chatSendBtn').disabled = true;
+            document.getElementById('chatInput').disabled = true;
             document.getElementById('chatTyping').style.display = 'block';
 
             const data = await api('/tasks/' + chatTaskId + '/chat', {
@@ -1931,19 +1949,56 @@
                 body: JSON.stringify({ message: message }),
             });
 
-            document.getElementById('chatSendBtn').disabled = false;
-            document.getElementById('chatTyping').style.display = 'none';
-
-            if (data !== null) {
-                // Show AI response
-                const aiBubble = document.createElement('div');
-                aiBubble.className = 'chat-bubble assistant';
-                aiBubble.innerHTML = '<div class="chat-role">AI</div>'
-                    + renderMarkdown(data.ai_response);
-                container.appendChild(aiBubble);
-                container.scrollTop = container.scrollHeight;
+            if (data !== null && data.accepted) {
+                // Message accepted, start polling for AI response
+                chatLastMessageCount = container.querySelectorAll('.chat-bubble').length;
+                startChatPolling(chatTaskId);
+            } else {
+                // Immediate error
+                document.getElementById('chatSendBtn').disabled = false;
+                document.getElementById('chatInput').disabled = false;
+                document.getElementById('chatTyping').style.display = 'none';
             }
-            input.focus();
+        }
+
+        function startChatPolling(taskId) {
+            stopChatPolling();
+            chatPollingTimer = setInterval(async function() {
+                const data = await api('/tasks/' + taskId + '/chat');
+                if (data === null) {
+                    stopChatPolling();
+                    return;
+                }
+                if (!data.thinking) {
+                    // AI finished responding
+                    stopChatPolling();
+                    document.getElementById('chatSendBtn').disabled = false;
+                    document.getElementById('chatInput').disabled = false;
+                    document.getElementById('chatTyping').style.display = 'none';
+
+                    // Render the new AI response (last message)
+                    if (data.messages && data.messages.length > 0) {
+                        const lastMsg = data.messages[data.messages.length - 1];
+                        if (lastMsg.role === 'assistant') {
+                            const container = document.getElementById('chatMessages');
+                            const aiBubble = document.createElement('div');
+                            aiBubble.className = 'chat-bubble assistant';
+                            aiBubble.innerHTML = '<div class="chat-role">AI</div>'
+                                + renderMarkdown(lastMsg.content);
+                            container.appendChild(aiBubble);
+                            container.scrollTop = container.scrollHeight;
+                        }
+                    }
+                    document.getElementById('chatInput').focus();
+                }
+            }, 1500);
+        }
+
+        function stopChatPolling() {
+            if (chatPollingTimer) {
+                clearInterval(chatPollingTimer);
+                chatPollingTimer = null;
+            }
         }
 
         async function finalizeChat() {
