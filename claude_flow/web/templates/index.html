@@ -2910,11 +2910,19 @@
             document.getElementById('chatTyping').style.display = 'none';
             document.getElementById('chatSendBtn').disabled = false;
             document.getElementById('chatInput').disabled = false;
+            document.getElementById('chatFinalizeBtn').disabled = false;
+            document.getElementById('chatFinalizeBtn').textContent = 'Finalize Plan';
             document.getElementById('chatModal').classList.add('active');
 
             var data = await api('/tasks/' + taskId + '/chat');
             if (data !== null && data.exists && data.messages.length > 0) {
                 renderChatMessages(data.messages);
+            }
+
+            // If session is finalized, show generating state
+            if (data !== null && data.status === 'finalized') {
+                document.getElementById('chatFinalizeBtn').disabled = true;
+                document.getElementById('chatFinalizeBtn').textContent = 'Generating...';
             }
 
             if (data !== null && data.thinking) {
@@ -3629,6 +3637,16 @@
                 renderDetailChatMessages(data.messages);
             } else {
                 container.innerHTML = '<div class="detail-chat-empty">No chat messages. Start an interactive planning session.</div>';
+            }
+
+            // Reset Finalize button state based on session status
+            var finalizeBtn = document.getElementById('detailChatFinalizeBtn');
+            if (data !== null && data.status === 'finalized') {
+                finalizeBtn.disabled = true;
+                finalizeBtn.textContent = 'Generating...';
+            } else {
+                finalizeBtn.disabled = false;
+                finalizeBtn.textContent = 'Finalize Plan';
             }
 
             // Handle thinking state
