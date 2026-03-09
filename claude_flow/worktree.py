@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import fcntl
 import logging
+import os
 import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable, List, Optional, TypeVar
@@ -31,11 +32,18 @@ class WorktreeManager:
 
     def _run(self, args: List[str], cwd: Path | None = None, check: bool = True,
              timeout: Optional[int] = None) -> subprocess.CompletedProcess:
+        # Prevent git from opening interactive editors (e.g. during rebase --continue).
+        # GIT_EDITOR handles commit message editing, GIT_SEQUENCE_EDITOR handles
+        # interactive rebase todo lists. Setting both to 'true' (the shell builtin
+        # that exits 0) ensures all git operations run non-interactively.
+        env = os.environ.copy()
+        env.setdefault("GIT_EDITOR", "true")
+        env.setdefault("GIT_SEQUENCE_EDITOR", "true")
         try:
             return subprocess.run(
                 args, cwd=cwd or self._repo,
                 capture_output=True, text=True, check=check,
-                timeout=timeout,
+                timeout=timeout, env=env,
             )
         except subprocess.TimeoutExpired:
             cmd_str = " ".join(args)
