@@ -312,7 +312,16 @@ def send_chat(task_id: str):
     # Create session if it doesn't exist
     session = chat_mgr.get_session(task_id)
     if not session:
-        session = chat_mgr.create_session(task_id, mode="interactive")
+        # Inject auto plan output as initial context if plan file exists
+        if task.plan_file:
+            plan_path = Path(task.plan_file)
+            if plan_path.exists():
+                plan_content = plan_path.read_text()
+                session = chat_mgr.create_session_from_plan(task_id, plan_content)
+            else:
+                session = chat_mgr.create_session(task_id, mode="interactive")
+        else:
+            session = chat_mgr.create_session(task_id, mode="interactive")
         _update_plan_mode(tm, task_id, "interactive")
 
     if session.status != "active":
@@ -322,7 +331,7 @@ def send_chat(task_id: str):
         return _err("AI is still processing the previous message, please wait")
 
     # Ensure task is in planning state
-    if task.status == TaskStatus.PENDING:
+    if task.status in (TaskStatus.PENDING, TaskStatus.PLANNED):
         tm.update_status(task_id, TaskStatus.PLANNING)
 
     # Send message asynchronously (returns immediately)

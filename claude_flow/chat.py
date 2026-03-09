@@ -146,6 +146,21 @@ class ChatManager:
         self._save_session(session)
         return session
 
+    def create_session_from_plan(
+        self, task_id: str, plan_content: str
+    ) -> ChatSession:
+        """Create a new chat session with auto plan output as initial context.
+
+        Used when transitioning from auto plan to interactive chat, so the
+        AI retains the plan content as conversation history.
+        """
+        session = self.create_session(task_id, mode="interactive")
+        session.messages.append(
+            ChatMessage(role="assistant", content=plan_content)
+        )
+        self._save_session(session)
+        return session
+
     def get_session(self, task_id: str) -> Optional[ChatSession]:
         """Retrieve an existing chat session.
 

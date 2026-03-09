@@ -1,5 +1,115 @@
 # Progress Log
 
+## [2026-03-09 22:58:03] task-3744b8 - 增加LOGO
+**Status**: SUCCESS
+**Commit**: 4cb669e
+
+以下是任务经验总结：
+
+---
+
+**任务：增加 LOGO**
+
+**做了什么：** 将项目已有的 SVG LOGO 集成到三个位置——README.md（居中展示）、Web 页面侧边栏（品牌标识）、以及浏览器标签页（favicon，同时配置了 SVG、PNG 和 Apple Touch Icon 三种格式）。
+
+**遇到的问题：** 需要同时处理 Markdown（GitHub 渲染）和 HTML 两套不同的图片引用方式；favicon 需要考虑多种格式兼容性（SVG 优先、PNG 回退、Apple Touch Icon）。
+
+**解决方案：** README 中使用 `<p align="center">` + `<img>` 标签替代纯 Markdown 标题以实现居中布局；favicon 采用渐进增强策略，按 `image/svg+xml` → `image/png` → `apple-touch-icon` 顺序声明。
+
+**经验教训：** LOGO 集成看似简单，但涉及多个展示上下文（文档、Web UI、浏览器标签），改动文件数量少（2 个文件、12 行改动）但需要注意不同平台的兼容性差异。提前确认 LOGO 资源文件（SVG/PNG）是否已就绪，可以避免返工。
+
+---
+
+## [2026-03-09 19:53:36] task-716617 - BUG
+**Status**: SUCCESS
+**Commit**: 011076e
+
+以下是该任务的经验总结：
+
+---
+
+**任务总结：All Tasks 页面点击任务无法跳转详情页**
+
+**做了什么：** 修复前端 All Tasks 页面点击任务后详情页闪现即消失的 BUG，涉及 `index.html` 中视图切换逻辑的修正。
+
+**问题根因：** `showTaskDetail()` 打开详情页时未隐藏 `allTasksPanel` 和 `usagePage`，导致多个视图同时处于 active 状态产生冲突；`goBackToList()` 返回时无差别恢复 `contentPanel`/`topBar`，未根据 `activeTab` 区分来源页面，导致从 All Tasks 进入详情后返回时视图状态错乱。
+
+**解决方案：** 在 `showTaskDetail()` 中增加对 `allTasksPanel` 和 `usagePage` 的 `classList.remove('active')`；在 `goBackToList()` 中根据 `activeTab` 判断返回目标，分别恢复 All Tasks 面板或常规列表视图。
+
+**经验教训：** 多面板/多 Tab 的 SPA 页面中，视图切换必须确保**互斥性**——进入新视图时要显式关闭所有其他视图，返回时要根据上下文（如 `activeTab`）恢复正确的来源视图，而非假设固定的返回目标。
+
+---
+
+## [2026-03-09 19:48:41] task-5e0086 - 优化
+**Status**: SUCCESS
+**Commit**: 66c025e
+
+## 任务经验总结
+
+**做了什么：** 将 Web UI 中的 "Generate Plan" 按钮文案统一重命名为 "Finalize Plan"，涉及 `index.html` 中 7 处文本替换，包括按钮标签、引导提示、加载状态和错误恢复文案。
+
+**遇到的问题：** "Generate Plan" 语义模糊，容易让用户误以为是"从零生成计划"，但实际功能是从已有的聊天对话中提炼生成最终计划文档，属于"定稿/终结"操作。
+
+**解决方案：** 全局搜索替换所有 "Generate Plan" 相关文案为 "Finalize Plan"（按钮）和 "Finalizing plan..."（状态提示），同时将引导步骤标题从 "Generate Plans" 改为更通用的 "Plan Tasks"。
+
+**经验教训：** UI 文案应准确反映功能语义，尤其是涉及多步骤工作流（聊天 → 定稿）时，动词选择直接影响用户对操作结果的预期。小改动也需要全局排查，确保所有出现点一致。
+
+---
+
+## [2026-03-09 19:48:24] task-f2998c - BUG
+**Status**: FAILED
+**Commit**: 8a07dfb
+
+**错误信息**: Merge conflict
+
+**任务 Prompt**: 现在我这个 Token Usage 页面，点进去后，一定要先输入日期范围才显示用量，这个太麻烦了，我希望默认俺session就展示所有的数据，然后分页展示。以及最重要的要默认展示使用总量
+
+---
+
+## [2026-03-09 19:47:48] task-95a449 - 集成测试（详细版）
+**Status**: FAILED
+**Commit**: 0230cf7
+
+**错误信息**: Merge conflict
+
+**任务 Prompt**: ---
+task_id: task-95a449
+title: 集成测试
+version: 2
+created_at: 2026-03-09T18:18:19
+status: planned
+---
+
+# 实施计划
+
+计划已保存到 `docs/plans/2026-03-09-integration-tests.md`。
+
+## 计划概览
+
+| Task | 模块 | 文件 | 测试数 | 覆盖场景 |
+|------|------|------|--------|----------|
+| 0 | Infrastructure | `conftest.py` | 0 | `full_stack` + `web_client` 共享 fixture |
+| 1 | CLI | `test_cli_integration.py` | ~14 | init, task CRUD, plan, run, status, reset, retry |
+| 2 | Lifecycle | `test_lifecycle_advanced.py` | ~10 | priority, batch, 
+
+---
+
+## [2026-03-09 19:43:47] task-a05c6c - BUG
+**Status**: SUCCESS
+**Commit**: 27ec5c4
+
+## 任务经验总结：Generate Plan 按钮重复点击 BUG
+
+**做了什么：** 修复了 planning 状态任务的 "Generate Plan" 按钮在点击后仍可重复点击的问题，涉及前端（`index.html`）和后端（`api.py`）两处修改。
+
+**问题本质：** 缺乏前后端双重防护——前端按钮无 disabled 状态控制，后端 `finalize_chat` 接口无幂等性检查，导致用户可多次触发计划生成。
+
+**解决方案：** 前端在 `finalizeChat()` 和 `finalizeDetailChat()` 两个入口点击后立即 `disabled=true` 并更改文本为 "Generating..."，失败时恢复；后端增加 `session.status == "finalized"` 的前置校验，拒绝重复请求。
+
+**经验教训：** 异步操作的 UI 控件必须遵循"乐观锁定"模式——点击即禁用，结果返回后再决定恢复或跳转。同时后端接口应始终保证幂等性，前后端双重防护是防止竞态条件的标准做法。
+
+---
+
 ## [2026-03-09 19:22:35] task-510746 - 添加删除 task 按钮
 **Status**: FAILED
 **Commit**: e2ddd5b

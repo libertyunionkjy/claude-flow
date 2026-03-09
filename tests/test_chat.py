@@ -360,6 +360,40 @@ class TestChatManager:
         assert finalized.status == "finalized"
         assert finalized.thinking is False
 
+    def test_create_session_from_plan(self, chat_mgr):
+        """create_session_from_plan injects plan content as assistant's first message."""
+        plan_content = "# Implementation Plan\n\n1. Step one\n2. Step two"
+        session = chat_mgr.create_session_from_plan("task-plan-1", plan_content)
+
+        assert session.task_id == "task-plan-1"
+        assert session.mode == "interactive"
+        assert session.status == "active"
+        assert len(session.messages) == 1
+        assert session.messages[0].role == "assistant"
+        assert session.messages[0].content == plan_content
+
+        # Verify persistence
+        reloaded = chat_mgr.get_session("task-plan-1")
+        assert len(reloaded.messages) == 1
+        assert reloaded.messages[0].content == plan_content
+
+    def test_create_session_from_plan_preserves_chat_flow(self, chat_mgr):
+        """After create_session_from_plan, subsequent messages include plan context."""
+        plan_content = "Plan: build REST API"
+        chat_mgr.create_session_from_plan("task-plan-2", plan_content)
+
+        # Add a user message
+        session = chat_mgr.add_message("task-plan-2", "user", "How about auth?")
+        assert len(session.messages) == 2
+        assert session.messages[0].role == "assistant"
+        assert session.messages[0].content == plan_content
+        assert session.messages[1].role == "user"
+
+        # Build prompt should include both plan and user message
+        prompt = chat_mgr._build_prompt(session, task_prompt="Build API")
+        assert plan_content in prompt
+        assert "How about auth?" in prompt
+
     def test_build_prompt(self, chat_mgr):
         session = ChatSession(
             task_id="task-010",

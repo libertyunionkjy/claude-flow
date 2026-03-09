@@ -457,8 +457,17 @@ def plan_chat(ctx, task_id, message):
 
     session = chat_mgr.get_session(task_id)
     if not session:
-        click.echo(f"No chat session for {task_id}. Start one with: cf plan {task_id} --interactive")
-        return
+        # Auto-create session from existing plan file if available
+        if t.plan_file:
+            plan_path = Path(t.plan_file)
+            if plan_path.exists():
+                plan_content = plan_path.read_text()
+                session = chat_mgr.create_session_from_plan(task_id, plan_content)
+                tm.update_status(task_id, TaskStatus.PLANNING)
+                click.echo(f"Chat session created from existing plan for {task_id}")
+        if not session:
+            click.echo(f"No chat session for {task_id}. Start one with: cf plan {task_id} --interactive")
+            return
 
     if session.status != "active":
         click.echo(f"Chat session for {task_id} is finalized")
