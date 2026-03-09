@@ -127,13 +127,55 @@ class WorktreeManager:
     # 原有合并方法（向后兼容）
     # ------------------------------------------------------------------
 
-    def merge(self, branch: str, main_branch: str, strategy: str = "--no-ff") -> bool:
+    def merge(self, branch: str, main_branch: str, strategy: str = "--no-ff",
+              config: Config = None,
+              task_title: str = "", task_prompt: str = "") -> bool:
         def _do() -> bool:
             try:
                 self._run(["git", "checkout", main_branch])
                 self._run(["git", "merge", strategy, branch, "-m", f"merge {branch}"])
                 return True
             except subprocess.CalledProcessError:
+                # 尝试自动解决冲突
+                skip_ok = config is not None and can_skip_permissions(
+                    getattr(config, "skip_permissions", False)
+                )
+                max_retries = getattr(config, "max_merge_retries", 3) if config else 3
+
+                if skip_ok:
+                    for attempt in range(max_retries):
+                        conflict_files = self._get_conflict_files(self._repo)
+                        if not conflict_files:
+                            break
+
+                        logger.info(f"Merge conflict (attempt {attempt + 1}/{max_retries}), "
+                                    f"files: {conflict_files}")
+
+                        prompt = self._build_conflict_prompt(
+                            conflict_files,
+                            task_title=task_title,
+                            task_prompt=task_prompt,
+                        )
+                        claude_cmd = ["claude", "-p", prompt, "--dangerously-skip-permissions"]
+                        claude_result = self._run(claude_cmd, check=False)
+
+                        if claude_result.returncode != 0:
+                            break
+
+                        if self._has_conflict_markers(self._repo):
+                            continue  # 重试
+
+                        self._run(["git", "add", "-A"], check=False)
+
+                        # 尝试完成 merge commit
+                        commit_result = self._run(
+                            ["git", "commit", "--no-edit"],
+                            check=False,
+                        )
+                        if commit_result.returncode == 0:
+                            return True
+
+                # 解决失败，abort
                 self._run(["git", "merge", "--abort"], check=False)
                 self._run(["git", "checkout", main_branch], check=False)
                 return False
@@ -148,8 +190,51 @@ class WorktreeManager:
         result = self._run(["git", "remote"], check=False)
         return "origin" in result.stdout.split()
 
+    def _get_conflict_files(self, cwd: Path) -> List[str]:
+        """获取当前冲突的文件列表。"""
+        result = self._run(
+            ["git", "diff", "--name-only", "--diff-filter=U"],
+            cwd=cwd, check=False,
+        )
+        return [f for f in result.stdout.strip().splitlines() if f]
+
+    def _has_conflict_markers(self, cwd: Path) -> bool:
+        """检查工作区中是否还残留冲突标记。"""
+        result = self._run(
+            ["git", "diff", "--check"],
+            cwd=cwd, check=False,
+        )
+        return result.returncode != 0
+
+    def _build_conflict_prompt(self, conflict_files: List[str],
+                               task_title: str = "", task_prompt: str = "") -> str:
+        """构建包含任务上下文和冲突详情的 prompt。"""
+        parts = [
+            "你正在解决一个 Git rebase 冲突。",
+        ]
+        if task_title:
+            parts.append(f"任务标题: {task_title}")
+        if task_prompt:
+            # 截断过长的 prompt
+            prompt_text = task_prompt[:800] if len(task_prompt) > 800 else task_prompt
+            parts.append(f"任务描述: {prompt_text}")
+
+        parts.append(f"\n以下文件存在冲突，请逐一解决:")
+        for f in conflict_files:
+            parts.append(f"  - {f}")
+
+        parts.append(
+            "\n要求:\n"
+            "1. 读取每个冲突文件，理解冲突双方的意图\n"
+            "2. 保留双方的有效改动，合理合并\n"
+            "3. 删除所有冲突标记 (<<<<<<<, =======, >>>>>>>)\n"
+            "4. 确保合并后的代码逻辑正确、可运行"
+        )
+        return "\n".join(parts)
+
     def rebase_and_merge(self, branch: str, main_branch: str, max_retries: int = 5,
-                         config: Config = None) -> bool:
+                         config: Config = None,
+                         task_title: str = "", task_prompt: str = "") -> bool:
         """使用 rebase 策略合并分支。
 
         流程：
@@ -183,25 +268,52 @@ class WorktreeManager:
                 # rebase 成功，执行 ff-only 合并
                 return self._ff_merge(branch, main_branch)
 
-            # 步骤 4: 冲突处理 — 最多重试 max_retries 次
+            # 步骤 3: 冲突处理 — 最多重试 max_retries 次
             skip_ok = config is not None and can_skip_permissions(
                 getattr(config, "skip_permissions", False)
             )
 
-            for _ in range(max_retries):
+            for attempt in range(max_retries):
                 if not skip_ok:
-                    # 没有 skip_permissions 权限（或以 root 运行），无法自动解决冲突
+                    logger.warning("Cannot auto-resolve conflicts: skip_permissions not available")
                     break
 
-                # 调用 claude 解决冲突
-                claude_cmd = ["claude", "-p", "resolve rebase conflict", "--dangerously-skip-permissions"]
+                # 获取冲突文件列表
+                conflict_files = self._get_conflict_files(wt_path)
+                if not conflict_files:
+                    # 无冲突文件但 rebase 仍失败，尝试直接 continue
+                    self._run(["git", "add", "-A"], cwd=wt_path, check=False)
+                    continue_result = self._run(
+                        ["git", "rebase", "--continue"],
+                        cwd=wt_path, check=False,
+                    )
+                    if continue_result.returncode == 0:
+                        return self._ff_merge(branch, main_branch)
+                    break
+
+                logger.info(f"Rebase conflict (attempt {attempt + 1}/{max_retries}), "
+                            f"files: {conflict_files}")
+
+                # 构建包含任务上下文的冲突解决 prompt
+                prompt = self._build_conflict_prompt(
+                    conflict_files,
+                    task_title=task_title,
+                    task_prompt=task_prompt,
+                )
+                claude_cmd = ["claude", "-p", prompt, "--dangerously-skip-permissions"]
                 claude_result = self._run(
                     claude_cmd,
                     cwd=wt_path, check=False,
                 )
 
                 if claude_result.returncode != 0:
+                    logger.warning(f"Claude conflict resolution failed (exit {claude_result.returncode})")
                     break
+
+                # 验证冲突标记已清除
+                if self._has_conflict_markers(wt_path):
+                    logger.warning("Conflict markers still present after claude resolution")
+                    continue  # 重试
 
                 # 将所有文件标记为已解决
                 self._run(["git", "add", "-A"], cwd=wt_path, check=False)

@@ -134,9 +134,16 @@ class Worker:
                     task.branch, self._cfg.main_branch,
                     max_retries=self._cfg.max_merge_retries,
                     config=self._cfg,
+                    task_title=task.title,
+                    task_prompt=task.prompt,
                 )
             else:
-                success = self._wt.merge(task.branch, self._cfg.main_branch, self._cfg.merge_strategy)
+                success = self._wt.merge(
+                    task.branch, self._cfg.main_branch, self._cfg.merge_strategy,
+                    config=self._cfg,
+                    task_title=task.title,
+                    task_prompt=task.prompt,
+                )
 
             if not success:
                 self._tm.update_status(task.id, TaskStatus.FAILED, "CONFLICT")
