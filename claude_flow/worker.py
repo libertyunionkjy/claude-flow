@@ -38,6 +38,10 @@ class Worker:
         self.port = config.base_port + worker_id
         # 守护进程停止标志
         self._stop_requested = False
+        # Current subprocess handle (for abort support)
+        self._current_process: Optional[subprocess.Popen] = None
+        # Current task ID being executed
+        self._current_task_id: Optional[str] = None
 
     def _log_prefix(self) -> str:
         return f"[Worker-{self.worker_id}]"
@@ -45,6 +49,7 @@ class Worker:
     def execute_task(self, task: Task) -> bool:
         prefix = self._log_prefix()
         logger.info(f"{prefix} Executing: {task.title} ({task.id})")
+        self._current_task_id = task.id
 
         try:
             return self._execute_task_inner(task)
@@ -53,6 +58,8 @@ class Worker:
             logger.error(f"{prefix} {error_msg}")
             self._tm.update_status(task.id, TaskStatus.FAILED, error_msg)
             return False
+        finally:
+            self._current_task_id = None
 
     def _execute_task_inner(self, task: Task) -> bool:
         prefix = self._log_prefix()
@@ -151,26 +158,39 @@ class Worker:
         logger.info(f"{prefix} Done: {task.title}")
         return True
 
-    def run_loop(self) -> int:
-        """一次性执行循环：取完 approved 任务就退出。"""
+    def run_loop(self, worker_registry: Optional[dict] = None) -> int:
+        """一次性执行循环：取完 approved 任务就退出。
+
+        Args:
+            worker_registry: Optional dict to register self by task_id for abort support.
+        """
         completed = 0
         while True:
             task = self._tm.claim_next(self.worker_id)
             if task is None:
                 logger.info(f"{self._log_prefix()} No more tasks, exiting")
                 break
+            if worker_registry is not None:
+                worker_registry[task.id] = self
             try:
                 success = self.execute_task(task)
             except Exception as e:
                 logger.error(f"{self._log_prefix()} Task {task.id} crashed: {e}")
                 self._tm.update_status(task.id, TaskStatus.FAILED, f"Worker crash: {e}")
                 success = False
+            finally:
+                if worker_registry is not None:
+                    worker_registry.pop(task.id, None)
             if success:
                 completed += 1
         return completed
 
-    def run_daemon(self) -> int:
-        """守护进程模式：持续轮询等待新任务，直到收到停止信号。"""
+    def run_daemon(self, worker_registry: Optional[dict] = None) -> int:
+        """守护进程模式：持续轮询等待新任务，直到收到停止信号。
+
+        Args:
+            worker_registry: Optional dict to register self by task_id for abort support.
+        """
         prefix = self._log_prefix()
         completed = 0
         self._stop_requested = False
@@ -192,12 +212,17 @@ class Worker:
                     time.sleep(self._cfg.daemon_poll_interval)
                     continue
 
+                if worker_registry is not None:
+                    worker_registry[task.id] = self
                 try:
                     success = self.execute_task(task)
                 except Exception as e:
                     logger.error(f"{prefix} Task {task.id} crashed: {e}")
                     self._tm.update_status(task.id, TaskStatus.FAILED, f"Worker crash: {e}")
                     success = False
+                finally:
+                    if worker_registry is not None:
+                        worker_registry.pop(task.id, None)
                 if success:
                     completed += 1
                     logger.info(f"{prefix} Completed {completed} tasks so far")
@@ -208,6 +233,21 @@ class Worker:
 
         logger.info(f"{prefix} Daemon stopped, completed {completed} tasks")
         return completed
+
+    def stop(self) -> None:
+        """Stop the worker, killing the current subprocess if any.
+
+        Used when deleting a task that is currently being executed.
+        """
+        self._stop_requested = True
+        proc = self._current_process
+        if proc and proc.poll() is None:
+            logger.info(f"{self._log_prefix()} Killing current subprocess for task abort")
+            proc.kill()
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                pass
 
     def _handle_stop_signal(self, signum: int, frame) -> None:
         """信号处理器：标记停止请求。"""
@@ -288,6 +328,7 @@ class Worker:
             stderr=subprocess.PIPE,
             text=True,
         )
+        self._current_process = proc
 
         stderr_lines: list[str] = []
         flush_counter = 0
@@ -335,6 +376,8 @@ class Worker:
             proc.kill()
             proc.wait()
             raise
+        finally:
+            self._current_process = None
 
         return proc.returncode
 

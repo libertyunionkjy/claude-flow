@@ -81,6 +81,8 @@ class ChatManager:
         self._chats_dir = project_root / ".claude-flow" / "chats"
         # Track active background threads by task_id
         self._active_threads: dict[str, threading.Thread] = {}
+        # Track active subprocess handles by task_id (for abort support)
+        self._active_processes: dict[str, subprocess.Popen] = {}
         # Recover stale thinking states from previous process
         self._recover_stale_sessions()
 
@@ -378,22 +380,37 @@ class ChatManager:
 
         This runs in a daemon thread. On completion (success or error),
         it appends the AI response and clears the thinking flag.
+        Uses Popen to allow aborting the subprocess via abort_session().
         """
+        proc = None
         try:
-            result = subprocess.run(
+            proc = subprocess.Popen(
                 cmd,
                 cwd=str(self._root),
                 stdin=subprocess.DEVNULL,
-                capture_output=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 text=True,
-                timeout=self._config.task_timeout,
             )
-            if result.returncode != 0:
-                ai_response = f"Chat error: {result.stderr.strip()}"
+            self._active_processes[task_id] = proc
+            try:
+                stdout, stderr = proc.communicate(
+                    timeout=self._config.task_timeout
+                )
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait()
+                ai_response = f"Chat error: timed out after {self._config.task_timeout}s"
             else:
-                ai_response = result.stdout.strip()
-        except (subprocess.TimeoutExpired, OSError) as e:
+                if proc.returncode != 0:
+                    ai_response = f"Chat error: {stderr.strip()}"
+                else:
+                    ai_response = stdout.strip()
+        except OSError as e:
             ai_response = f"Chat error: {e}"
+
+        # Clean up process reference
+        self._active_processes.pop(task_id, None)
 
         # Update session: append response and clear thinking flag
         session = self._load_session(task_id)
@@ -405,6 +422,30 @@ class ChatManager:
             self._save_session(session)
         # Clean up thread reference
         self._active_threads.pop(task_id, None)
+
+    def abort_session(self, task_id: str) -> bool:
+        """Abort an active chat session, killing any running subprocess.
+
+        Used when deleting a task that is in planning state with an active
+        chat or AI generation. Kills the subprocess, cleans up thread/process
+        references, and removes the session file.
+
+        Returns True if a session was found and cleaned up.
+        """
+        # Kill active subprocess if any
+        proc = self._active_processes.pop(task_id, None)
+        if proc and proc.poll() is None:
+            proc.kill()
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                pass
+
+        # Clean up thread reference
+        self._active_threads.pop(task_id, None)
+
+        # Delete session file
+        return self.delete_session(task_id)
 
     def finalize(self, task_id: str) -> Optional[ChatSession]:
         """Mark the session as finalized (plan generated)."""
