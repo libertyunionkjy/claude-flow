@@ -3882,7 +3882,7 @@
             }).join('') + '</tr></thead>';
         }
 
-        function _n(s, k, a) { return s[k] || s[a] || 0; }
+        function _n(s, k, a, b) { return s[k] || s[a] || (b ? s[b] : 0) || 0; }
 
         // -- Session pagination state
         var _usageSessionsAll = [];
@@ -3917,9 +3917,9 @@
             sessions.forEach(function(s) {
                 gI += _n(s, 'input_tokens', 'inputTokens');
                 gO += _n(s, 'output_tokens', 'outputTokens');
-                gCC += _n(s, 'cache_creation_input_tokens', 'cacheCreationInputTokens');
-                gCR += _n(s, 'cache_read_input_tokens', 'cacheReadInputTokens');
-                gCost += (s.cost_usd || s.costUSD || s.total_cost_usd || 0);
+                gCC += _n(s, 'cache_creation_input_tokens', 'cacheCreationInputTokens', 'cacheCreationTokens');
+                gCR += _n(s, 'cache_read_input_tokens', 'cacheReadInputTokens', 'cacheReadTokens');
+                gCost += (s.cost_usd || s.costUSD || s.total_cost_usd || s.totalCost || 0);
             });
 
             // Build rows for current page
@@ -3927,10 +3927,10 @@
                 var tid = s.task_id || s.sessionId || s.session_id || '-';
                 var i = _n(s, 'input_tokens', 'inputTokens');
                 var o = _n(s, 'output_tokens', 'outputTokens');
-                var cc = _n(s, 'cache_creation_input_tokens', 'cacheCreationInputTokens');
-                var cr = _n(s, 'cache_read_input_tokens', 'cacheReadInputTokens');
+                var cc = _n(s, 'cache_creation_input_tokens', 'cacheCreationInputTokens', 'cacheCreationTokens');
+                var cr = _n(s, 'cache_read_input_tokens', 'cacheReadInputTokens', 'cacheReadTokens');
                 var tot = i + o + cc + cr;
-                var cost = s.cost_usd || s.costUSD || s.total_cost_usd || 0;
+                var cost = s.cost_usd || s.costUSD || s.total_cost_usd || s.totalCost || 0;
                 var tc = (tid && tid !== '-')
                     ? '<span class="task-link" onclick="navigateToTask(\'' + tid + '\')">' + tid + '</span>' : '-';
                 return _uRow([tc,{v:fmtTokFull(i),cls:'num'},{v:fmtTokFull(o),cls:'num'},
@@ -3994,7 +3994,7 @@
 
         function _renderTimeTable(data, el, timeLabel, timeKey, altTimeKey) {
             if (!data || data.length === 0) {
-                el.innerHTML = '<div class="usage-empty">No data available. Requires ccusage CLI.</div>';
+                el.innerHTML = '<div class="usage-empty">No data available for the selected period.</div>';
                 return;
             }
             var tI = 0, tO = 0, tCC = 0, tCR = 0, tCost = 0;
@@ -4002,10 +4002,10 @@
                 var time = d[timeKey] || d[altTimeKey] || '-';
                 var i = _n(d, 'input_tokens', 'inputTokens');
                 var o = _n(d, 'output_tokens', 'outputTokens');
-                var cc = _n(d, 'cache_creation_input_tokens', 'cacheCreationInputTokens');
-                var cr = _n(d, 'cache_read_input_tokens', 'cacheReadInputTokens');
+                var cc = _n(d, 'cache_creation_input_tokens', 'cacheCreationInputTokens', 'cacheCreationTokens');
+                var cr = _n(d, 'cache_read_input_tokens', 'cacheReadInputTokens', 'cacheReadTokens');
                 var tot = i + o + cc + cr;
-                var cost = d.cost_usd || d.costUSD || d.total_cost_usd || 0;
+                var cost = d.cost_usd || d.costUSD || d.total_cost_usd || d.totalCost || 0;
                 tI += i; tO += o; tCC += cc; tCR += cr; tCost += (cost || 0);
                 return _uRow([time,{v:fmtTokFull(i),cls:'num'},{v:fmtTokFull(o),cls:'num'},
                     {v:fmtTokFull(cc),cls:'num'},{v:fmtTokFull(cr),cls:'num'},

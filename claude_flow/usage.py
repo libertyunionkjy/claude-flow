@@ -317,7 +317,11 @@ class UsageManager:
         """Get daily aggregated usage report (requires ccusage)."""
         if not self._check_ccusage():
             return None
-        return self._run_ccusage("daily", since=since, until=until)
+        data = self._run_ccusage("daily", since=since, until=until)
+        if data:
+            for entry in data:
+                self._normalize_session(entry)
+        return data
 
     def get_monthly_usage(
         self, *, since: Optional[str] = None, until: Optional[str] = None,
@@ -325,7 +329,11 @@ class UsageManager:
         """Get monthly aggregated usage report (requires ccusage)."""
         if not self._check_ccusage():
             return None
-        return self._run_ccusage("monthly", since=since, until=until)
+        data = self._run_ccusage("monthly", since=since, until=until)
+        if data:
+            for entry in data:
+                self._normalize_session(entry)
+        return data
 
     def get_summary(
         self, *, since: Optional[str] = None, until: Optional[str] = None,
