@@ -85,7 +85,11 @@ class Worker:
                 timeout=self._cfg.task_timeout,
                 env=env,
             )
+            # 保存原始 log 作为备份
             log_file.write_text(result.stdout + "\n" + result.stderr)
+
+            # 解析 stream-json 并保存结构化 JSON 日志
+            self._save_structured_log(task, result.stdout)
 
             # 解析 stream-json 输出并更新进度
             self._parse_and_update_progress(task, result.stdout)
@@ -328,6 +332,22 @@ class Worker:
             return int(result.stdout.strip()) > 0
         except (ValueError, AttributeError):
             return False
+
+    def _save_structured_log(self, task: Task, stdout: str) -> None:
+        """解析 stream-json 输出并保存为结构化 JSON 日志。"""
+        try:
+            import json as _json
+            from .monitor import StreamJsonParser
+            parser = StreamJsonParser()
+            for line in stdout.splitlines():
+                parser.parse_line(line)
+            structured = parser.to_structured_log(task.id)
+            json_log_file = self._logs_dir / f"{task.id}.json"
+            json_log_file.write_text(
+                _json.dumps(structured, indent=2, ensure_ascii=False)
+            )
+        except Exception as e:
+            logger.warning(f"{self._log_prefix()} Failed to save structured log: {e}")
 
     def _log_progress(self, task: Task, success: bool, error: Optional[str], wt_path: Path) -> None:
         """记录任务经验到 PROGRESS.md。"""
