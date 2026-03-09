@@ -5,41 +5,192 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Claude Flow - Web Manager</title>
     <style>
-        /* -- 基础样式 -------------------------------------------------------- */
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        /* -- Reset & Base ---------------------------------------------------- */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             background: #1a1a2e;
             color: #e0e0e0;
             min-height: 100vh;
+            display: flex;
         }
 
-        /* -- 顶部导航栏 ------------------------------------------------------ */
-        .header {
+        /* -- Sidebar --------------------------------------------------------- */
+        .sidebar {
+            width: 220px;
+            min-width: 220px;
             background: #0f0f23;
+            border-right: 1px solid #2a2a4a;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            flex-shrink: 0;
+        }
+
+        .sidebar-brand {
+            padding: 18px 16px;
+            border-bottom: 1px solid #2a2a4a;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .sidebar-brand h1 {
+            font-size: 16px;
+            font-weight: 700;
+            color: #00d4ff;
+            letter-spacing: 1.5px;
+        }
+
+        .sidebar-brand .brand-logo {
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+        }
+
+        .sidebar-nav {
+            flex: 1;
+            overflow-y: auto;
+            padding: 8px 0;
+        }
+
+        .sidebar-section-label {
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: #4a4a6a;
+            padding: 12px 16px 6px;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 16px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            border: none;
+            background: transparent;
+            width: 100%;
+            text-align: left;
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: 500;
+            color: #8888aa;
+            border-left: 3px solid transparent;
+        }
+
+        .nav-item:hover {
+            background: rgba(255, 255, 255, 0.04);
+            color: #b0b0cc;
+        }
+
+        .nav-item.active {
+            background: rgba(255, 255, 255, 0.06);
+            color: #e0e0e0;
+        }
+
+        .nav-item .nav-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .nav-item .nav-label { flex: 1; }
+
+        .nav-item .nav-count {
+            font-size: 11px;
+            padding: 1px 7px;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.08);
+            min-width: 20px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+
+        .nav-item.active .nav-count {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        /* Nav item status colors */
+        .nav-item[data-tab="pending"].active    { border-left-color: #6c5ce7; color: #a29bfe; }
+        .nav-item[data-tab="planning"].active   { border-left-color: #a29bfe; color: #c0b8ff; }
+        .nav-item[data-tab="planned"].active    { border-left-color: #74b9ff; color: #a0d0ff; }
+        .nav-item[data-tab="approved"].active   { border-left-color: #00cec9; color: #55e6e1; }
+        .nav-item[data-tab="running"].active    { border-left-color: #fdcb6e; color: #ffe0a0; }
+        .nav-item[data-tab="needs_input"].active { border-left-color: #e17055; color: #f0a090; }
+        .nav-item[data-tab="done"].active       { border-left-color: #00b894; color: #55d4b0; }
+        .nav-item[data-tab="failed"].active     { border-left-color: #ff6b6b; color: #ff9090; }
+
+        .nav-item[data-tab="pending"]    .nav-dot { background: #6c5ce7; }
+        .nav-item[data-tab="planning"]   .nav-dot { background: #a29bfe; }
+        .nav-item[data-tab="planned"]    .nav-dot { background: #74b9ff; }
+        .nav-item[data-tab="approved"]   .nav-dot { background: #00cec9; }
+        .nav-item[data-tab="running"]    .nav-dot { background: #fdcb6e; }
+        .nav-item[data-tab="needs_input"] .nav-dot { background: #e17055; }
+        .nav-item[data-tab="done"]       .nav-dot { background: #00b894; }
+        .nav-item[data-tab="failed"]     .nav-dot { background: #ff6b6b; }
+
+        .sidebar-bottom {
+            padding: 12px 16px;
+            border-top: 1px solid #2a2a4a;
+        }
+
+        .sidebar-bottom .nav-item {
+            padding: 8px 0;
+            border-left: none;
+            font-size: 12px;
+        }
+
+        .sidebar-status {
+            font-size: 11px;
+            color: #4a4a6a;
+            padding: 8px 16px;
+            line-height: 1.5;
+        }
+
+        /* -- Main Content ---------------------------------------------------- */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        /* -- Top Bar (within main content) ----------------------------------- */
+        .top-bar {
+            background: #12122a;
             border-bottom: 1px solid #2a2a4a;
             padding: 12px 24px;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            position: sticky;
-            top: 0;
-            z-index: 100;
+            flex-shrink: 0;
         }
 
-        .header h1 {
-            font-size: 18px;
+        .top-bar-title {
+            font-size: 17px;
             font-weight: 600;
-            color: #00d4ff;
-            letter-spacing: 1px;
+            color: #e0e0e0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
 
-        .header-actions {
+        .top-bar-title .title-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        .top-bar-actions {
             display: flex;
             align-items: center;
             gap: 8px;
@@ -47,246 +198,131 @@
         }
 
         .status-bar {
-            font-size: 13px;
-            color: #8888aa;
+            font-size: 12px;
+            color: #6c7a9a;
             margin-right: 8px;
         }
 
+        /* -- Button Styles --------------------------------------------------- */
         .btn {
-            padding: 8px 16px;
+            padding: 7px 14px;
             border: none;
             border-radius: 6px;
             cursor: pointer;
-            font-size: 13px;
+            font-size: 12px;
             font-weight: 500;
             transition: all 0.2s ease;
+            font-family: inherit;
         }
 
-        .btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-primary { background: #00d4ff; color: #0f0f23; }
+        .btn-primary:hover:not(:disabled) { background: #00b8e6; transform: translateY(-1px); }
+        .btn-success { background: #00c853; color: #0f0f23; }
+        .btn-success:hover:not(:disabled) { background: #00b248; }
+        .btn-danger { background: #ff4757; color: #fff; }
+        .btn-danger:hover:not(:disabled) { background: #e0404f; }
+        .btn-warning { background: #ffa502; color: #0f0f23; }
+        .btn-warning:hover:not(:disabled) { background: #e09400; }
+        .btn-info { background: #6c5ce7; color: #fff; }
+        .btn-info:hover:not(:disabled) { background: #5a4bd6; }
+        .btn-outline { background: transparent; border: 1px solid #2a2a4a; color: #8888aa; }
+        .btn-outline:hover:not(:disabled) { border-color: #00d4ff; color: #00d4ff; }
+        .btn-small { padding: 4px 10px; font-size: 11px; }
+        .btn-cancel { background: #2a2a4a; color: #8888aa; }
+        .btn-cancel:hover { background: #3a3a5a; }
 
-        .btn-primary {
-            background: #00d4ff;
-            color: #0f0f23;
-        }
-
-        .btn-primary:hover:not(:disabled) {
-            background: #00b8e6;
-            transform: translateY(-1px);
-        }
-
-        .btn-success {
-            background: #00c853;
-            color: #0f0f23;
-        }
-
-        .btn-success:hover:not(:disabled) {
-            background: #00b248;
-        }
-
-        .btn-danger {
-            background: #ff4757;
-            color: #fff;
-        }
-
-        .btn-danger:hover:not(:disabled) {
-            background: #e0404f;
-        }
-
-        .btn-warning {
-            background: #ffa502;
-            color: #0f0f23;
-        }
-
-        .btn-warning:hover:not(:disabled) {
-            background: #e09400;
-        }
-
-        .btn-info {
-            background: #6c5ce7;
-            color: #fff;
-        }
-
-        .btn-info:hover:not(:disabled) {
-            background: #5a4bd6;
-        }
-
-        .btn-outline {
-            background: transparent;
-            border: 1px solid #2a2a4a;
-            color: #8888aa;
-        }
-
-        .btn-outline:hover:not(:disabled) {
-            border-color: #00d4ff;
-            color: #00d4ff;
-        }
-
-        .btn-small {
-            padding: 4px 10px;
-            font-size: 12px;
-        }
-
-        /* -- 看板主体 -------------------------------------------------------- */
-        .board {
-            display: flex;
-            gap: 16px;
-            padding: 20px;
-            overflow-x: auto;
-            min-height: calc(100vh - 60px);
-            align-items: flex-start;
-        }
-
-        .column {
-            min-width: 260px;
-            max-width: 300px;
+        /* -- Content Panel (task list area) ---------------------------------- */
+        .content-panel {
             flex: 1;
-            background: #12122a;
-            border-radius: 10px;
+            overflow-y: auto;
+            padding: 20px 24px;
+        }
+
+        .task-list {
             display: flex;
             flex-direction: column;
-            max-height: calc(100vh - 100px);
+            gap: 10px;
+            max-width: 900px;
         }
 
-        .column-header {
-            padding: 14px 16px;
-            font-size: 13px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            border-radius: 10px 10px 0 0;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            flex-shrink: 0;
-        }
-
-        .column-header .count {
-            background: rgba(255, 255, 255, 0.15);
-            padding: 2px 8px;
-            border-radius: 10px;
-            font-size: 12px;
-        }
-
-        /* 各列颜色 */
-        .col-pending .column-header { background: #2d2d5e; border-bottom: 2px solid #6c5ce7; }
-        .col-planning .column-header { background: #2d3a5e; border-bottom: 2px solid #a29bfe; }
-        .col-planned .column-header { background: #1e3a5e; border-bottom: 2px solid #74b9ff; }
-        .col-approved .column-header { background: #1e4a3e; border-bottom: 2px solid #00cec9; }
-        .col-running .column-header { background: #3e3a1e; border-bottom: 2px solid #fdcb6e; }
-        .col-needs_input .column-header { background: #4a3a1e; border-bottom: 2px solid #e17055; }
-        .col-done .column-header { background: #1e4a2e; border-bottom: 2px solid #00b894; }
-        .col-failed .column-header { background: #4a1e2e; border-bottom: 2px solid #ff6b6b; }
-
-        .column-body {
-            padding: 8px;
-            overflow-y: auto;
-            flex: 1;
-        }
-
-        /* -- 任务卡片 -------------------------------------------------------- */
+        /* -- Task Card ------------------------------------------------------- */
         .card {
             background: #16213e;
-            border-radius: 8px;
-            padding: 12px;
-            margin-bottom: 8px;
+            border-radius: 10px;
+            padding: 14px 18px;
             cursor: pointer;
             transition: all 0.2s ease;
-            border: 1px solid transparent;
+            border: 1px solid #1e2a4a;
         }
 
         .card:hover {
             border-color: #2a3a6e;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
         }
 
         .card-id {
             font-family: "SF Mono", "Fira Code", monospace;
             font-size: 11px;
-            color: #6c7a9a;
-            margin-bottom: 6px;
+            color: #5a6a8a;
+            flex-shrink: 0;
         }
 
         .card-title {
             font-size: 14px;
             font-weight: 500;
             color: #d0d0e0;
-            margin-bottom: 8px;
+            flex: 1;
             word-break: break-word;
         }
 
         .card-meta {
             display: flex;
             align-items: center;
-            gap: 8px;
-            flex-wrap: wrap;
+            gap: 6px;
+            flex-shrink: 0;
         }
 
         .badge {
-            font-size: 11px;
+            font-size: 10px;
             padding: 2px 6px;
             border-radius: 4px;
             font-weight: 500;
         }
 
-        .badge-priority {
-            background: #2d2d5e;
-            color: #a29bfe;
-        }
+        .badge-priority { background: #2d2d5e; color: #a29bfe; }
+        .badge-worker { background: #1e3a5e; color: #74b9ff; }
+        .badge-retry { background: #4a3a1e; color: #ffa502; }
+        .badge-progress { background: #1e4a3e; color: #00cec9; font-size: 10px; }
 
-        .badge-worker {
-            background: #1e3a5e;
-            color: #74b9ff;
-        }
-
-        .badge-retry {
-            background: #4a3a1e;
-            color: #ffa502;
-        }
-
-        .badge-progress {
-            background: #1e4a3e;
-            color: #00cec9;
-            font-size: 10px;
-        }
-
-        /* 卡片展开详情 */
+        /* Card expanded details */
         .card-details {
             display: none;
-            margin-top: 10px;
-            padding-top: 10px;
+            margin-top: 12px;
+            padding-top: 12px;
             border-top: 1px solid #2a2a4a;
             font-size: 12px;
             color: #8888aa;
         }
 
-        .card-details.open {
-            display: block;
-        }
+        .card-details.open { display: block; }
 
-        .card-details p {
-            margin-bottom: 6px;
-            word-break: break-word;
-        }
-
-        .card-details .label {
-            color: #6c7a9a;
-            font-weight: 500;
-        }
-
-        .card-details .error-text {
-            color: #ff6b6b;
-        }
+        .card-details p { margin-bottom: 6px; word-break: break-word; }
+        .card-details .label { color: #6c7a9a; font-weight: 500; }
+        .card-details .error-text { color: #ff6b6b; }
 
         .card-details .prompt-text {
             max-height: 120px;
             overflow-y: auto;
-            padding: 6px 8px;
+            padding: 8px 10px;
             background: #0f0f23;
-            border-radius: 4px;
+            border-radius: 6px;
             white-space: pre-wrap;
             font-family: "SF Mono", "Fira Code", monospace;
             font-size: 11px;
@@ -296,27 +332,53 @@
         .card-actions {
             display: flex;
             gap: 6px;
-            margin-top: 8px;
+            margin-top: 10px;
             flex-wrap: wrap;
         }
 
-        /* -- 模态框 ---------------------------------------------------------- */
+        .planning-indicator, .running-indicator {
+            font-size: 11px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            margin-top: 6px;
+        }
+        .planning-indicator { color: #a29bfe; }
+        .running-indicator { color: #fdcb6e; }
+
+        .empty-hint {
+            text-align: center;
+            color: #4a4a6a;
+            font-size: 14px;
+            padding: 40px 20px;
+        }
+
+        /* -- Spinner --------------------------------------------------------- */
+        .spinner {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border: 2px solid rgba(255,255,255,0.2);
+            border-top-color: currentColor;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            vertical-align: middle;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* -- Modal ----------------------------------------------------------- */
         .modal-overlay {
             display: none;
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
             background: rgba(0, 0, 0, 0.7);
             z-index: 200;
             justify-content: center;
             align-items: center;
         }
-
-        .modal-overlay.active {
-            display: flex;
-        }
+        .modal-overlay.active { display: flex; }
 
         .modal {
             background: #16213e;
@@ -328,28 +390,11 @@
             max-height: 90vh;
             overflow-y: auto;
         }
+        .modal-lg { max-width: 700px; }
+        .modal h2 { font-size: 18px; margin-bottom: 16px; color: #00d4ff; }
 
-        .modal-lg {
-            max-width: 700px;
-        }
-
-        .modal h2 {
-            font-size: 18px;
-            margin-bottom: 16px;
-            color: #00d4ff;
-        }
-
-        .form-group {
-            margin-bottom: 14px;
-        }
-
-        .form-group label {
-            display: block;
-            font-size: 13px;
-            color: #8888aa;
-            margin-bottom: 4px;
-        }
-
+        .form-group { margin-bottom: 14px; }
+        .form-group label { display: block; font-size: 13px; color: #8888aa; margin-bottom: 4px; }
         .form-group input,
         .form-group textarea,
         .form-group select {
@@ -362,42 +407,15 @@
             font-size: 14px;
             font-family: inherit;
         }
-
         .form-group input:focus,
         .form-group textarea:focus,
-        .form-group select:focus {
-            outline: none;
-            border-color: #00d4ff;
-        }
+        .form-group select:focus { outline: none; border-color: #00d4ff; }
+        .form-group textarea { min-height: 100px; resize: vertical; }
 
-        .form-group textarea {
-            min-height: 100px;
-            resize: vertical;
-        }
+        .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 
-        .modal-actions {
-            display: flex;
-            justify-content: flex-end;
-            gap: 8px;
-            margin-top: 16px;
-        }
-
-        .btn-cancel {
-            background: #2a2a4a;
-            color: #8888aa;
-        }
-
-        .btn-cancel:hover {
-            background: #3a3a5a;
-        }
-
-        /* -- Chat Modal ---------------------------------------------------- */
-        .chat-container {
-            display: flex;
-            flex-direction: column;
-            height: 60vh;
-            max-height: 500px;
-        }
+        /* -- Chat Modal ------------------------------------------------------ */
+        .chat-container { display: flex; flex-direction: column; height: 60vh; max-height: 500px; }
 
         .chat-messages {
             flex: 1;
@@ -419,86 +437,40 @@
             word-wrap: break-word;
             white-space: pre-wrap;
         }
-
         .chat-bubble.user {
-            background: #1a3a5c;
-            color: #e0e8f0;
-            margin-left: auto;
-            border-bottom-right-radius: 4px;
+            background: #1a3a5c; color: #e0e8f0;
+            margin-left: auto; border-bottom-right-radius: 4px;
         }
-
         .chat-bubble.assistant {
-            background: #1e1e3a;
-            color: #d0d0e0;
-            margin-right: auto;
-            border-bottom-left-radius: 4px;
+            background: #1e1e3a; color: #d0d0e0;
+            margin-right: auto; border-bottom-left-radius: 4px;
         }
-
-        .chat-bubble .chat-role {
-            font-size: 11px;
-            color: #6688aa;
-            margin-bottom: 4px;
-            font-weight: 600;
-        }
-
+        .chat-bubble .chat-role { font-size: 11px; color: #6688aa; margin-bottom: 4px; font-weight: 600; }
         .chat-bubble.user .chat-role { color: #4da6ff; }
         .chat-bubble.assistant .chat-role { color: #a888cc; }
 
-        .chat-input-area {
-            display: flex;
-            gap: 8px;
-        }
-
+        .chat-input-area { display: flex; gap: 8px; }
         .chat-input-area textarea {
-            flex: 1;
-            padding: 10px 12px;
-            background: #0f0f23;
-            border: 1px solid #2a2a4a;
-            border-radius: 8px;
-            color: #e0e0e0;
-            font-size: 14px;
-            font-family: inherit;
-            resize: none;
-            min-height: 44px;
-            max-height: 120px;
+            flex: 1; padding: 10px 12px;
+            background: #0f0f23; border: 1px solid #2a2a4a;
+            border-radius: 8px; color: #e0e0e0;
+            font-size: 14px; font-family: inherit;
+            resize: none; min-height: 44px; max-height: 120px;
         }
-
-        .chat-input-area textarea:focus {
-            outline: none;
-            border-color: #00d4ff;
-        }
-
-        .chat-input-area button {
-            align-self: flex-end;
-        }
+        .chat-input-area textarea:focus { outline: none; border-color: #00d4ff; }
+        .chat-input-area button { align-self: flex-end; }
 
         .chat-actions-top {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
+            display: flex; justify-content: space-between;
+            align-items: center; margin-bottom: 10px;
         }
 
         .chat-typing {
-            color: #6688aa;
-            font-size: 12px;
-            font-style: italic;
-            padding: 4px 14px;
-            display: none;
+            color: #6688aa; font-size: 12px; font-style: italic;
+            padding: 4px 14px; display: none;
         }
 
-        /* -- Plan mode selector ------------------------------------------- */
-        .plan-mode-btns {
-            display: flex;
-            gap: 6px;
-        }
-
-        .plan-mode-btns .btn {
-            font-size: 12px;
-            padding: 5px 10px;
-        }
-
-        /* -- Plan / Log 查看区域 --------------------------------------------- */
+        /* -- Plan / Log Content ---------------------------------------------- */
         .plan-content, .log-content {
             background: #0f0f23;
             border: 1px solid #2a2a4a;
@@ -510,7 +482,6 @@
             overflow-y: auto;
             color: #d0d0e0;
         }
-
         .log-content {
             background: #0a0a16;
             font-family: "SF Mono", "Fira Code", monospace;
@@ -520,16 +491,12 @@
             white-space: pre-wrap;
         }
 
-        /* -- Structured Log 样式 --------------------------------------------- */
+        /* Structured Log */
         .log-summary {
-            display: flex;
-            gap: 16px;
-            padding: 8px 12px;
-            margin-bottom: 8px;
-            background: #12122a;
-            border-radius: 6px;
-            font-size: 12px;
-            color: #8888bb;
+            display: flex; gap: 16px;
+            padding: 8px 12px; margin-bottom: 8px;
+            background: #12122a; border-radius: 6px;
+            font-size: 12px; color: #8888bb;
         }
         .log-summary .stat { font-weight: 600; }
         .log-summary .stat-tools { color: #64b5f6; }
@@ -537,35 +504,17 @@
         .log-summary .stat-cost { color: #ffd54f; }
 
         .log-event {
-            display: flex;
-            align-items: flex-start;
-            gap: 8px;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 12px;
-            line-height: 1.5;
+            display: flex; align-items: flex-start; gap: 8px;
+            padding: 4px 8px; border-radius: 4px;
+            font-size: 12px; line-height: 1.5;
         }
         .log-event:hover { background: rgba(255,255,255,0.03); }
-        .log-event .ev-ts {
-            flex-shrink: 0;
-            color: #555577;
-            min-width: 65px;
-            font-size: 11px;
-        }
+        .log-event .ev-ts { flex-shrink: 0; color: #555577; min-width: 65px; font-size: 11px; }
         .log-event .ev-icon {
-            flex-shrink: 0;
-            width: 32px;
-            text-align: center;
-            font-size: 11px;
-            font-weight: 700;
-            border-radius: 3px;
-            padding: 1px 4px;
+            flex-shrink: 0; width: 32px; text-align: center;
+            font-size: 11px; font-weight: 700; border-radius: 3px; padding: 1px 4px;
         }
-        .log-event .ev-content {
-            flex: 1;
-            word-break: break-word;
-            color: #c0c0dd;
-        }
+        .log-event .ev-content { flex: 1; word-break: break-word; color: #c0c0dd; }
 
         .ev-icon-text     { background: #1a3a5c; color: #90caf9; }
         .ev-icon-tool_use { background: #1a2a4a; color: #82b1ff; }
@@ -573,894 +522,492 @@
         .ev-icon-result   { background: #1a3a1a; color: #a5d6a7; }
         .ev-icon-system   { background: #1a1a2a; color: #777; }
 
-        /* -- Markdown 渲染样式 ----------------------------------------------- */
+        /* -- Markdown Rendering ---------------------------------------------- */
         .plan-content h1, .plan-content h2, .plan-content h3,
         .plan-content h4, .plan-content h5, .plan-content h6 {
-            color: #00d4ff;
-            margin: 16px 0 8px 0;
-            font-weight: 600;
+            color: #00d4ff; margin: 16px 0 8px 0; font-weight: 600;
         }
         .plan-content h1 { font-size: 20px; border-bottom: 1px solid #2a2a4a; padding-bottom: 6px; }
         .plan-content h2 { font-size: 17px; border-bottom: 1px solid #2a2a4a; padding-bottom: 4px; }
         .plan-content h3 { font-size: 15px; }
         .plan-content h4 { font-size: 14px; color: #66b3ff; }
-
-        .plan-content p {
-            margin: 8px 0;
-        }
-
-        .plan-content ul, .plan-content ol {
-            margin: 8px 0;
-            padding-left: 24px;
-        }
-        .plan-content li {
-            margin: 4px 0;
-        }
-
+        .plan-content p { margin: 8px 0; }
+        .plan-content ul, .plan-content ol { margin: 8px 0; padding-left: 24px; }
+        .plan-content li { margin: 4px 0; }
         .plan-content code {
-            background: #1a1a3e;
-            color: #ff9f43;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-family: "SF Mono", "Fira Code", monospace;
-            font-size: 12px;
+            background: #1a1a3e; color: #ff9f43; padding: 2px 6px; border-radius: 4px;
+            font-family: "SF Mono", "Fira Code", monospace; font-size: 12px;
         }
-
         .plan-content pre {
-            background: #0a0a1e;
-            border: 1px solid #2a2a4a;
-            border-radius: 6px;
-            padding: 12px;
-            margin: 10px 0;
-            overflow-x: auto;
+            background: #0a0a1e; border: 1px solid #2a2a4a; border-radius: 6px;
+            padding: 12px; margin: 10px 0; overflow-x: auto;
         }
-        .plan-content pre code {
-            background: none;
-            padding: 0;
-            color: #d0d0e0;
-            font-size: 12px;
-            line-height: 1.5;
-        }
-
+        .plan-content pre code { background: none; padding: 0; color: #d0d0e0; font-size: 12px; line-height: 1.5; }
         .plan-content blockquote {
-            border-left: 3px solid #00d4ff;
-            margin: 10px 0;
-            padding: 4px 12px;
-            color: #a0a0c0;
-            background: #12122a;
-            border-radius: 0 4px 4px 0;
+            border-left: 3px solid #00d4ff; margin: 10px 0; padding: 4px 12px;
+            color: #a0a0c0; background: #12122a; border-radius: 0 4px 4px 0;
         }
+        .plan-content hr { border: none; border-top: 1px solid #2a2a4a; margin: 16px 0; }
+        .plan-content table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+        .plan-content th, .plan-content td { border: 1px solid #2a2a4a; padding: 6px 10px; text-align: left; }
+        .plan-content th { background: #1a1a3e; color: #00d4ff; font-weight: 600; }
+        .plan-content tr:nth-child(even) { background: #12122a; }
+        .plan-content strong { color: #ffffff; }
+        .plan-content em { color: #b0b0d0; }
+        .plan-content a { color: #00d4ff; text-decoration: none; }
+        .plan-content a:hover { text-decoration: underline; }
+        .plan-content .task-checkbox { margin-right: 6px; }
 
-        .plan-content hr {
-            border: none;
-            border-top: 1px solid #2a2a4a;
-            margin: 16px 0;
-        }
-
-        .plan-content table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 10px 0;
-        }
-        .plan-content th, .plan-content td {
-            border: 1px solid #2a2a4a;
-            padding: 6px 10px;
-            text-align: left;
-        }
-        .plan-content th {
-            background: #1a1a3e;
-            color: #00d4ff;
-            font-weight: 600;
-        }
-        .plan-content tr:nth-child(even) {
-            background: #12122a;
-        }
-
-        .plan-content strong {
-            color: #ffffff;
-        }
-
-        .plan-content em {
-            color: #b0b0d0;
-        }
-
-        .plan-content a {
-            color: #00d4ff;
-            text-decoration: none;
-        }
-        .plan-content a:hover {
-            text-decoration: underline;
-        }
-
-        .plan-content .task-checkbox {
-            margin-right: 6px;
-        }
-
-        /* -- 空状态提示 ------------------------------------------------------ */
-        .empty-hint {
-            text-align: center;
-            color: #4a4a6a;
-            font-size: 13px;
-            padding: 20px 10px;
-        }
-
-        /* -- 消息提示 -------------------------------------------------------- */
-        .toast {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            background: #16213e;
-            color: #e0e0e0;
-            padding: 12px 20px;
-            border-radius: 8px;
-            border: 1px solid #2a3a6e;
-            font-size: 14px;
-            z-index: 300;
-            opacity: 0;
-            transition: opacity 0.3s ease;
-            pointer-events: none;
-            max-width: 400px;
-        }
-
-        .toast.show {
-            opacity: 1;
-        }
-
-        .toast.error {
-            border-color: #ff4757;
-            color: #ff6b6b;
-        }
-
-        /* -- Spinner --------------------------------------------------------- */
-        .spinner {
-            display: inline-block;
-            width: 14px;
-            height: 14px;
-            border: 2px solid rgba(255,255,255,0.3);
-            border-top-color: #fff;
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-            vertical-align: middle;
-            margin-right: 4px;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        .planning-indicator {
-            color: #a29bfe;
-            font-size: 11px;
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            margin-top: 4px;
-        }
-
-        .running-indicator {
-            color: #fdcb6e;
-            font-size: 11px;
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            margin-top: 4px;
-        }
-
-        /* -- 工作流指南页面 ---------------------------------------------------- */
+        /* -- Guide Page ------------------------------------------------------ */
         .guide-page {
             display: none;
             padding: 24px;
             max-width: 860px;
             margin: 0 auto;
-            min-height: calc(100vh - 60px);
+            overflow-y: auto;
         }
+        .guide-page.active { display: block; }
 
-        .guide-page.active {
-            display: block;
-        }
+        .guide-header { text-align: center; margin-bottom: 32px; }
+        .guide-header h2 { font-size: 24px; color: #00d4ff; margin-bottom: 8px; }
+        .guide-header p { color: #8888aa; font-size: 14px; line-height: 1.6; }
 
-        .guide-header {
-            text-align: center;
-            margin-bottom: 32px;
-        }
-
-        .guide-header h2 {
-            font-size: 24px;
-            color: #00d4ff;
-            margin-bottom: 8px;
-        }
-
-        .guide-header p {
-            color: #8888aa;
-            font-size: 14px;
-            line-height: 1.6;
-        }
-
-        /* Stepper timeline */
-        .guide-stepper {
-            position: relative;
-            padding-left: 36px;
-        }
-
+        .guide-stepper { position: relative; padding-left: 36px; }
         .guide-stepper::before {
-            content: '';
-            position: absolute;
-            left: 15px;
-            top: 0;
-            bottom: 0;
+            content: ''; position: absolute; left: 15px; top: 0; bottom: 0;
             width: 2px;
             background: linear-gradient(to bottom, #6c5ce7, #a29bfe, #74b9ff, #00cec9, #fdcb6e, #e17055, #00b894, #ff6b6b);
         }
 
         .guide-step {
-            position: relative;
-            margin-bottom: 12px;
-            border-radius: 10px;
-            background: #12122a;
-            border: 1px solid #2a2a4a;
-            overflow: hidden;
-            transition: border-color 0.2s ease;
+            position: relative; margin-bottom: 12px; border-radius: 10px;
+            background: #12122a; border: 1px solid #2a2a4a;
+            overflow: hidden; transition: border-color 0.2s ease;
         }
-
-        .guide-step:hover {
-            border-color: #3a3a6a;
-        }
-
-        .guide-step.expanded {
-            border-color: #00d4ff;
-        }
+        .guide-step:hover { border-color: #3a3a6a; }
+        .guide-step.expanded { border-color: #00d4ff; }
 
         .guide-step-dot {
-            position: absolute;
-            left: -29px;
-            top: 18px;
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            border: 2px solid #0f0f23;
-            z-index: 1;
+            position: absolute; left: -29px; top: 18px;
+            width: 12px; height: 12px; border-radius: 50%; border: 2px solid #0f0f23; z-index: 1;
         }
 
         .guide-step-header {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 14px 16px;
-            cursor: pointer;
-            user-select: none;
+            display: flex; align-items: center; gap: 12px;
+            padding: 14px 16px; cursor: pointer; user-select: none;
             transition: background 0.2s ease;
         }
-
-        .guide-step-header:hover {
-            background: rgba(255, 255, 255, 0.03);
-        }
+        .guide-step-header:hover { background: rgba(255, 255, 255, 0.03); }
 
         .guide-step-num {
-            font-size: 11px;
-            font-weight: 700;
-            color: #0f0f23;
-            width: 24px;
-            height: 24px;
-            border-radius: 6px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
+            font-size: 11px; font-weight: 700; color: #0f0f23;
+            width: 24px; height: 24px; border-radius: 6px;
+            display: flex; align-items: center; justify-content: center; flex-shrink: 0;
         }
-
-        .guide-step-title {
-            flex: 1;
-            font-size: 15px;
-            font-weight: 600;
-            color: #e0e0e0;
-        }
-
-        .guide-step-tag {
-            font-size: 11px;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-weight: 500;
-            flex-shrink: 0;
-        }
-
-        .guide-step-arrow {
-            font-size: 12px;
-            color: #6c7a9a;
-            transition: transform 0.2s ease;
-            flex-shrink: 0;
-        }
-
-        .guide-step.expanded .guide-step-arrow {
-            transform: rotate(180deg);
-        }
+        .guide-step-title { flex: 1; font-size: 15px; font-weight: 600; color: #e0e0e0; }
+        .guide-step-tag { font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: 500; flex-shrink: 0; }
+        .guide-step-arrow { font-size: 12px; color: #6c7a9a; transition: transform 0.2s ease; flex-shrink: 0; }
+        .guide-step.expanded .guide-step-arrow { transform: rotate(180deg); }
 
         .guide-step-body {
-            display: none;
-            padding: 0 16px 16px 52px;
-            font-size: 13px;
-            line-height: 1.7;
-            color: #b0b0d0;
+            display: none; padding: 0 16px 16px 52px;
+            font-size: 13px; line-height: 1.7; color: #b0b0d0;
         }
+        .guide-step.expanded .guide-step-body { display: block; }
+        .guide-step-body p { margin-bottom: 10px; }
+        .guide-step-body strong { color: #ffffff; }
 
-        .guide-step.expanded .guide-step-body {
-            display: block;
-        }
-
-        .guide-step-body p {
-            margin-bottom: 10px;
-        }
-
-        .guide-step-body strong {
-            color: #ffffff;
-        }
-
-        .guide-cmd-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-            margin: 10px 0;
-        }
-
+        .guide-cmd-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0; }
         .guide-cmd-box {
-            background: #0f0f23;
-            border: 1px solid #2a2a4a;
-            border-radius: 6px;
-            padding: 10px 12px;
+            background: #0f0f23; border: 1px solid #2a2a4a; border-radius: 6px; padding: 10px 12px;
         }
-
-        .guide-cmd-box .cmd-label {
-            font-size: 10px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: 6px;
-            display: block;
-        }
-
-        .guide-cmd-box .cmd-label.cli {
-            color: #00d4ff;
-        }
-
-        .guide-cmd-box .cmd-label.web {
-            color: #00b894;
-        }
-
-        .guide-cmd-box code {
-            font-family: "SF Mono", "Fira Code", monospace;
-            font-size: 12px;
-            color: #ff9f43;
-            background: #1a1a3e;
-            padding: 2px 6px;
-            border-radius: 3px;
-        }
-
-        .guide-cmd-box .cmd-text {
-            font-size: 12px;
-            color: #b0b0d0;
-        }
+        .guide-cmd-box .cmd-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; display: block; }
+        .guide-cmd-box .cmd-label.cli { color: #00d4ff; }
+        .guide-cmd-box .cmd-label.web { color: #00b894; }
+        .guide-cmd-box code { font-family: "SF Mono", "Fira Code", monospace; font-size: 12px; color: #ff9f43; background: #1a1a3e; padding: 2px 6px; border-radius: 3px; }
+        .guide-cmd-box .cmd-text { font-size: 12px; color: #b0b0d0; }
 
         .guide-tip {
-            margin-top: 10px;
-            padding: 8px 12px;
+            margin-top: 10px; padding: 8px 12px;
             background: rgba(0, 212, 255, 0.06);
             border-left: 3px solid #00d4ff;
             border-radius: 0 6px 6px 0;
-            font-size: 12px;
-            color: #8888aa;
+            font-size: 12px; color: #8888aa;
         }
+        .guide-tip strong { color: #00d4ff; }
 
-        .guide-tip strong {
-            color: #00d4ff;
+        .guide-role-tag { display: inline-block; font-size: 10px; padding: 1px 6px; border-radius: 3px; font-weight: 600; margin-left: 4px; }
+        .guide-role-auto { background: rgba(108, 92, 231, 0.2); color: #a29bfe; }
+        .guide-role-human { background: rgba(0, 206, 201, 0.2); color: #00cec9; }
+        .guide-expand-all { text-align: center; margin-top: 16px; }
+
+        /* -- Toast ----------------------------------------------------------- */
+        .toast {
+            position: fixed; bottom: 20px; right: 20px;
+            background: #16213e; color: #e0e0e0;
+            padding: 12px 20px; border-radius: 8px;
+            border: 1px solid #2a3a6e; font-size: 14px;
+            z-index: 300; opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none; max-width: 400px;
         }
+        .toast.show { opacity: 1; }
+        .toast.error { border-color: #ff4757; color: #ff6b6b; }
 
-        .guide-role-tag {
-            display: inline-block;
-            font-size: 10px;
-            padding: 1px 6px;
-            border-radius: 3px;
-            font-weight: 600;
-            margin-left: 4px;
-        }
-
-        .guide-role-auto {
-            background: rgba(108, 92, 231, 0.2);
-            color: #a29bfe;
-        }
-
-        .guide-role-human {
-            background: rgba(0, 206, 201, 0.2);
-            color: #00cec9;
-        }
-
-        .guide-expand-all {
-            text-align: center;
-            margin-top: 16px;
-        }
-
-        /* -- 移动端 Tab 导航栏 ------------------------------------------------ */
-        .mobile-tabs {
-            display: none;
-            overflow-x: auto;
-            -webkit-overflow-scrolling: touch;
-            background: #0f0f23;
-            border-bottom: 1px solid #2a2a4a;
-            padding: 0;
-            scrollbar-width: none;
-        }
-
-        .mobile-tabs::-webkit-scrollbar {
-            display: none;
-        }
-
-        .mobile-tabs-inner {
-            display: flex;
-            min-width: max-content;
-        }
-
-        .mobile-tab {
-            flex-shrink: 0;
-            padding: 10px 14px;
-            font-size: 12px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            color: #6c7a9a;
-            background: transparent;
-            border: none;
-            border-bottom: 2px solid transparent;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            white-space: nowrap;
-        }
-
-        .mobile-tab:active {
-            background: rgba(255, 255, 255, 0.05);
-        }
-
-        .mobile-tab.active {
-            color: #e0e0e0;
-        }
-
-        .mobile-tab .tab-count {
-            font-size: 11px;
-            padding: 1px 6px;
-            border-radius: 8px;
-            background: rgba(255, 255, 255, 0.1);
-            min-width: 18px;
-            text-align: center;
-        }
-
-        .mobile-tab.active .tab-count {
-            background: rgba(255, 255, 255, 0.2);
-        }
-
-        /* Tab 颜色 */
-        .mobile-tab[data-tab="pending"].active        { color: #a29bfe; border-bottom-color: #6c5ce7; }
-        .mobile-tab[data-tab="planning"].active       { color: #a29bfe; border-bottom-color: #a29bfe; }
-        .mobile-tab[data-tab="planned"].active        { color: #74b9ff; border-bottom-color: #74b9ff; }
-        .mobile-tab[data-tab="approved"].active       { color: #00cec9; border-bottom-color: #00cec9; }
-        .mobile-tab[data-tab="running"].active        { color: #fdcb6e; border-bottom-color: #fdcb6e; }
-        .mobile-tab[data-tab="needs_input"].active    { color: #e17055; border-bottom-color: #e17055; }
-        .mobile-tab[data-tab="done"].active           { color: #00b894; border-bottom-color: #00b894; }
-        .mobile-tab[data-tab="failed"].active         { color: #ff6b6b; border-bottom-color: #ff6b6b; }
-
-        /* -- 响应式设计 ------------------------------------------------------ */
+        /* -- Mobile responsive ----------------------------------------------- */
         @media (max-width: 768px) {
-            .header {
+            body { flex-direction: column; }
+
+            .sidebar {
+                width: 100%;
+                min-width: 100%;
+                height: auto;
+                position: sticky;
+                top: 0;
+                flex-direction: column;
+                border-right: none;
+                border-bottom: 1px solid #2a2a4a;
+            }
+
+            .sidebar-brand {
+                padding: 10px 14px;
+            }
+
+            .sidebar-brand h1 { font-size: 14px; }
+
+            .sidebar-nav {
+                display: flex;
+                flex-direction: row;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+                padding: 0;
+                scrollbar-width: none;
+            }
+
+            .sidebar-nav::-webkit-scrollbar { display: none; }
+
+            .sidebar-section-label { display: none; }
+
+            .nav-item {
+                flex-shrink: 0;
+                padding: 10px 14px;
+                border-left: none;
+                border-bottom: 2px solid transparent;
+                white-space: nowrap;
+                font-size: 12px;
+                gap: 6px;
+            }
+
+            .nav-item.active {
+                background: transparent;
+            }
+
+            .nav-item[data-tab="pending"].active    { border-bottom-color: #6c5ce7; border-left-color: transparent; }
+            .nav-item[data-tab="planning"].active   { border-bottom-color: #a29bfe; border-left-color: transparent; }
+            .nav-item[data-tab="planned"].active    { border-bottom-color: #74b9ff; border-left-color: transparent; }
+            .nav-item[data-tab="approved"].active   { border-bottom-color: #00cec9; border-left-color: transparent; }
+            .nav-item[data-tab="running"].active    { border-bottom-color: #fdcb6e; border-left-color: transparent; }
+            .nav-item[data-tab="needs_input"].active { border-bottom-color: #e17055; border-left-color: transparent; }
+            .nav-item[data-tab="done"].active       { border-bottom-color: #00b894; border-left-color: transparent; }
+            .nav-item[data-tab="failed"].active     { border-bottom-color: #ff6b6b; border-left-color: transparent; }
+
+            .nav-item .nav-dot { width: 6px; height: 6px; }
+
+            .sidebar-bottom { display: none; }
+            .sidebar-status { display: none; }
+
+            .main-content { min-height: 0; }
+
+            .top-bar {
                 padding: 10px 14px;
                 flex-wrap: wrap;
                 gap: 8px;
             }
 
-            .header h1 {
-                font-size: 16px;
-            }
+            .top-bar-title { font-size: 14px; }
 
-            .mobile-tabs {
-                display: block;
-                position: sticky;
-                top: 0;
-                z-index: 99;
-            }
+            .content-panel { padding: 12px 14px; }
 
-            .header {
-                position: relative;
-            }
+            .modal { width: 95%; padding: 18px; }
 
-            .board {
-                padding: 12px;
-                gap: 12px;
-                flex-direction: column;
-                overflow-x: hidden;
-            }
-
-            .column {
-                min-width: 100%;
-                max-width: 100%;
-                max-height: none;
-                display: none;
-            }
-
-            .column.mobile-active {
-                display: flex;
-            }
-
-            .modal {
-                width: 95%;
-                padding: 18px;
-            }
-
-            .guide-page {
-                padding: 16px;
-            }
-
-            .guide-stepper {
-                padding-left: 28px;
-            }
-
-            .guide-stepper::before {
-                left: 11px;
-            }
-
-            .guide-step-dot {
-                left: -23px;
-                width: 10px;
-                height: 10px;
-                top: 16px;
-            }
-
-            .guide-cmd-row {
-                grid-template-columns: 1fr;
-            }
-
-            .guide-step-body {
-                padding: 0 12px 12px 36px;
-            }
-
-            .guide-step-header {
-                padding: 12px;
-                gap: 8px;
-            }
-
-            .guide-header h2 {
-                font-size: 20px;
-            }
+            .guide-stepper { padding-left: 28px; }
+            .guide-stepper::before { left: 11px; }
+            .guide-step-dot { left: -23px; width: 10px; height: 10px; top: 16px; }
+            .guide-cmd-row { grid-template-columns: 1fr; }
+            .guide-step-body { padding: 0 12px 12px 36px; }
+            .guide-step-header { padding: 12px; gap: 8px; }
+            .guide-header h2 { font-size: 20px; }
         }
     </style>
 </head>
 <body>
-    <!-- 顶部导航 -->
-    <div class="header">
-        <h1>CLAUDE FLOW</h1>
-        <div class="header-actions">
-            <div class="status-bar" id="statusBar">loading...</div>
-            <button class="btn btn-outline btn-small" onclick="planAllTasks()" title="Plan All Pending">Plan All</button>
-            <button class="btn btn-outline btn-small" onclick="approveAllTasks()" title="Approve All Planned">Approve All</button>
-            <button class="btn btn-outline btn-small" onclick="runAllTasks()" title="Run All Approved">Run All</button>
-            <button class="btn btn-outline btn-small" onclick="retryAllTasks()" title="Retry All Failed">Retry All</button>
-            <button class="btn btn-outline btn-small" id="guideToggleBtn" onclick="toggleGuidePage()">Guide</button>
-            <button class="btn btn-primary" onclick="openNewTaskModal()">+ New Task</button>
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-brand">
+            <h1>CLAUDE FLOW</h1>
+        </div>
+
+        <nav class="sidebar-nav" id="sidebarNav">
+            <div class="sidebar-section-label">Task Status</div>
+            <button class="nav-item active" data-tab="pending" onclick="switchTab('pending')">
+                <span class="nav-dot"></span>
+                <span class="nav-label">Pending</span>
+                <span class="nav-count" id="nav-count-pending">0</span>
+            </button>
+            <button class="nav-item" data-tab="planning" onclick="switchTab('planning')">
+                <span class="nav-dot"></span>
+                <span class="nav-label">Planning</span>
+                <span class="nav-count" id="nav-count-planning">0</span>
+            </button>
+            <button class="nav-item" data-tab="planned" onclick="switchTab('planned')">
+                <span class="nav-dot"></span>
+                <span class="nav-label">Planned</span>
+                <span class="nav-count" id="nav-count-planned">0</span>
+            </button>
+            <button class="nav-item" data-tab="approved" onclick="switchTab('approved')">
+                <span class="nav-dot"></span>
+                <span class="nav-label">Approved</span>
+                <span class="nav-count" id="nav-count-approved">0</span>
+            </button>
+            <button class="nav-item" data-tab="running" onclick="switchTab('running')">
+                <span class="nav-dot"></span>
+                <span class="nav-label">Running</span>
+                <span class="nav-count" id="nav-count-running">0</span>
+            </button>
+            <button class="nav-item" data-tab="needs_input" onclick="switchTab('needs_input')">
+                <span class="nav-dot"></span>
+                <span class="nav-label">Needs Input</span>
+                <span class="nav-count" id="nav-count-needs_input">0</span>
+            </button>
+            <button class="nav-item" data-tab="done" onclick="switchTab('done')">
+                <span class="nav-dot"></span>
+                <span class="nav-label">Done</span>
+                <span class="nav-count" id="nav-count-done">0</span>
+            </button>
+            <button class="nav-item" data-tab="failed" onclick="switchTab('failed')">
+                <span class="nav-dot"></span>
+                <span class="nav-label">Failed</span>
+                <span class="nav-count" id="nav-count-failed">0</span>
+            </button>
+        </nav>
+
+        <div class="sidebar-status" id="statusBar">loading...</div>
+
+        <div class="sidebar-bottom">
+            <button class="nav-item" id="guideToggleBtn" onclick="toggleGuidePage()">
+                <span class="nav-dot" style="background: #00d4ff;"></span>
+                <span class="nav-label">Workflow Guide</span>
+            </button>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- Top Bar -->
+        <div class="top-bar" id="topBar">
+            <div class="top-bar-title">
+                <span class="title-dot" id="titleDot"></span>
+                <span id="currentTabTitle">Pending</span>
+            </div>
+            <div class="top-bar-actions">
+                <button class="btn btn-outline btn-small" onclick="planAllTasks()" title="Plan All Pending">Plan All</button>
+                <button class="btn btn-outline btn-small" onclick="approveAllTasks()" title="Approve All Planned">Approve All</button>
+                <button class="btn btn-outline btn-small" onclick="runAllTasks()" title="Run All Approved">Run All</button>
+                <button class="btn btn-outline btn-small" onclick="retryAllTasks()" title="Retry All Failed">Retry All</button>
+                <button class="btn btn-primary" onclick="openNewTaskModal()">+ New Task</button>
+            </div>
+        </div>
+
+        <!-- Task List Content -->
+        <div class="content-panel" id="contentPanel">
+            <div class="task-list" id="taskList">
+                <div class="empty-hint">No tasks</div>
+            </div>
+        </div>
+
+        <!-- Guide Page (hidden by default) -->
+        <div class="guide-page" id="guidePage">
+            <div class="guide-header">
+                <h2>Claude Flow Workflow Guide</h2>
+                <p>Claude Flow uses a task queue + Git Worktree isolation model for multi-instance parallel development.<br>
+                Below is the complete lifecycle of a task -- click each step to expand details.</p>
+            </div>
+
+            <div class="guide-stepper">
+                <!-- Step 1: Init -->
+                <div class="guide-step" onclick="toggleGuideStep(this)">
+                    <div class="guide-step-dot" style="background: #6c5ce7;"></div>
+                    <div class="guide-step-header">
+                        <span class="guide-step-num" style="background: #6c5ce7;">1</span>
+                        <span class="guide-step-title">Initialize Project</span>
+                        <span class="guide-step-tag" style="background: rgba(108,92,231,0.2); color: #a29bfe;">Setup</span>
+                        <span class="guide-step-arrow">&#9660;</span>
+                    </div>
+                    <div class="guide-step-body">
+                        <p>First, initialize Claude Flow in your Git project root. This creates a <code>.claude-flow/</code> directory containing configuration and task data.</p>
+                        <div class="guide-cmd-row">
+                            <div class="guide-cmd-box"><span class="cmd-label cli">CLI</span><code>cf init</code></div>
+                            <div class="guide-cmd-box"><span class="cmd-label web">Web</span><span class="cmd-text">Auto-initialized when Web Manager starts</span></div>
+                        </div>
+                        <div class="guide-tip"><strong>Tip: </strong>Run <code>cf init</code> once per project. It creates <code>tasks.json</code>, <code>config.json</code>, and a <code>worktrees/</code> directory.</div>
+                    </div>
+                </div>
+
+                <!-- Step 2: Add Task -->
+                <div class="guide-step" onclick="toggleGuideStep(this)">
+                    <div class="guide-step-dot" style="background: #6c5ce7;"></div>
+                    <div class="guide-step-header">
+                        <span class="guide-step-num" style="background: #6c5ce7;">2</span>
+                        <span class="guide-step-title">Add Tasks</span>
+                        <span class="guide-step-tag" style="background: rgba(108,92,231,0.2); color: #a29bfe;">Pending</span>
+                        <span class="guide-step-arrow">&#9660;</span>
+                    </div>
+                    <div class="guide-step-body">
+                        <p>Create one or more tasks with a title and a prompt. The prompt is what Claude Code will receive as instructions. Tasks start in <strong>Pending</strong> status.</p>
+                        <div class="guide-cmd-row">
+                            <div class="guide-cmd-box"><span class="cmd-label cli">CLI</span><code>cf task add -p "prompt" "title"</code></div>
+                            <div class="guide-cmd-box"><span class="cmd-label web">Web</span><span class="cmd-text">Click <strong>+ New Task</strong> button in the toolbar</span></div>
+                        </div>
+                        <div class="guide-tip"><strong>Tip: </strong>Use <code>-f tasks.txt</code> to batch-add from a file, one task per line. Set priority with the <code>-P</code> flag (0-3).</div>
+                    </div>
+                </div>
+
+                <!-- Step 3: Plan -->
+                <div class="guide-step" onclick="toggleGuideStep(this)">
+                    <div class="guide-step-dot" style="background: #a29bfe;"></div>
+                    <div class="guide-step-header">
+                        <span class="guide-step-num" style="background: #a29bfe;">3</span>
+                        <span class="guide-step-title">Generate Plans</span>
+                        <span class="guide-step-tag" style="background: rgba(162,155,254,0.2); color: #a29bfe;">Planning</span>
+                        <span class="guide-role-tag guide-role-auto">AUTO</span>
+                        <span class="guide-step-arrow">&#9660;</span>
+                    </div>
+                    <div class="guide-step-body">
+                        <p>Choose a planning mode for each task:</p>
+                        <ul style="margin: 8px 0 8px 20px; font-size: 13px; color: #b0b0cc;">
+                            <li><strong>Auto Plan</strong> - AI generates a complete plan directly (best for bug fixes and small features)</li>
+                            <li><strong>Chat Plan</strong> - Multi-round conversation to refine requirements and design before generating the plan</li>
+                        </ul>
+                        <div class="guide-cmd-row">
+                            <div class="guide-cmd-box"><span class="cmd-label cli">CLI</span><code>cf plan &lt;task_id&gt;</code> (auto) or <code>cf plan &lt;task_id&gt; --interactive</code></div>
+                            <div class="guide-cmd-box"><span class="cmd-label web">Web</span><span class="cmd-text">Click <strong>Auto Plan</strong> or <strong>Chat Plan</strong> on the card</span></div>
+                        </div>
+                        <p>Both modes produce a Markdown plan document in <code>.claude-flow/plans/</code>.</p>
+                    </div>
+                </div>
+
+                <!-- Step 4: Review -->
+                <div class="guide-step" onclick="toggleGuideStep(this)">
+                    <div class="guide-step-dot" style="background: #74b9ff;"></div>
+                    <div class="guide-step-header">
+                        <span class="guide-step-num" style="background: #74b9ff;">4</span>
+                        <span class="guide-step-title">Review & Approve Plans</span>
+                        <span class="guide-step-tag" style="background: rgba(116,185,255,0.2); color: #74b9ff;">Planned</span>
+                        <span class="guide-role-tag guide-role-human">HUMAN</span>
+                        <span class="guide-step-arrow">&#9660;</span>
+                    </div>
+                    <div class="guide-step-body">
+                        <p>This is the <strong>human-in-the-loop</strong> gate. Review each plan to ensure correctness and safety before approving execution.</p>
+                        <div class="guide-cmd-row">
+                            <div class="guide-cmd-box"><span class="cmd-label cli">CLI</span><code>cf plan review</code><br><code>cf plan approve --all</code></div>
+                            <div class="guide-cmd-box"><span class="cmd-label web">Web</span><span class="cmd-text">Click <strong>View Plan</strong> to read, then <strong>Approve</strong> or <strong>Chat</strong></span></div>
+                        </div>
+                        <div class="guide-tip"><strong>Chat: </strong>Open the chat dialog to discuss the plan with AI, ask questions, or request revisions. Click <strong>Generate Plan</strong> in the chat to regenerate from the conversation.</div>
+                    </div>
+                </div>
+
+                <!-- Step 5: Execute -->
+                <div class="guide-step" onclick="toggleGuideStep(this)">
+                    <div class="guide-step-dot" style="background: #00cec9;"></div>
+                    <div class="guide-step-header">
+                        <span class="guide-step-num" style="background: #00cec9;">5</span>
+                        <span class="guide-step-title">Execute Tasks</span>
+                        <span class="guide-step-tag" style="background: rgba(0,206,201,0.2); color: #00cec9;">Approved</span>
+                        <span class="guide-role-tag guide-role-auto">AUTO</span>
+                        <span class="guide-step-arrow">&#9660;</span>
+                    </div>
+                    <div class="guide-step-body">
+                        <p>Workers pick up approved tasks and execute them. Each task gets its own <strong>Git Worktree</strong> (isolated branch <code>cf/task-XXXXXX</code>) so multiple tasks can run in parallel without conflicts.</p>
+                        <div class="guide-cmd-row">
+                            <div class="guide-cmd-box"><span class="cmd-label cli">CLI</span><code>cf run</code> &nbsp;or&nbsp; <code>cf run -n 3</code></div>
+                            <div class="guide-cmd-box"><span class="cmd-label web">Web</span><span class="cmd-text">Click <strong>Run All</strong> or card's <strong>Run</strong> button</span></div>
+                        </div>
+                        <p>The worker calls <code>claude -p "prompt"</code> inside the worktree. The task moves to <strong>Running</strong>.</p>
+                    </div>
+                </div>
+
+                <!-- Step 6: Running / Needs Input -->
+                <div class="guide-step" onclick="toggleGuideStep(this)">
+                    <div class="guide-step-dot" style="background: #fdcb6e;"></div>
+                    <div class="guide-step-header">
+                        <span class="guide-step-num" style="background: #fdcb6e; color: #0f0f23;">6</span>
+                        <span class="guide-step-title">Running & Needs Input</span>
+                        <span class="guide-step-tag" style="background: rgba(253,203,110,0.2); color: #fdcb6e;">Running</span>
+                        <span class="guide-step-arrow">&#9660;</span>
+                    </div>
+                    <div class="guide-step-body">
+                        <p>While running, Claude Code writes code in the isolated worktree. Monitor progress via logs.</p>
+                        <p>If Claude Code needs clarification, the task enters <strong>Needs Input</strong> status. You can provide additional context and the task will resume.</p>
+                        <div class="guide-cmd-row">
+                            <div class="guide-cmd-box"><span class="cmd-label cli">CLI</span><code>cf log &lt;task_id&gt;</code><br><code>cf status</code></div>
+                            <div class="guide-cmd-box"><span class="cmd-label web">Web</span><span class="cmd-text">Click <strong>View Log</strong> on running cards, or <strong>Respond</strong> for Needs Input cards</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 7: Done / Merge -->
+                <div class="guide-step" onclick="toggleGuideStep(this)">
+                    <div class="guide-step-dot" style="background: #00b894;"></div>
+                    <div class="guide-step-header">
+                        <span class="guide-step-num" style="background: #00b894;">7</span>
+                        <span class="guide-step-title">Merge & Done</span>
+                        <span class="guide-step-tag" style="background: rgba(0,184,148,0.2); color: #00b894;">Done</span>
+                        <span class="guide-role-tag guide-role-auto">AUTO</span>
+                        <span class="guide-step-arrow">&#9660;</span>
+                    </div>
+                    <div class="guide-step-body">
+                        <p>After execution completes, the worker automatically <strong>merges</strong> the worktree branch back to the main branch (configurable via <code>auto_merge</code>). The worktree is then cleaned up.</p>
+                        <div class="guide-cmd-row">
+                            <div class="guide-cmd-box"><span class="cmd-label cli">CLI</span><code>cf clean</code></div>
+                            <div class="guide-cmd-box"><span class="cmd-label web">Web</span><span class="cmd-text">Task card moves to <strong>Done</strong> column automatically</span></div>
+                        </div>
+                        <div class="guide-tip"><strong>Config: </strong>Set <code>auto_merge: false</code> in config.json to merge manually. Merge strategy defaults to <code>--no-ff</code>.</div>
+                    </div>
+                </div>
+
+                <!-- Step 8: Failed / Retry -->
+                <div class="guide-step" onclick="toggleGuideStep(this)">
+                    <div class="guide-step-dot" style="background: #ff6b6b;"></div>
+                    <div class="guide-step-header">
+                        <span class="guide-step-num" style="background: #ff6b6b;">8</span>
+                        <span class="guide-step-title">Handle Failures</span>
+                        <span class="guide-step-tag" style="background: rgba(255,107,107,0.2); color: #ff6b6b;">Failed</span>
+                        <span class="guide-role-tag guide-role-human">HUMAN</span>
+                        <span class="guide-step-arrow">&#9660;</span>
+                    </div>
+                    <div class="guide-step-body">
+                        <p>If a task fails (timeout, Claude error, merge conflict), it enters <strong>Failed</strong> status with an error message. You can:</p>
+                        <ul style="margin: 8px 0; padding-left: 20px;">
+                            <li><strong>Retry</strong> -- re-queue the task as Approved</li>
+                            <li><strong>Reset</strong> -- send it back to Pending (start from scratch)</li>
+                            <li><strong>View Log</strong> -- inspect what went wrong</li>
+                            <li><strong>Delete</strong> -- remove the task entirely</li>
+                        </ul>
+                        <div class="guide-cmd-row">
+                            <div class="guide-cmd-box"><span class="cmd-label cli">CLI</span><code>cf retry</code><br><code>cf reset &lt;task_id&gt;</code></div>
+                            <div class="guide-cmd-box"><span class="cmd-label web">Web</span><span class="cmd-text">Use <strong>Retry</strong>, <strong>Reset</strong>, or <strong>Delete</strong> buttons on failed cards</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="guide-expand-all">
+                <button class="btn btn-outline btn-small" onclick="toggleAllGuideSteps()">Expand / Collapse All</button>
+            </div>
         </div>
     </div>
 
-    <!-- 移动端 Tab 导航栏 -->
-    <nav class="mobile-tabs" id="mobileTabs">
-        <div class="mobile-tabs-inner">
-            <button class="mobile-tab active" data-tab="pending" onclick="switchMobileTab('pending')">
-                Pending <span class="tab-count" id="tab-count-pending">0</span>
-            </button>
-            <button class="mobile-tab" data-tab="planning" onclick="switchMobileTab('planning')">
-                Planning <span class="tab-count" id="tab-count-planning">0</span>
-            </button>
-            <button class="mobile-tab" data-tab="planned" onclick="switchMobileTab('planned')">
-                Planned <span class="tab-count" id="tab-count-planned">0</span>
-            </button>
-            <button class="mobile-tab" data-tab="approved" onclick="switchMobileTab('approved')">
-                Approved <span class="tab-count" id="tab-count-approved">0</span>
-            </button>
-            <button class="mobile-tab" data-tab="running" onclick="switchMobileTab('running')">
-                Running <span class="tab-count" id="tab-count-running">0</span>
-            </button>
-            <button class="mobile-tab" data-tab="needs_input" onclick="switchMobileTab('needs_input')">
-                Needs Input <span class="tab-count" id="tab-count-needs_input">0</span>
-            </button>
-            <button class="mobile-tab" data-tab="done" onclick="switchMobileTab('done')">
-                Done <span class="tab-count" id="tab-count-done">0</span>
-            </button>
-            <button class="mobile-tab" data-tab="failed" onclick="switchMobileTab('failed')">
-                Failed <span class="tab-count" id="tab-count-failed">0</span>
-            </button>
-        </div>
-    </nav>
-
-    <!-- 看板主体 -->
-    <div class="board" id="board">
-        <div class="column col-pending" data-status="pending">
-            <div class="column-header">
-                Pending <span class="count" id="count-pending">0</span>
-            </div>
-            <div class="column-body" id="col-pending"></div>
-        </div>
-        <div class="column col-planning" data-status="planning">
-            <div class="column-header">
-                Planning <span class="count" id="count-planning">0</span>
-            </div>
-            <div class="column-body" id="col-planning"></div>
-        </div>
-        <div class="column col-planned" data-status="planned">
-            <div class="column-header">
-                Planned <span class="count" id="count-planned">0</span>
-            </div>
-            <div class="column-body" id="col-planned"></div>
-        </div>
-        <div class="column col-approved" data-status="approved">
-            <div class="column-header">
-                Approved <span class="count" id="count-approved">0</span>
-            </div>
-            <div class="column-body" id="col-approved"></div>
-        </div>
-        <div class="column col-running" data-status="running">
-            <div class="column-header">
-                Running <span class="count" id="count-running">0</span>
-            </div>
-            <div class="column-body" id="col-running"></div>
-        </div>
-        <div class="column col-needs_input" data-status="needs_input">
-            <div class="column-header">
-                Needs Input <span class="count" id="count-needs_input">0</span>
-            </div>
-            <div class="column-body" id="col-needs_input"></div>
-        </div>
-        <div class="column col-done" data-status="done">
-            <div class="column-header">
-                Done <span class="count" id="count-done">0</span>
-            </div>
-            <div class="column-body" id="col-done"></div>
-        </div>
-        <div class="column col-failed" data-status="failed">
-            <div class="column-header">
-                Failed <span class="count" id="count-failed">0</span>
-            </div>
-            <div class="column-body" id="col-failed"></div>
-        </div>
-    </div>
-
-    <!-- 工作流指南页面 -->
-    <div class="guide-page" id="guidePage">
-        <div class="guide-header">
-            <h2>Claude Flow Workflow Guide</h2>
-            <p>Claude Flow uses a task queue + Git Worktree isolation model for multi-instance parallel development.<br>
-            Below is the complete lifecycle of a task — click each step to expand details.</p>
-        </div>
-
-        <div class="guide-stepper">
-            <!-- Step 1: Init -->
-            <div class="guide-step" onclick="toggleGuideStep(this)">
-                <div class="guide-step-dot" style="background: #6c5ce7;"></div>
-                <div class="guide-step-header">
-                    <span class="guide-step-num" style="background: #6c5ce7;">1</span>
-                    <span class="guide-step-title">Initialize Project</span>
-                    <span class="guide-step-tag" style="background: rgba(108,92,231,0.2); color: #a29bfe;">Setup</span>
-                    <span class="guide-step-arrow">&#9660;</span>
-                </div>
-                <div class="guide-step-body">
-                    <p>First, initialize Claude Flow in your Git project root. This creates a <code>.claude-flow/</code> directory containing configuration and task data.</p>
-                    <div class="guide-cmd-row">
-                        <div class="guide-cmd-box">
-                            <span class="cmd-label cli">CLI</span>
-                            <code>cf init</code>
-                        </div>
-                        <div class="guide-cmd-box">
-                            <span class="cmd-label web">Web</span>
-                            <span class="cmd-text">Auto-initialized when Web Manager starts</span>
-                        </div>
-                    </div>
-                    <div class="guide-tip"><strong>Tip: </strong>Run <code>cf init</code> once per project. It creates <code>tasks.json</code>, <code>config.json</code>, and a <code>worktrees/</code> directory.</div>
-                </div>
-            </div>
-
-            <!-- Step 2: Add Task -->
-            <div class="guide-step" onclick="toggleGuideStep(this)">
-                <div class="guide-step-dot" style="background: #6c5ce7;"></div>
-                <div class="guide-step-header">
-                    <span class="guide-step-num" style="background: #6c5ce7;">2</span>
-                    <span class="guide-step-title">Add Tasks</span>
-                    <span class="guide-step-tag" style="background: rgba(108,92,231,0.2); color: #a29bfe;">Pending</span>
-                    <span class="guide-step-arrow">&#9660;</span>
-                </div>
-                <div class="guide-step-body">
-                    <p>Create one or more tasks with a title and a prompt. The prompt is what Claude Code will receive as instructions. Tasks start in <strong>Pending</strong> status.</p>
-                    <div class="guide-cmd-row">
-                        <div class="guide-cmd-box">
-                            <span class="cmd-label cli">CLI</span>
-                            <code>cf task add -p "prompt" "title"</code>
-                        </div>
-                        <div class="guide-cmd-box">
-                            <span class="cmd-label web">Web</span>
-                            <span class="cmd-text">Click <strong>+ New Task</strong> button in the header</span>
-                        </div>
-                    </div>
-                    <div class="guide-tip"><strong>Tip: </strong>Use <code>-f tasks.txt</code> to batch-add from a file, one task per line. Set priority with the <code>-P</code> flag (0-3).</div>
-                </div>
-            </div>
-
-            <!-- Step 3: Plan -->
-            <div class="guide-step" onclick="toggleGuideStep(this)">
-                <div class="guide-step-dot" style="background: #a29bfe;"></div>
-                <div class="guide-step-header">
-                    <span class="guide-step-num" style="background: #a29bfe;">3</span>
-                    <span class="guide-step-title">Generate Plans</span>
-                    <span class="guide-step-tag" style="background: rgba(162,155,254,0.2); color: #a29bfe;">Planning</span>
-                    <span class="guide-role-tag guide-role-auto">AUTO</span>
-                    <span class="guide-step-arrow">&#9660;</span>
-                </div>
-                <div class="guide-step-body">
-                    <p>Choose a planning mode for each task:</p>
-                    <ul style="margin: 8px 0 8px 20px; font-size: 13px; color: #b0b0cc;">
-                        <li><strong>Auto Plan</strong> - AI generates a complete plan directly (best for bug fixes and small features)</li>
-                        <li><strong>Chat Plan</strong> - Multi-round conversation to refine requirements and design before generating the plan</li>
-                    </ul>
-                    <div class="guide-cmd-row">
-                        <div class="guide-cmd-box">
-                            <span class="cmd-label cli">CLI</span>
-                            <code>cf plan &lt;task_id&gt;</code> (auto) or <code>cf plan &lt;task_id&gt; --interactive</code>
-                        </div>
-                        <div class="guide-cmd-box">
-                            <span class="cmd-label web">Web</span>
-                            <span class="cmd-text">Click <strong>Auto Plan</strong> or <strong>Chat Plan</strong> on the card</span>
-                        </div>
-                    </div>
-                    <p>Both modes produce a Markdown plan document in <code>.claude-flow/plans/</code>.</p>
-                </div>
-            </div>
-
-            <!-- Step 4: Review -->
-            <div class="guide-step" onclick="toggleGuideStep(this)">
-                <div class="guide-step-dot" style="background: #74b9ff;"></div>
-                <div class="guide-step-header">
-                    <span class="guide-step-num" style="background: #74b9ff;">4</span>
-                    <span class="guide-step-title">Review & Approve Plans</span>
-                    <span class="guide-step-tag" style="background: rgba(116,185,255,0.2); color: #74b9ff;">Planned</span>
-                    <span class="guide-role-tag guide-role-human">HUMAN</span>
-                    <span class="guide-step-arrow">&#9660;</span>
-                </div>
-                <div class="guide-step-body">
-                    <p>This is the <strong>human-in-the-loop</strong> gate. Review each plan to ensure correctness and safety before approving execution.</p>
-                    <div class="guide-cmd-row">
-                        <div class="guide-cmd-box">
-                            <span class="cmd-label cli">CLI</span>
-                            <code>cf plan review</code><br>
-                            <code>cf plan approve --all</code>
-                        </div>
-                        <div class="guide-cmd-box">
-                            <span class="cmd-label web">Web</span>
-                            <span class="cmd-text">Click <strong>View Plan</strong> to read, then <strong>Approve</strong> or <strong>Chat</strong></span>
-                        </div>
-                    </div>
-                    <div class="guide-tip"><strong>Chat: </strong>Open the chat dialog to discuss the plan with AI, ask questions, or request revisions. Click <strong>Generate Plan</strong> in the chat to regenerate from the conversation.</div>
-                </div>
-            </div>
-
-            <!-- Step 5: Execute -->
-            <div class="guide-step" onclick="toggleGuideStep(this)">
-                <div class="guide-step-dot" style="background: #00cec9;"></div>
-                <div class="guide-step-header">
-                    <span class="guide-step-num" style="background: #00cec9;">5</span>
-                    <span class="guide-step-title">Execute Tasks</span>
-                    <span class="guide-step-tag" style="background: rgba(0,206,201,0.2); color: #00cec9;">Approved</span>
-                    <span class="guide-role-tag guide-role-auto">AUTO</span>
-                    <span class="guide-step-arrow">&#9660;</span>
-                </div>
-                <div class="guide-step-body">
-                    <p>Workers pick up approved tasks and execute them. Each task gets its own <strong>Git Worktree</strong> (isolated branch <code>cf/task-XXXXXX</code>) so multiple tasks can run in parallel without conflicts.</p>
-                    <div class="guide-cmd-row">
-                        <div class="guide-cmd-box">
-                            <span class="cmd-label cli">CLI</span>
-                            <code>cf run</code> &nbsp;or&nbsp; <code>cf run -n 3</code>
-                        </div>
-                        <div class="guide-cmd-box">
-                            <span class="cmd-label web">Web</span>
-                            <span class="cmd-text">Click <strong>Run All</strong> or card's <strong>Run</strong> button</span>
-                        </div>
-                    </div>
-                    <p>The worker calls <code>claude -p "prompt"</code> inside the worktree. The task moves to <strong>Running</strong>.</p>
-                </div>
-            </div>
-
-            <!-- Step 6: Running / Needs Input -->
-            <div class="guide-step" onclick="toggleGuideStep(this)">
-                <div class="guide-step-dot" style="background: #fdcb6e;"></div>
-                <div class="guide-step-header">
-                    <span class="guide-step-num" style="background: #fdcb6e; color: #0f0f23;">6</span>
-                    <span class="guide-step-title">Running & Needs Input</span>
-                    <span class="guide-step-tag" style="background: rgba(253,203,110,0.2); color: #fdcb6e;">Running</span>
-                    <span class="guide-step-arrow">&#9660;</span>
-                </div>
-                <div class="guide-step-body">
-                    <p>While running, Claude Code writes code in the isolated worktree. Monitor progress via logs.</p>
-                    <p>If Claude Code needs clarification, the task enters <strong>Needs Input</strong> status. You can provide additional context and the task will resume.</p>
-                    <div class="guide-cmd-row">
-                        <div class="guide-cmd-box">
-                            <span class="cmd-label cli">CLI</span>
-                            <code>cf log &lt;task_id&gt;</code><br>
-                            <code>cf status</code>
-                        </div>
-                        <div class="guide-cmd-box">
-                            <span class="cmd-label web">Web</span>
-                            <span class="cmd-text">Click <strong>View Log</strong> on running cards, or <strong>Respond</strong> for Needs Input cards</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Step 7: Done / Merge -->
-            <div class="guide-step" onclick="toggleGuideStep(this)">
-                <div class="guide-step-dot" style="background: #00b894;"></div>
-                <div class="guide-step-header">
-                    <span class="guide-step-num" style="background: #00b894;">7</span>
-                    <span class="guide-step-title">Merge & Done</span>
-                    <span class="guide-step-tag" style="background: rgba(0,184,148,0.2); color: #00b894;">Done</span>
-                    <span class="guide-role-tag guide-role-auto">AUTO</span>
-                    <span class="guide-step-arrow">&#9660;</span>
-                </div>
-                <div class="guide-step-body">
-                    <p>After execution completes, the worker automatically <strong>merges</strong> the worktree branch back to the main branch (configurable via <code>auto_merge</code>). The worktree is then cleaned up.</p>
-                    <div class="guide-cmd-row">
-                        <div class="guide-cmd-box">
-                            <span class="cmd-label cli">CLI</span>
-                            <code>cf clean</code>
-                        </div>
-                        <div class="guide-cmd-box">
-                            <span class="cmd-label web">Web</span>
-                            <span class="cmd-text">Task card moves to <strong>Done</strong> column automatically</span>
-                        </div>
-                    </div>
-                    <div class="guide-tip"><strong>Config: </strong>Set <code>auto_merge: false</code> in config.json to merge manually. Merge strategy defaults to <code>--no-ff</code>.</div>
-                </div>
-            </div>
-
-            <!-- Step 8: Failed / Retry -->
-            <div class="guide-step" onclick="toggleGuideStep(this)">
-                <div class="guide-step-dot" style="background: #ff6b6b;"></div>
-                <div class="guide-step-header">
-                    <span class="guide-step-num" style="background: #ff6b6b;">8</span>
-                    <span class="guide-step-title">Handle Failures</span>
-                    <span class="guide-step-tag" style="background: rgba(255,107,107,0.2); color: #ff6b6b;">Failed</span>
-                    <span class="guide-role-tag guide-role-human">HUMAN</span>
-                    <span class="guide-step-arrow">&#9660;</span>
-                </div>
-                <div class="guide-step-body">
-                    <p>If a task fails (timeout, Claude error, merge conflict), it enters <strong>Failed</strong> status with an error message. You can:</p>
-                    <ul style="margin: 8px 0; padding-left: 20px;">
-                        <li><strong>Retry</strong> — re-queue the task as Approved</li>
-                        <li><strong>Reset</strong> — send it back to Pending (start from scratch)</li>
-                        <li><strong>View Log</strong> — inspect what went wrong</li>
-                        <li><strong>Delete</strong> — remove the task entirely</li>
-                    </ul>
-                    <div class="guide-cmd-row">
-                        <div class="guide-cmd-box">
-                            <span class="cmd-label cli">CLI</span>
-                            <code>cf retry</code><br>
-                            <code>cf reset &lt;task_id&gt;</code>
-                        </div>
-                        <div class="guide-cmd-box">
-                            <span class="cmd-label web">Web</span>
-                            <span class="cmd-text">Use <strong>Retry</strong>, <strong>Reset</strong>, or <strong>Delete</strong> buttons on failed cards</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="guide-expand-all">
-            <button class="btn btn-outline btn-small" onclick="toggleAllGuideSteps()">Expand / Collapse All</button>
-        </div>
-    </div>
-
-    <!-- 新建任务模态框 -->
+    <!-- New Task Modal -->
     <div class="modal-overlay" id="newTaskModal">
         <div class="modal">
             <h2>New Task</h2>
@@ -1488,7 +1035,7 @@
         </div>
     </div>
 
-    <!-- Chat modal -->
+    <!-- Chat Modal -->
     <div class="modal-overlay" id="chatModal">
         <div class="modal modal-lg">
             <div class="chat-actions-top">
@@ -1510,7 +1057,7 @@
         </div>
     </div>
 
-    <!-- 补充输入模态框 -->
+    <!-- Respond Modal -->
     <div class="modal-overlay" id="respondModal">
         <div class="modal">
             <h2>Respond</h2>
@@ -1526,7 +1073,7 @@
         </div>
     </div>
 
-    <!-- Plan 查看模态框 -->
+    <!-- Plan Modal -->
     <div class="modal-overlay" id="planModal">
         <div class="modal modal-lg">
             <h2 id="planModalTitle">Plan</h2>
@@ -1539,7 +1086,7 @@
         </div>
     </div>
 
-    <!-- Log 查看模态框 -->
+    <!-- Log Modal -->
     <div class="modal-overlay" id="logModal">
         <div class="modal modal-lg">
             <h2 id="logModalTitle">Log</h2>
@@ -1551,11 +1098,11 @@
         </div>
     </div>
 
-    <!-- 消息提示 -->
+    <!-- Toast -->
     <div class="toast" id="toast"></div>
 
     <script>
-        /* -- 全局状态 -------------------------------------------------------- */
+        /* -- Global State ---------------------------------------------------- */
         let allTasks = [];
         let expandedCards = new Set();
         let chatTaskId = null;
@@ -1564,18 +1111,44 @@
         let viewingLogTaskId = null;
         let logAutoRefreshTimer = null;
         let refreshTimer = null;
-        let activeMobileTab = 'pending';
+        let activeTab = 'pending';
 
-        /* -- API 调用 -------------------------------------------------------- */
-        async function api(path, options = {}) {
-            const url = '/api' + path;
-            const opts = {
+        const STATUSES = ['pending', 'planning', 'planned', 'approved', 'running', 'needs_input', 'done', 'failed'];
+
+        const STATUS_LABELS = {
+            pending: 'Pending',
+            planning: 'Planning',
+            planned: 'Planned',
+            approved: 'Approved',
+            running: 'Running',
+            needs_input: 'Needs Input',
+            done: 'Done',
+            failed: 'Failed'
+        };
+
+        const STATUS_COLORS = {
+            pending: '#6c5ce7',
+            planning: '#a29bfe',
+            planned: '#74b9ff',
+            approved: '#00cec9',
+            running: '#fdcb6e',
+            needs_input: '#e17055',
+            done: '#00b894',
+            failed: '#ff6b6b'
+        };
+
+        /* -- API ------------------------------------------------------------- */
+        async function api(path, options) {
+            options = options || {};
+            var url = '/api' + path;
+            var opts = {
                 headers: { 'Content-Type': 'application/json' },
-                ...options,
             };
+            // Merge options
+            for (var k in options) { opts[k] = options[k]; }
             try {
-                const resp = await fetch(url, opts);
-                const data = await resp.json();
+                var resp = await fetch(url, opts);
+                var data = await resp.json();
                 if (!data.ok) {
                     showToast(data.error || 'Request failed', true);
                     return null;
@@ -1587,21 +1160,23 @@
             }
         }
 
-        /* -- 数据获取 -------------------------------------------------------- */
+        /* -- Data Fetch ------------------------------------------------------ */
         async function fetchTasks() {
-            const data = await api('/tasks');
+            var data = await api('/tasks');
             if (data !== null) {
                 allTasks = data;
-                renderBoard();
+                renderTaskList();
+                updateNavCounts();
+                fetchStatus();
             }
         }
 
         async function fetchStatus() {
-            const data = await api('/status');
+            var data = await api('/status');
             if (data !== null) {
-                const bar = document.getElementById('statusBar');
-                const c = data.counts;
-                const parts = [data.total + ' tasks'];
+                var bar = document.getElementById('statusBar');
+                var c = data.counts;
+                var parts = [data.total + ' tasks'];
                 if (c.running > 0) parts.push(c.running + ' running');
                 if (c.planning > 0) parts.push(c.planning + ' planning');
                 if (c.pending > 0) parts.push(c.pending + ' pending');
@@ -1611,83 +1186,71 @@
             }
         }
 
-        /* -- 看板渲染 -------------------------------------------------------- */
-        const STATUSES = ['pending', 'planning', 'planned', 'approved', 'running', 'needs_input', 'done', 'failed'];
+        /* -- Tab Navigation -------------------------------------------------- */
+        function switchTab(status) {
+            activeTab = status;
 
-        function renderBoard() {
-            const groups = {};
-            STATUSES.forEach(s => groups[s] = []);
-
-            allTasks.forEach(task => {
-                if (groups[task.status]) {
-                    groups[task.status].push(task);
-                }
+            // Update nav items
+            document.querySelectorAll('.nav-item[data-tab]').forEach(function(item) {
+                item.classList.toggle('active', item.dataset.tab === status);
             });
 
-            STATUSES.forEach(status => {
-                const col = document.getElementById('col-' + status);
-                const count = document.getElementById('count-' + status);
-                const tasks = groups[status];
+            // Update top bar title
+            document.getElementById('currentTabTitle').textContent = STATUS_LABELS[status] || status;
+            document.getElementById('titleDot').style.background = STATUS_COLORS[status] || '#888';
 
-                count.textContent = tasks.length;
+            // Show/hide guide vs task list
+            document.getElementById('guidePage').classList.remove('active');
+            document.getElementById('contentPanel').style.display = '';
+            document.getElementById('topBar').style.display = '';
+            guideVisible = false;
+            var guideBtn = document.getElementById('guideToggleBtn');
+            guideBtn.querySelector('.nav-label').textContent = 'Workflow Guide';
 
-                if (tasks.length === 0) {
-                    col.innerHTML = '<div class="empty-hint">No tasks</div>';
-                    return;
-                }
-
-                // 按优先级降序
-                tasks.sort((a, b) => (b.priority || 0) - (a.priority || 0));
-                col.innerHTML = tasks.map(task => renderCard(task, status)).join('');
-            });
-
-            fetchStatus();
-            syncMobileTabState();
-        }
-
-        /* -- 移动端 Tab 切换 -------------------------------------------------- */
-        function switchMobileTab(status) {
-            activeMobileTab = status;
-
-            // 更新 Tab 按钮状态
-            document.querySelectorAll('.mobile-tab').forEach(function(tab) {
-                tab.classList.toggle('active', tab.dataset.tab === status);
-            });
-
-            // 更新列显示状态
-            document.querySelectorAll('.column').forEach(function(col) {
-                col.classList.toggle('mobile-active', col.dataset.status === status);
-            });
-
-            // 滚动 Tab 到可视区域
-            var activeTab = document.querySelector('.mobile-tab[data-tab="' + status + '"]');
-            if (activeTab) {
-                activeTab.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+            // Scroll to active tab on mobile
+            var activeNavItem = document.querySelector('.nav-item[data-tab="' + status + '"]');
+            if (activeNavItem) {
+                activeNavItem.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
             }
+
+            renderTaskList();
         }
 
-        function syncMobileTabState() {
-            // 同步 Tab 上的计数
-            STATUSES.forEach(function(status) {
-                var tabCount = document.getElementById('tab-count-' + status);
-                var colCount = document.getElementById('count-' + status);
-                if (tabCount && colCount) {
-                    tabCount.textContent = colCount.textContent;
+        function updateNavCounts() {
+            var groups = {};
+            STATUSES.forEach(function(s) { groups[s] = 0; });
+            allTasks.forEach(function(task) {
+                if (groups[task.status] !== undefined) {
+                    groups[task.status]++;
                 }
             });
-
-            // 确保当前 active 列可见
-            document.querySelectorAll('.column').forEach(function(col) {
-                col.classList.toggle('mobile-active', col.dataset.status === activeMobileTab);
+            STATUSES.forEach(function(status) {
+                var el = document.getElementById('nav-count-' + status);
+                if (el) el.textContent = groups[status];
             });
+        }
+
+        /* -- Task List Rendering --------------------------------------------- */
+        function renderTaskList() {
+            var tasks = allTasks.filter(function(t) { return t.status === activeTab; });
+            var container = document.getElementById('taskList');
+
+            if (tasks.length === 0) {
+                container.innerHTML = '<div class="empty-hint">No tasks in ' + STATUS_LABELS[activeTab] + '</div>';
+                return;
+            }
+
+            // Sort by priority descending
+            tasks.sort(function(a, b) { return (b.priority || 0) - (a.priority || 0); });
+            container.innerHTML = tasks.map(function(task) { return renderCard(task, activeTab); }).join('');
         }
 
         function renderCard(task, status) {
-            const isExpanded = expandedCards.has(task.id);
-            const detailClass = isExpanded ? 'open' : '';
+            var isExpanded = expandedCards.has(task.id);
+            var detailClass = isExpanded ? 'open' : '';
 
             // Meta badges
-            let metaHtml = '';
+            var metaHtml = '';
             if (task.priority > 0) {
                 metaHtml += '<span class="badge badge-priority">P' + task.priority + '</span>';
             }
@@ -1702,7 +1265,7 @@
             }
 
             // Status indicators
-            let statusIndicator = '';
+            var statusIndicator = '';
             if (status === 'planning') {
                 statusIndicator = '<div class="planning-indicator"><span class="spinner"></span>Generating plan...</div>';
             } else if (status === 'running') {
@@ -1710,7 +1273,7 @@
             }
 
             // Detail area
-            let detailHtml = '';
+            var detailHtml = '';
             detailHtml += '<p><span class="label">Prompt:</span></p><div class="prompt-text">' + escapeHtml(task.prompt || '') + '</div>';
             if (task.branch) {
                 detailHtml += '<p style="margin-top:6px;"><span class="label">Branch: </span>' + escapeHtml(task.branch) + '</p>';
@@ -1728,13 +1291,15 @@
                 detailHtml += '<p><span class="label">Completed: </span>' + formatTime(task.completed_at) + '</p>';
             }
 
-            // Action buttons per status
-            let actionsHtml = buildActions(task, status);
+            // Action buttons
+            var actionsHtml = buildActions(task, status);
 
             return '<div class="card" onclick="toggleCard(\'' + task.id + '\')">'
-                + '<div class="card-id">' + escapeHtml(task.id) + '</div>'
-                + '<div class="card-title">' + escapeHtml(task.title) + '</div>'
+                + '<div class="card-header">'
+                + '<span class="card-id">' + escapeHtml(task.id) + '</span>'
+                + '<span class="card-title">' + escapeHtml(task.title) + '</span>'
                 + '<div class="card-meta">' + metaHtml + '</div>'
+                + '</div>'
                 + statusIndicator
                 + '<div class="card-details ' + detailClass + '">'
                 + detailHtml
@@ -1744,10 +1309,9 @@
         }
 
         function buildActions(task, status) {
-            const id = task.id;
-            let btns = [];
+            var id = task.id;
+            var btns = [];
 
-            // View Plan: show for any task that has a plan_file
             if (task.plan_file) {
                 btns.push(actionBtn('View Plan', 'outline', 'viewPlan', id));
             }
@@ -1758,38 +1322,31 @@
                     btns.push(actionBtn('Chat Plan', 'warning', 'planTaskInteractive', id));
                     btns.push(actionBtn('Delete', 'danger', 'deleteTask', id));
                     break;
-
                 case 'planning':
                     if (task.plan_mode === 'interactive') {
                         btns.push(actionBtn('Open Chat', 'warning', 'openChatModal', id));
                     }
                     break;
-
                 case 'planned':
                     btns.push(actionBtn('Approve', 'success', 'approveTask', id));
                     btns.push(actionBtn('Chat', 'warning', 'openChatModal', id));
                     break;
-
                 case 'approved':
                     btns.push(actionBtn('Run', 'warning', 'runTask', id));
                     btns.push(actionBtn('Delete', 'danger', 'deleteTask', id));
                     break;
-
                 case 'running':
                     btns.push(actionBtn('View Log', 'outline', 'viewLog', id));
                     break;
-
                 case 'needs_input':
                     btns.push(actionBtn('Respond', 'warning', 'openRespondModal', id));
                     btns.push(actionBtn('Reset', 'outline', 'resetTask', id));
                     btns.push(actionBtn('Delete', 'danger', 'deleteTask', id));
                     break;
-
                 case 'done':
                     btns.push(actionBtn('View Log', 'outline', 'viewLog', id));
                     btns.push(actionBtn('Delete', 'danger', 'deleteTask', id));
                     break;
-
                 case 'failed':
                     btns.push(actionBtn('View Log', 'outline', 'viewLog', id));
                     btns.push(actionBtn('Retry', 'warning', 'retryTask', id));
@@ -1806,20 +1363,20 @@
             return '<button class="btn btn-' + variant + ' btn-small" onclick="' + fn + '(event, \'' + id + '\')">' + label + '</button>';
         }
 
-        /* -- 卡片交互 -------------------------------------------------------- */
+        /* -- Card Interaction ------------------------------------------------ */
         function toggleCard(taskId) {
             if (expandedCards.has(taskId)) {
                 expandedCards.delete(taskId);
             } else {
                 expandedCards.add(taskId);
             }
-            renderBoard();
+            renderTaskList();
         }
 
-        /* -- 任务操作: Plan --------------------------------------------------- */
+        /* -- Task Actions: Plan ---------------------------------------------- */
         async function planTaskAuto(event, taskId) {
             event.stopPropagation();
-            const data = await api('/tasks/' + taskId + '/plan', {
+            var data = await api('/tasks/' + taskId + '/plan', {
                 method: 'POST',
                 body: JSON.stringify({ mode: 'auto' }),
             });
@@ -1831,7 +1388,7 @@
 
         async function planTaskInteractive(event, taskId) {
             event.stopPropagation();
-            const data = await api('/tasks/' + taskId + '/plan', {
+            var data = await api('/tasks/' + taskId + '/plan', {
                 method: 'POST',
                 body: JSON.stringify({ mode: 'interactive' }),
             });
@@ -1843,17 +1400,17 @@
         }
 
         async function planAllTasks() {
-            const data = await api('/plan-all', { method: 'POST' });
+            var data = await api('/plan-all', { method: 'POST' });
             if (data !== null) {
                 showToast(data.message);
                 fetchTasks();
             }
         }
 
-        /* -- 任务操作: Approve ------------------------------------------------ */
+        /* -- Task Actions: Approve ------------------------------------------- */
         async function approveTask(event, taskId) {
             event.stopPropagation();
-            const data = await api('/tasks/' + taskId + '/approve', { method: 'POST' });
+            var data = await api('/tasks/' + taskId + '/approve', { method: 'POST' });
             if (data !== null) {
                 showToast('Task ' + taskId + ' approved');
                 fetchTasks();
@@ -1861,19 +1418,19 @@
         }
 
         async function approveAllTasks() {
-            const data = await api('/approve-all', { method: 'POST' });
+            var data = await api('/approve-all', { method: 'POST' });
             if (data !== null) {
                 showToast(data.approved + ' tasks approved');
                 fetchTasks();
             }
         }
 
-        /* -- Task action: Chat -------------------------------------------- */
+        /* -- Task Actions: Chat ---------------------------------------------- */
         async function openChatModal(event, taskId) {
             if (event) event.stopPropagation();
             stopChatPolling();
             chatTaskId = taskId;
-            const task = allTasks.find(t => t.id === taskId);
+            var task = allTasks.find(function(t) { return t.id === taskId; });
             document.getElementById('chatModalTitle').textContent =
                 'Chat: ' + (task ? task.title : taskId);
             document.getElementById('chatMessages').innerHTML = '';
@@ -1883,13 +1440,11 @@
             document.getElementById('chatInput').disabled = false;
             document.getElementById('chatModal').classList.add('active');
 
-            // Load existing chat history
-            const data = await api('/tasks/' + taskId + '/chat');
+            var data = await api('/tasks/' + taskId + '/chat');
             if (data !== null && data.exists && data.messages.length > 0) {
                 renderChatMessages(data.messages);
             }
 
-            // If AI is currently thinking, resume polling
             if (data !== null && data.thinking) {
                 document.getElementById('chatSendBtn').disabled = true;
                 document.getElementById('chatInput').disabled = true;
@@ -1907,12 +1462,12 @@
         }
 
         function renderChatMessages(messages) {
-            const container = document.getElementById('chatMessages');
+            var container = document.getElementById('chatMessages');
             container.innerHTML = '';
             messages.forEach(function(msg) {
-                const bubble = document.createElement('div');
+                var bubble = document.createElement('div');
                 bubble.className = 'chat-bubble ' + msg.role;
-                const roleLabel = msg.role === 'user' ? 'You' : 'AI';
+                var roleLabel = msg.role === 'user' ? 'You' : 'AI';
                 bubble.innerHTML = '<div class="chat-role">' + roleLabel + '</div>'
                     + renderMarkdown(msg.content);
                 container.appendChild(bubble);
@@ -1920,22 +1475,19 @@
             container.scrollTop = container.scrollHeight;
         }
 
-        // Track polling state per task to avoid duplicate polls
-        let chatPollingTimer = null;
-        let chatLastMessageCount = 0;
+        var chatPollingTimer = null;
+        var chatLastMessageCount = 0;
 
         async function sendChatMessage() {
             if (!chatTaskId) return;
-            const input = document.getElementById('chatInput');
-            const message = input.value.trim();
+            var input = document.getElementById('chatInput');
+            var message = input.value.trim();
             if (!message) return;
 
-            // Show user message immediately
-            const container = document.getElementById('chatMessages');
-            const userBubble = document.createElement('div');
+            var container = document.getElementById('chatMessages');
+            var userBubble = document.createElement('div');
             userBubble.className = 'chat-bubble user';
-            userBubble.innerHTML = '<div class="chat-role">You</div>'
-                + renderMarkdown(message);
+            userBubble.innerHTML = '<div class="chat-role">You</div>' + renderMarkdown(message);
             container.appendChild(userBubble);
             container.scrollTop = container.scrollHeight;
 
@@ -1944,17 +1496,15 @@
             document.getElementById('chatInput').disabled = true;
             document.getElementById('chatTyping').style.display = 'block';
 
-            const data = await api('/tasks/' + chatTaskId + '/chat', {
+            var data = await api('/tasks/' + chatTaskId + '/chat', {
                 method: 'POST',
                 body: JSON.stringify({ message: message }),
             });
 
             if (data !== null && data.accepted) {
-                // Message accepted, start polling for AI response
                 chatLastMessageCount = container.querySelectorAll('.chat-bubble').length;
                 startChatPolling(chatTaskId);
             } else {
-                // Immediate error
                 document.getElementById('chatSendBtn').disabled = false;
                 document.getElementById('chatInput').disabled = false;
                 document.getElementById('chatTyping').style.display = 'none';
@@ -1964,27 +1514,20 @@
         function startChatPolling(taskId) {
             stopChatPolling();
             chatPollingTimer = setInterval(async function() {
-                const data = await api('/tasks/' + taskId + '/chat');
-                if (data === null) {
-                    stopChatPolling();
-                    return;
-                }
+                var data = await api('/tasks/' + taskId + '/chat');
+                if (data === null) { stopChatPolling(); return; }
                 if (!data.thinking) {
-                    // AI finished responding
                     stopChatPolling();
                     document.getElementById('chatSendBtn').disabled = false;
                     document.getElementById('chatInput').disabled = false;
                     document.getElementById('chatTyping').style.display = 'none';
-
-                    // Render the new AI response (last message)
                     if (data.messages && data.messages.length > 0) {
-                        const lastMsg = data.messages[data.messages.length - 1];
+                        var lastMsg = data.messages[data.messages.length - 1];
                         if (lastMsg.role === 'assistant') {
-                            const container = document.getElementById('chatMessages');
-                            const aiBubble = document.createElement('div');
+                            var container = document.getElementById('chatMessages');
+                            var aiBubble = document.createElement('div');
                             aiBubble.className = 'chat-bubble assistant';
-                            aiBubble.innerHTML = '<div class="chat-role">AI</div>'
-                                + renderMarkdown(lastMsg.content);
+                            aiBubble.innerHTML = '<div class="chat-role">AI</div>' + renderMarkdown(lastMsg.content);
                             container.appendChild(aiBubble);
                             container.scrollTop = container.scrollHeight;
                         }
@@ -1995,17 +1538,12 @@
         }
 
         function stopChatPolling() {
-            if (chatPollingTimer) {
-                clearInterval(chatPollingTimer);
-                chatPollingTimer = null;
-            }
+            if (chatPollingTimer) { clearInterval(chatPollingTimer); chatPollingTimer = null; }
         }
 
         async function finalizeChat() {
             if (!chatTaskId) return;
-            const data = await api('/tasks/' + chatTaskId + '/chat/finalize', {
-                method: 'POST',
-            });
+            var data = await api('/tasks/' + chatTaskId + '/chat/finalize', { method: 'POST' });
             if (data !== null) {
                 showToast('Plan generation started from chat...');
                 closeChatModal();
@@ -2013,10 +1551,10 @@
             }
         }
 
-        /* -- 任务操作: Run ---------------------------------------------------- */
+        /* -- Task Actions: Run ----------------------------------------------- */
         async function runTask(event, taskId) {
             event.stopPropagation();
-            const data = await api('/tasks/' + taskId + '/run', { method: 'POST' });
+            var data = await api('/tasks/' + taskId + '/run', { method: 'POST' });
             if (data !== null) {
                 showToast('Execution started for ' + taskId);
                 fetchTasks();
@@ -2024,7 +1562,7 @@
         }
 
         async function runAllTasks() {
-            const data = await api('/run', {
+            var data = await api('/run', {
                 method: 'POST',
                 body: JSON.stringify({ num_workers: 1 }),
             });
@@ -2034,10 +1572,10 @@
             }
         }
 
-        /* -- 任务操作: Retry / Reset ------------------------------------------ */
+        /* -- Task Actions: Retry / Reset ------------------------------------- */
         async function retryTask(event, taskId) {
             event.stopPropagation();
-            const data = await api('/tasks/' + taskId, {
+            var data = await api('/tasks/' + taskId, {
                 method: 'PATCH',
                 body: JSON.stringify({ status: 'approved' }),
             });
@@ -2049,7 +1587,7 @@
 
         async function resetTask(event, taskId) {
             event.stopPropagation();
-            const data = await api('/tasks/' + taskId + '/reset', { method: 'POST' });
+            var data = await api('/tasks/' + taskId + '/reset', { method: 'POST' });
             if (data !== null) {
                 showToast('Task ' + taskId + ' reset to pending');
                 fetchTasks();
@@ -2057,30 +1595,30 @@
         }
 
         async function retryAllTasks() {
-            const data = await api('/retry-all', { method: 'POST' });
+            var data = await api('/retry-all', { method: 'POST' });
             if (data !== null) {
                 showToast(data.retried + ' tasks retried');
                 fetchTasks();
             }
         }
 
-        /* -- 任务操作: Delete ------------------------------------------------- */
+        /* -- Task Actions: Delete -------------------------------------------- */
         async function deleteTask(event, taskId) {
             event.stopPropagation();
             if (!confirm('Delete task ' + taskId + '?')) return;
-            const data = await api('/tasks/' + taskId, { method: 'DELETE' });
+            var data = await api('/tasks/' + taskId, { method: 'DELETE' });
             if (data !== null) {
                 showToast('Task ' + taskId + ' deleted');
                 fetchTasks();
             }
         }
 
-        /* -- 补充输入 -------------------------------------------------------- */
+        /* -- Respond Modal --------------------------------------------------- */
         function openRespondModal(event, taskId) {
             event.stopPropagation();
             respondingTaskId = taskId;
-            const task = allTasks.find(t => t.id === taskId);
-            const questionEl = document.getElementById('respondQuestion');
+            var task = allTasks.find(function(t) { return t.id === taskId; });
+            var questionEl = document.getElementById('respondQuestion');
             if (task && task.error) {
                 questionEl.textContent = task.error;
                 questionEl.style.display = 'block';
@@ -2098,12 +1636,9 @@
 
         async function submitRespond() {
             if (!respondingTaskId) return;
-            const message = document.getElementById('respondMessage').value.trim();
-            if (!message) {
-                showToast('Please enter a message', true);
-                return;
-            }
-            const data = await api('/tasks/' + respondingTaskId + '/respond', {
+            var message = document.getElementById('respondMessage').value.trim();
+            if (!message) { showToast('Please enter a message', true); return; }
+            var data = await api('/tasks/' + respondingTaskId + '/respond', {
                 method: 'POST',
                 body: JSON.stringify({ message: message }),
             });
@@ -2114,123 +1649,70 @@
             }
         }
 
-        /* -- 简易 Markdown 解析器 ------------------------------------------- */
+        /* -- Markdown Parser ------------------------------------------------- */
         function renderMarkdown(text) {
             if (!text) return '';
-            let html = text;
-
-            // Normalize line endings
+            var html = text;
             html = html.replace(/\r\n/g, '\n');
-
-            // Escape HTML (but we'll selectively unescape markdown constructs)
             html = html.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-
-            // Fenced code blocks (```lang ... ```)
             html = html.replace(/```(\w*)\n([\s\S]*?)```/g, function(_, lang, code) {
                 return '<pre><code>' + code.replace(/\n$/, '') + '</code></pre>';
             });
-
-            // Inline code (`code`)
             html = html.replace(/`([^`\n]+?)`/g, '<code>$1</code>');
-
-            // Tables
             html = html.replace(/((?:^\|.+\|\s*\n)+)/gm, function(tableBlock) {
                 var rows = tableBlock.trim().split('\n');
                 if (rows.length < 2) return tableBlock;
-
                 var headerCells = rows[0].split('|').filter(function(c) { return c.trim() !== ''; });
                 var isAlignRow = /^\|[\s:]*-+[\s:]*\|/.test(rows[1]);
                 var dataStart = isAlignRow ? 2 : 1;
-
-                var thead = '<thead><tr>' + headerCells.map(function(c) {
-                    return '<th>' + c.trim() + '</th>';
-                }).join('') + '</tr></thead>';
-
+                var thead = '<thead><tr>' + headerCells.map(function(c) { return '<th>' + c.trim() + '</th>'; }).join('') + '</tr></thead>';
                 var tbody = '<tbody>' + rows.slice(dataStart).map(function(row) {
                     var cells = row.split('|').filter(function(c) { return c.trim() !== ''; });
-                    return '<tr>' + cells.map(function(c) {
-                        return '<td>' + c.trim() + '</td>';
-                    }).join('') + '</tr>';
+                    return '<tr>' + cells.map(function(c) { return '<td>' + c.trim() + '</td>'; }).join('') + '</tr>';
                 }).join('') + '</tbody>';
-
                 return '<table>' + thead + tbody + '</table>\n';
             });
-
-            // Headings (# ... ######)
             html = html.replace(/^######\s+(.+)$/gm, '<h6>$1</h6>');
             html = html.replace(/^#####\s+(.+)$/gm, '<h5>$1</h5>');
             html = html.replace(/^####\s+(.+)$/gm, '<h4>$1</h4>');
             html = html.replace(/^###\s+(.+)$/gm, '<h3>$1</h3>');
             html = html.replace(/^##\s+(.+)$/gm, '<h2>$1</h2>');
             html = html.replace(/^#\s+(.+)$/gm, '<h1>$1</h1>');
-
-            // Horizontal rule
             html = html.replace(/^---+$/gm, '<hr>');
             html = html.replace(/^\*\*\*+$/gm, '<hr>');
-
-            // Blockquote
             html = html.replace(/^&gt;\s+(.+)$/gm, '<blockquote>$1</blockquote>');
-
-            // Task list items (- [x] / - [ ])
             html = html.replace(/^(\s*)[-*]\s+\[x\]\s+(.+)$/gm, '$1<li><input type="checkbox" checked disabled class="task-checkbox">$2</li>');
             html = html.replace(/^(\s*)[-*]\s+\[\s\]\s+(.+)$/gm, '$1<li><input type="checkbox" disabled class="task-checkbox">$2</li>');
-
-            // Unordered list items
             html = html.replace(/^(\s*)[-*]\s+(.+)$/gm, '$1<li>$2</li>');
-
-            // Ordered list items
             html = html.replace(/^(\s*)\d+\.\s+(.+)$/gm, '$1<li>$2</li>');
-
-            // Wrap consecutive <li> in <ul>
             html = html.replace(/((?:\s*<li>[\s\S]*?<\/li>\s*)+)/g, '<ul>$1</ul>');
-
-            // Bold (**text** or __text__)
             html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
             html = html.replace(/__(.+?)__/g, '<strong>$1</strong>');
-
-            // Italic (*text* or _text_)
             html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
             html = html.replace(/_(.+?)_/g, '<em>$1</em>');
-
-            // Strikethrough (~~text~~)
             html = html.replace(/~~(.+?)~~/g, '<del>$1</del>');
-
-            // Links [text](url)
             html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
-
-            // Paragraphs: replace double newlines with <p> tags
             html = html.replace(/\n\n+/g, '</p><p>');
-
-            // Single newlines to <br> (except after block elements)
             html = html.replace(/(?<!\>)\n(?!\<)/g, '<br>');
-
-            // Wrap in <p> if not starting with a block element
             if (!/^\s*<(h[1-6]|ul|ol|pre|table|blockquote|hr)/.test(html)) {
                 html = '<p>' + html + '</p>';
             }
-
-            // Clean up empty paragraphs
             html = html.replace(/<p>\s*<\/p>/g, '');
-
             return html;
         }
 
-        /* -- Plan 查看 ------------------------------------------------------- */
+        /* -- Plan View ------------------------------------------------------- */
         async function viewPlan(event, taskId) {
             event.stopPropagation();
             viewingPlanTaskId = taskId;
-            const task = allTasks.find(t => t.id === taskId);
+            var task = allTasks.find(function(t) { return t.id === taskId; });
             document.getElementById('planModalTitle').textContent = 'Plan: ' + (task ? task.title : taskId);
             document.getElementById('planContent').innerHTML = '<p style="color:#8888aa;">Loading...</p>';
-
-            // Show/hide approve/chat buttons
-            const isPlanned = task && task.status === 'planned';
+            var isPlanned = task && task.status === 'planned';
             document.getElementById('planApproveBtn').style.display = isPlanned ? 'inline-block' : 'none';
             document.getElementById('planChatBtn').style.display = isPlanned ? 'inline-block' : 'none';
-
             document.getElementById('planModal').classList.add('active');
-
-            const data = await api('/tasks/' + taskId + '/plan');
+            var data = await api('/tasks/' + taskId + '/plan');
             if (data !== null) {
                 document.getElementById('planContent').innerHTML = renderMarkdown(data.content);
             } else {
@@ -2245,7 +1727,7 @@
 
         async function approveFromPlan() {
             if (!viewingPlanTaskId) return;
-            const data = await api('/tasks/' + viewingPlanTaskId + '/approve', { method: 'POST' });
+            var data = await api('/tasks/' + viewingPlanTaskId + '/approve', { method: 'POST' });
             if (data !== null) {
                 showToast('Task ' + viewingPlanTaskId + ' approved');
                 closePlanModal();
@@ -2255,43 +1737,33 @@
 
         async function chatFromPlan() {
             if (!viewingPlanTaskId) return;
-            const taskId = viewingPlanTaskId;
+            var taskId = viewingPlanTaskId;
             closePlanModal();
             openChatModal(null, taskId);
         }
 
-        /* -- Log 查看 -------------------------------------------------------- */
+        /* -- Log View -------------------------------------------------------- */
         async function viewLog(event, taskId) {
             event.stopPropagation();
             viewingLogTaskId = taskId;
-            const task = allTasks.find(t => t.id === taskId);
+            var task = allTasks.find(function(t) { return t.id === taskId; });
             document.getElementById('logModalTitle').textContent = 'Log: ' + (task ? task.title : taskId);
             document.getElementById('logContent').textContent = 'Loading...';
             document.getElementById('logModal').classList.add('active');
-
             await loadLog(taskId);
-
-            // Auto-refresh log for running tasks
             _clearLogAutoRefresh();
             if (task && task.status === 'running') {
                 logAutoRefreshTimer = setInterval(function() {
-                    if (viewingLogTaskId) {
-                        loadLog(viewingLogTaskId);
-                    }
+                    if (viewingLogTaskId) loadLog(viewingLogTaskId);
                 }, 3000);
             }
         }
 
         async function loadLog(taskId) {
-            const data = await api('/tasks/' + taskId + '/log');
+            var data = await api('/tasks/' + taskId + '/log');
             if (data === null) return;
-
-            const el = document.getElementById('logContent');
-            if (!data.exists) {
-                el.textContent = 'No log data available.';
-                return;
-            }
-
+            var el = document.getElementById('logContent');
+            if (!data.exists) { el.textContent = 'No log data available.'; return; }
             if (data.structured && data.data) {
                 el.innerHTML = renderStructuredLog(data.data);
             } else if (data.content) {
@@ -2302,78 +1774,59 @@
         }
 
         function renderStructuredLog(logData) {
-            const events = logData.events || [];
-            const summary = logData.summary || {};
-            const cost = logData.cost_usd;
-
-            const iconMap = {
+            var events = logData.events || [];
+            var summary = logData.summary || {};
+            var cost = logData.cost_usd;
+            var iconMap = {
                 text:     { label: 'MSG', cls: 'ev-icon-text' },
                 tool_use: { label: 'USE', cls: 'ev-icon-tool_use' },
                 error:    { label: 'ERR', cls: 'ev-icon-error' },
                 result:   { label: 'RES', cls: 'ev-icon-result' },
                 system:   { label: 'SYS', cls: 'ev-icon-system' },
             };
-
-            // Summary bar
-            const costStr = cost != null ? '$' + cost.toFixed(4) : 'n/a';
-            let html = '<div class="log-summary">'
+            var costStr = cost != null ? '$' + cost.toFixed(4) : 'n/a';
+            var html = '<div class="log-summary">'
                 + '<span><span class="stat stat-tools">' + (summary.tool_use || 0) + '</span> tools</span>'
                 + '<span><span class="stat stat-errors">' + (summary.error || 0) + '</span> errors</span>'
                 + '<span><span class="stat stat-cost">' + costStr + '</span></span>'
                 + '<span>' + (summary.total || 0) + ' events</span>'
                 + '</div>';
-
-            // Filter noisy events
-            const filtered = events.filter(function(ev) {
+            var filtered = events.filter(function(ev) {
                 if (ev.type === 'system') {
                     var c = (ev.content || '').toLowerCase();
                     if (!c || c.includes('hook') || c.startsWith('[user]')) return false;
                 }
                 return true;
             });
-
-            // Detect if timestamps are meaningful (more than 1 distinct value)
-            const tsSet = new Set(filtered.map(function(e) { return e.ts || ''; }));
-            const hasRealTs = tsSet.size > 1;
-
-            // Events
+            var tsSet = new Set(filtered.map(function(e) { return e.ts || ''; }));
+            var hasRealTs = tsSet.size > 1;
             filtered.forEach(function(ev, idx) {
-                const evType = ev.type || 'system';
-                const tsRaw = (ev.ts || '').includes('T') ? ev.ts.split('T')[1].substring(0, 8) : (ev.ts || '');
-                const tsCol = hasRealTs ? tsRaw : '#' + (idx + 1);
-                const icon = iconMap[evType] || iconMap.system;
-                const tool = ev.tool ? '<strong>' + escapeHtml(ev.tool) + '</strong> ' : '';
-
+                var evType = ev.type || 'system';
+                var tsRaw = (ev.ts || '').includes('T') ? ev.ts.split('T')[1].substring(0, 8) : (ev.ts || '');
+                var tsCol = hasRealTs ? tsRaw : '#' + (idx + 1);
+                var icon = iconMap[evType] || iconMap.system;
+                var tool = ev.tool ? '<strong>' + escapeHtml(ev.tool) + '</strong> ' : '';
                 var contentHtml;
                 if (evType === 'result') {
-                    // Result: render full content as Markdown
                     contentHtml = '<div class="md-body">' + renderMarkdown(ev.content || '') + '</div>';
                 } else {
                     contentHtml = escapeHtml(ev.content || '').substring(0, 200);
                 }
-
                 html += '<div class="log-event">'
                     + '<span class="ev-ts">' + tsCol + '</span>'
                     + '<span class="ev-icon ' + icon.cls + '">' + icon.label + '</span>'
                     + '<span class="ev-content">' + tool + contentHtml + '</span>'
                     + '</div>';
             });
-
             return html;
         }
 
         async function refreshLog() {
-            if (viewingLogTaskId) {
-                await loadLog(viewingLogTaskId);
-                showToast('Log refreshed');
-            }
+            if (viewingLogTaskId) { await loadLog(viewingLogTaskId); showToast('Log refreshed'); }
         }
 
         function _clearLogAutoRefresh() {
-            if (logAutoRefreshTimer) {
-                clearInterval(logAutoRefreshTimer);
-                logAutoRefreshTimer = null;
-            }
+            if (logAutoRefreshTimer) { clearInterval(logAutoRefreshTimer); logAutoRefreshTimer = null; }
         }
 
         function closeLogModal() {
@@ -2382,7 +1835,7 @@
             document.getElementById('logModal').classList.remove('active');
         }
 
-        /* -- 新建任务 -------------------------------------------------------- */
+        /* -- New Task -------------------------------------------------------- */
         function openNewTaskModal() {
             document.getElementById('taskTitle').value = '';
             document.getElementById('taskPrompt').value = '';
@@ -2396,24 +1849,15 @@
         }
 
         async function createTask() {
-            const title = document.getElementById('taskTitle').value.trim();
-            const prompt = document.getElementById('taskPrompt').value.trim();
-            const priority = parseInt(document.getElementById('taskPriority').value, 10);
-
-            if (!title) {
-                showToast('Please enter a title', true);
-                return;
-            }
-            if (!prompt) {
-                showToast('Please enter a prompt', true);
-                return;
-            }
-
-            const data = await api('/tasks', {
+            var title = document.getElementById('taskTitle').value.trim();
+            var prompt = document.getElementById('taskPrompt').value.trim();
+            var priority = parseInt(document.getElementById('taskPriority').value, 10);
+            if (!title) { showToast('Please enter a title', true); return; }
+            if (!prompt) { showToast('Please enter a prompt', true); return; }
+            var data = await api('/tasks', {
                 method: 'POST',
                 body: JSON.stringify({ title: title, prompt: prompt, priority: priority }),
             });
-
             if (data !== null) {
                 showToast('Task ' + data.id + ' created');
                 closeNewTaskModal();
@@ -2421,9 +1865,9 @@
             }
         }
 
-        /* -- 工具函数 -------------------------------------------------------- */
+        /* -- Utilities ------------------------------------------------------- */
         function escapeHtml(text) {
-            const el = document.createElement('div');
+            var el = document.createElement('div');
             el.textContent = text;
             return el.innerHTML;
         }
@@ -2431,103 +1875,83 @@
         function formatTime(isoStr) {
             if (!isoStr) return '-';
             try {
-                const d = new Date(isoStr);
-                return d.toLocaleString('zh-CN', {
-                    month: '2-digit',
-                    day: '2-digit',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit',
-                });
-            } catch {
-                return isoStr;
-            }
+                var d = new Date(isoStr);
+                return d.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            } catch (e) { return isoStr; }
         }
 
         function showToast(message, isError) {
-            const toast = document.getElementById('toast');
+            var toast = document.getElementById('toast');
             toast.textContent = message;
             toast.className = 'toast show' + (isError ? ' error' : '');
-            setTimeout(() => { toast.className = 'toast'; }, 3000);
+            setTimeout(function() { toast.className = 'toast'; }, 3000);
         }
 
-        /* -- 工作流指南页面 ---------------------------------------------------- */
-        let guideVisible = false;
+        /* -- Guide Page ------------------------------------------------------ */
+        var guideVisible = false;
 
         function toggleGuidePage() {
             guideVisible = !guideVisible;
-            const guidePage = document.getElementById('guidePage');
-            const board = document.getElementById('board');
-            const mobileTabs = document.getElementById('mobileTabs');
-            const btn = document.getElementById('guideToggleBtn');
+            var guidePage = document.getElementById('guidePage');
+            var contentPanel = document.getElementById('contentPanel');
+            var topBar = document.getElementById('topBar');
+            var btn = document.getElementById('guideToggleBtn');
 
             if (guideVisible) {
                 guidePage.classList.add('active');
-                board.style.display = 'none';
-                mobileTabs.style.display = 'none';
-                btn.textContent = 'Board';
-                btn.classList.remove('btn-outline');
-                btn.classList.add('btn-info');
+                contentPanel.style.display = 'none';
+                topBar.style.display = 'none';
+                btn.querySelector('.nav-label').textContent = 'Back to Board';
+                // Deactivate all nav items
+                document.querySelectorAll('.nav-item[data-tab]').forEach(function(item) {
+                    item.classList.remove('active');
+                });
             } else {
                 guidePage.classList.remove('active');
-                board.style.display = '';
-                mobileTabs.style.display = '';
-                btn.textContent = 'Guide';
-                btn.classList.remove('btn-info');
-                btn.classList.add('btn-outline');
+                contentPanel.style.display = '';
+                topBar.style.display = '';
+                btn.querySelector('.nav-label').textContent = 'Workflow Guide';
+                switchTab(activeTab);
             }
         }
 
-        function toggleGuideStep(stepEl) {
-            stepEl.classList.toggle('expanded');
-        }
+        function toggleGuideStep(stepEl) { stepEl.classList.toggle('expanded'); }
 
         function toggleAllGuideSteps() {
-            const steps = document.querySelectorAll('.guide-step');
-            const allExpanded = Array.from(steps).every(function(s) { return s.classList.contains('expanded'); });
+            var steps = document.querySelectorAll('.guide-step');
+            var allExpanded = Array.from(steps).every(function(s) { return s.classList.contains('expanded'); });
             steps.forEach(function(s) {
-                if (allExpanded) {
-                    s.classList.remove('expanded');
-                } else {
-                    s.classList.add('expanded');
-                }
+                if (allExpanded) s.classList.remove('expanded');
+                else s.classList.add('expanded');
             });
         }
 
-        /* -- 自动刷新（每 3 秒）----------------------------------------------- */
+        /* -- Auto Refresh ---------------------------------------------------- */
         function startAutoRefresh() {
             if (refreshTimer) clearInterval(refreshTimer);
             refreshTimer = setInterval(fetchTasks, 3000);
         }
 
-        /* -- 键盘快捷键 ------------------------------------------------------ */
-        document.addEventListener('keydown', function (e) {
+        /* -- Keyboard Shortcuts ---------------------------------------------- */
+        document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape') {
-                closeNewTaskModal();
-                closeChatModal();
-                closeRespondModal();
-                closePlanModal();
-                closeLogModal();
+                closeNewTaskModal(); closeChatModal(); closeRespondModal(); closePlanModal(); closeLogModal();
             }
-            // Ctrl+N: New task
             if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
                 e.preventDefault();
                 openNewTaskModal();
             }
         });
 
-        /* -- 模态框外部点击关闭 ------------------------------------------------ */
+        /* -- Modal click-outside-to-close ------------------------------------ */
         ['newTaskModal', 'chatModal', 'respondModal', 'planModal', 'logModal'].forEach(function(id) {
             document.getElementById(id).addEventListener('click', function(e) {
-                if (e.target === this) {
-                    this.classList.remove('active');
-                }
+                if (e.target === this) this.classList.remove('active');
             });
         });
 
-        /* -- 初始化 ---------------------------------------------------------- */
-        // 移动端默认激活第一列
-        switchMobileTab(activeMobileTab);
+        /* -- Init ------------------------------------------------------------ */
+        switchTab(activeTab);
         fetchTasks();
         startAutoRefresh();
     </script>
