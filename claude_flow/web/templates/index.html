@@ -2253,12 +2253,12 @@
                         <span class="guide-step-arrow">&#9660;</span>
                     </div>
                     <div class="guide-step-body">
-                        <p>First, initialize Claude Flow in your Git project root. This creates a <code>.claude-flow/</code> directory containing configuration and task data.</p>
+                        <p>First, initialize Claude Flow in your project root. This creates a <code>.claude-flow/</code> directory containing configuration and task data.</p>
                         <div class="guide-cmd-row">
                             <div class="guide-cmd-box"><span class="cmd-label cli">CLI</span><code>cf init</code></div>
                             <div class="guide-cmd-box"><span class="cmd-label web">Web</span><span class="cmd-text">Auto-initialized when Web Manager starts</span></div>
                         </div>
-                        <div class="guide-tip"><strong>Tip: </strong>Run <code>cf init</code> once per project. It creates <code>tasks.json</code>, <code>config.json</code>, and a <code>worktrees/</code> directory.</div>
+                        <div class="guide-tip"><strong>Tip: </strong>Run <code>cf init</code> once per project. Works with both Git repos and non-Git directories (non-Git mode uses single worker without worktree isolation).</div>
                     </div>
                 </div>
 
@@ -2272,12 +2272,16 @@
                         <span class="guide-step-arrow">&#9660;</span>
                     </div>
                     <div class="guide-step-body">
-                        <p>Create one or more tasks with a title and a prompt. The prompt is what Claude Code will receive as instructions. Tasks start in <strong>Pending</strong> status.</p>
+                        <p>Create tasks with a title and a prompt. The prompt is what Claude Code will receive as instructions. Choose between two task types:</p>
+                        <ul style="margin: 8px 0 8px 20px; font-size: 13px; color: #b0b0cc;">
+                            <li><strong>Normal Task</strong> - Full lifecycle with planning, review, and execution. Best for complex features.</li>
+                            <li><strong>Mini Task</strong> - Skips planning/approval, goes directly to Approved. Ideal for quick fixes and simple changes.</li>
+                        </ul>
                         <div class="guide-cmd-row">
-                            <div class="guide-cmd-box"><span class="cmd-label cli">CLI</span><code>cf task add -p "prompt" "title"</code></div>
-                            <div class="guide-cmd-box"><span class="cmd-label web">Web</span><span class="cmd-text">Click <strong>+ New Task</strong> button in the toolbar</span></div>
+                            <div class="guide-cmd-box"><span class="cmd-label cli">CLI</span><code>cf task add -p "prompt" "title"</code><br><code>cf task mini "prompt" --run</code></div>
+                            <div class="guide-cmd-box"><span class="cmd-label web">Web</span><span class="cmd-text">Click <strong>+ New Task</strong>, select Normal or Mini type</span></div>
                         </div>
-                        <div class="guide-tip"><strong>Tip: </strong>Use <code>-f tasks.txt</code> to batch-add from a file, one task per line. Set priority with the <code>-P</code> flag (0-3).</div>
+                        <div class="guide-tip"><strong>Tip: </strong>Use <code>-f tasks.txt</code> to batch-add from a file. Set priority with <code>-P</code> flag. Mini tasks with <code>--run</code> execute immediately.</div>
                     </div>
                 </div>
 
@@ -2292,16 +2296,16 @@
                         <span class="guide-step-arrow">&#9660;</span>
                     </div>
                     <div class="guide-step-body">
-                        <p>Choose a planning mode for each task:</p>
+                        <p>Choose a planning mode for each task (mini tasks skip this step entirely):</p>
                         <ul style="margin: 8px 0 8px 20px; font-size: 13px; color: #b0b0cc;">
-                            <li><strong>Auto Plan</strong> - AI generates a complete plan directly (best for bug fixes and small features)</li>
+                            <li><strong>Auto Plan</strong> - AI generates a complete plan in the background (best for bug fixes and small features)</li>
                             <li><strong>Chat Plan</strong> - Multi-round conversation to refine requirements and design before generating the plan</li>
                         </ul>
                         <div class="guide-cmd-row">
-                            <div class="guide-cmd-box"><span class="cmd-label cli">CLI</span><code>cf plan &lt;task_id&gt;</code> (auto) or <code>cf plan &lt;task_id&gt; --interactive</code></div>
+                            <div class="guide-cmd-box"><span class="cmd-label cli">CLI</span><code>cf plan</code> (background) or <code>cf plan -F</code> (foreground)<br><code>cf plan -t &lt;id&gt; --interactive</code> (chat mode)<br><code>cf plan status</code> (check progress)</div>
                             <div class="guide-cmd-box"><span class="cmd-label web">Web</span><span class="cmd-text">Click <strong>Auto Plan</strong> or <strong>Chat Plan</strong> on the card</span></div>
                         </div>
-                        <p>Both modes produce a Markdown plan document in <code>.claude-flow/plans/</code>.</p>
+                        <p>Plans are generated in the background by default. Use <code>cf plan status</code> to check progress. Both modes produce a Markdown plan document in <code>.claude-flow/plans/</code>.</p>
                     </div>
                 </div>
 
@@ -2316,12 +2320,12 @@
                         <span class="guide-step-arrow">&#9660;</span>
                     </div>
                     <div class="guide-step-body">
-                        <p>This is the <strong>human-in-the-loop</strong> gate. Review each plan to ensure correctness and safety before approving execution.</p>
+                        <p>This is the <strong>human-in-the-loop</strong> gate. Review each plan to ensure correctness and safety before approving execution. Mini tasks skip this step.</p>
                         <div class="guide-cmd-row">
-                            <div class="guide-cmd-box"><span class="cmd-label cli">CLI</span><code>cf plan review</code><br><code>cf plan approve --all</code></div>
+                            <div class="guide-cmd-box"><span class="cmd-label cli">CLI</span><code>cf plan review</code> (interactive)<br><code>cf plan approve --all</code> (quick approve)</div>
                             <div class="guide-cmd-box"><span class="cmd-label web">Web</span><span class="cmd-text">Click <strong>View Plan</strong> to read, then <strong>Approve</strong> or <strong>Chat</strong></span></div>
                         </div>
-                        <div class="guide-tip"><strong>Chat: </strong>Open the chat dialog to discuss the plan with AI, ask questions, or request revisions. Click <strong>Finalize Plan</strong> in the chat to regenerate from the conversation.</div>
+                        <div class="guide-tip"><strong>Chat: </strong>Open the chat dialog to discuss the plan with AI, ask questions, or request revisions. Click <strong>Finalize Plan</strong> in the chat to regenerate the plan from the conversation history.</div>
                     </div>
                 </div>
 
@@ -2336,12 +2340,12 @@
                         <span class="guide-step-arrow">&#9660;</span>
                     </div>
                     <div class="guide-step-body">
-                        <p>Workers pick up approved tasks and execute them. Each task gets its own <strong>Git Worktree</strong> (isolated branch <code>cf/task-XXXXXX</code>) so multiple tasks can run in parallel without conflicts.</p>
+                        <p>Workers pick up approved tasks (both normal and mini) and execute them. Each task gets its own <strong>Git Worktree</strong> (isolated branch <code>cf/task-XXXXXX</code>) so multiple tasks can run in parallel without conflicts.</p>
                         <div class="guide-cmd-row">
-                            <div class="guide-cmd-box"><span class="cmd-label cli">CLI</span><code>cf run</code> &nbsp;or&nbsp; <code>cf run -n 3</code></div>
-                            <div class="guide-cmd-box"><span class="cmd-label web">Web</span><span class="cmd-text">Click <strong>Run All</strong> or card's <strong>Run</strong> button</span></div>
+                            <div class="guide-cmd-box"><span class="cmd-label cli">CLI</span><code>cf run</code> (single) or <code>cf run -n 3</code> (parallel)<br><code>cf run --daemon</code> (continuous polling)</div>
+                            <div class="guide-cmd-box"><span class="cmd-label web">Web</span><span class="cmd-text">Click <strong>Run All</strong> in toolbar or <strong>Run</strong> on individual cards</span></div>
                         </div>
-                        <p>The worker calls <code>claude -p "prompt"</code> inside the worktree. The task moves to <strong>Running</strong>.</p>
+                        <div class="guide-tip"><strong>Daemon: </strong>Use <code>cf run --daemon</code> for continuous execution. Workers poll for new tasks every 10 seconds (configurable via <code>daemon_poll_interval</code>). Stop with Ctrl+C.</div>
                     </div>
                 </div>
 
@@ -2355,32 +2359,41 @@
                         <span class="guide-step-arrow">&#9660;</span>
                     </div>
                     <div class="guide-step-body">
-                        <p>While running, Claude Code writes code in the isolated worktree. Monitor progress via logs.</p>
-                        <p>If Claude Code needs clarification, the task enters <strong>Needs Input</strong> status. You can provide additional context and the task will resume.</p>
+                        <p>While running, Claude Code writes code in the isolated worktree. Monitor real-time progress via structured logs that show tool calls, errors, and execution timeline.</p>
+                        <p>If Claude Code produces no code changes (e.g., needs clarification), the task enters <strong>Needs Input</strong> status with Claude's response saved. You can provide additional context and the task will be re-queued.</p>
                         <div class="guide-cmd-row">
-                            <div class="guide-cmd-box"><span class="cmd-label cli">CLI</span><code>cf log &lt;task_id&gt;</code><br><code>cf status</code></div>
-                            <div class="guide-cmd-box"><span class="cmd-label web">Web</span><span class="cmd-text">Click <strong>View Log</strong> on running cards, or <strong>Respond</strong> for Needs Input cards</span></div>
+                            <div class="guide-cmd-box"><span class="cmd-label cli">CLI</span><code>cf log &lt;task_id&gt;</code> (structured log)<br><code>cf respond &lt;task_id&gt; -m "info"</code> (answer Claude)<br><code>cf watch</code> (live monitor)</div>
+                            <div class="guide-cmd-box"><span class="cmd-label web">Web</span><span class="cmd-text"><strong>View Log</strong> on running cards. <strong>Respond</strong> button for Needs Input cards.</span></div>
                         </div>
+                        <div class="guide-tip"><strong>Safety: </strong>Workers detect if Claude accidentally modifies the main repo and automatically rescue changes to the worktree.</div>
                     </div>
                 </div>
 
-                <!-- Step 7: Done / Merge -->
+                <!-- Step 7: Test, Merge & Done -->
                 <div class="guide-step" onclick="toggleGuideStep(this)">
                     <div class="guide-step-dot" style="background: #00b894;"></div>
                     <div class="guide-step-header">
                         <span class="guide-step-num" style="background: #00b894;">7</span>
-                        <span class="guide-step-title">Merge & Done</span>
+                        <span class="guide-step-title">Test, Merge & Done</span>
                         <span class="guide-step-tag" style="background: rgba(0,184,148,0.2); color: #00b894;">Done</span>
                         <span class="guide-role-tag guide-role-auto">AUTO</span>
                         <span class="guide-step-arrow">&#9660;</span>
                     </div>
                     <div class="guide-step-body">
-                        <p>After execution completes, the worker automatically <strong>merges</strong> the worktree branch back to the main branch (configurable via <code>auto_merge</code>). The worktree is then cleaned up.</p>
+                        <p>After execution, the worker performs a multi-stage merge pipeline:</p>
+                        <ul style="margin: 8px 0; padding-left: 20px; font-size: 13px; color: #b0b0cc;">
+                            <li><strong>Auto-commit</strong> any uncommitted changes in the worktree</li>
+                            <li><strong>Pre-merge tests</strong> (if configured) -- run test commands, auto-fix failures with Claude</li>
+                            <li><strong>Rebase merge</strong> to main branch with merge lock (prevents concurrent merges)</li>
+                            <li><strong>Conflict auto-resolution</strong> -- Claude resolves conflicts with task context awareness</li>
+                            <li><strong>Remote push</strong> (if <code>auto_push</code> enabled)</li>
+                            <li><strong>Experience log</strong> to PROGRESS.md</li>
+                        </ul>
                         <div class="guide-cmd-row">
-                            <div class="guide-cmd-box"><span class="cmd-label cli">CLI</span><code>cf clean</code></div>
-                            <div class="guide-cmd-box"><span class="cmd-label web">Web</span><span class="cmd-text">Task card moves to <strong>Done</strong> column automatically</span></div>
+                            <div class="guide-cmd-box"><span class="cmd-label cli">CLI</span><code>cf clean</code> (cleanup) <br><code>cf progress</code> (experience log)<br><code>cf usage</code> (token stats)</div>
+                            <div class="guide-cmd-box"><span class="cmd-label web">Web</span><span class="cmd-text">Task card moves to <strong>Done</strong> automatically. View usage stats in the Overview dashboard.</span></div>
                         </div>
-                        <div class="guide-tip"><strong>Config: </strong>Set <code>auto_merge: false</code> in config.json to merge manually. Merge strategy defaults to <code>--no-ff</code>.</div>
+                        <div class="guide-tip"><strong>Config: </strong>Set <code>auto_merge: false</code> to skip merging. Use <code>pre_merge_commands: ["pytest -v"]</code> to enable test verification. Merge strategy defaults to <code>rebase</code> with <code>max_merge_retries: 5</code>.</div>
                     </div>
                 </div>
 
@@ -2395,17 +2408,37 @@
                         <span class="guide-step-arrow">&#9660;</span>
                     </div>
                     <div class="guide-step-body">
-                        <p>If a task fails (timeout, Claude error, merge conflict), it enters <strong>Failed</strong> status with an error message. You can:</p>
+                        <p>If a task fails (timeout, Claude error, merge conflict, test failure), it enters <strong>Failed</strong> status with an error message. You can:</p>
                         <ul style="margin: 8px 0; padding-left: 20px;">
-                            <li><strong>Retry</strong> -- re-queue the task as Approved</li>
-                            <li><strong>Reset</strong> -- send it back to Pending (start from scratch)</li>
-                            <li><strong>View Log</strong> -- inspect what went wrong</li>
-                            <li><strong>Delete</strong> -- remove the task entirely</li>
+                            <li><strong>Retry</strong> -- re-queue as Approved (keeps the plan)</li>
+                            <li><strong>Reset</strong> -- send back to Pending (mini tasks reset to Approved)</li>
+                            <li><strong>View Log</strong> -- inspect structured execution log with tool calls and errors</li>
+                            <li><strong>Delete</strong> -- remove the task (auto-stops running processes and cleans worktree)</li>
                         </ul>
                         <div class="guide-cmd-row">
-                            <div class="guide-cmd-box"><span class="cmd-label cli">CLI</span><code>cf retry</code><br><code>cf reset &lt;task_id&gt;</code></div>
-                            <div class="guide-cmd-box"><span class="cmd-label web">Web</span><span class="cmd-text">Use <strong>Retry</strong>, <strong>Reset</strong>, or <strong>Delete</strong> buttons on failed cards</span></div>
+                            <div class="guide-cmd-box"><span class="cmd-label cli">CLI</span><code>cf retry</code> (all failed)<br><code>cf reset &lt;task_id&gt;</code> (single task)<br><code>cf log &lt;task_id&gt;</code> (inspect)</div>
+                            <div class="guide-cmd-box"><span class="cmd-label web">Web</span><span class="cmd-text">Use <strong>Retry</strong>, <strong>Reset</strong>, or <strong>Delete</strong> buttons on failed cards. Batch delete via task selection.</span></div>
                         </div>
+                        <div class="guide-tip"><strong>Zombie tasks: </strong>If a worker crashed, use <code>cf reset &lt;task_id&gt;</code> to reset zombie running tasks. This also cleans up orphaned worktrees and branches.</div>
+                    </div>
+                </div>
+
+                <!-- Step 9: Token Usage -->
+                <div class="guide-step" onclick="toggleGuideStep(this)">
+                    <div class="guide-step-dot" style="background: #a29bfe;"></div>
+                    <div class="guide-step-header">
+                        <span class="guide-step-num" style="background: #a29bfe;">9</span>
+                        <span class="guide-step-title">Token Usage & Monitoring</span>
+                        <span class="guide-step-tag" style="background: rgba(162,155,254,0.2); color: #a29bfe;">Stats</span>
+                        <span class="guide-step-arrow">&#9660;</span>
+                    </div>
+                    <div class="guide-step-body">
+                        <p>Track token consumption across all tasks and sessions. Usage data is collected from stream-json logs, with enhanced reporting available via <code>ccusage</code>.</p>
+                        <div class="guide-cmd-row">
+                            <div class="guide-cmd-box"><span class="cmd-label cli">CLI</span><code>cf usage</code> (per-session report)<br><code>cf usage daily</code> / <code>monthly</code> / <code>summary</code><br><code>cf usage --since 2026-03-01</code></div>
+                            <div class="guide-cmd-box"><span class="cmd-label web">Web</span><span class="cmd-text">Overview dashboard shows aggregated usage stats. API endpoints available at <code>/api/usage/*</code>.</span></div>
+                        </div>
+                        <div class="guide-tip"><strong>Tip: </strong>Install <code>ccusage</code> (<code>npx ccusage@latest</code>) for full-featured daily/monthly reporting. Without it, basic per-task stats are still available from execution logs.</div>
                     </div>
                 </div>
             </div>

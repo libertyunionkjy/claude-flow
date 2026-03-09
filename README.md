@@ -4,128 +4,178 @@
 
 <h1 align="center">Claude Flow</h1>
 
-<p align="center">多实例 Claude Code 工作流管理器。在任意 Git 项目中管理多个 Claude Code 实例并行开发。</p>
+<p align="center">Multi-instance Claude Code workflow manager. Manage multiple Claude Code instances for parallel development in any Git project.</p>
 
-灵感来自[胡渊鸣的 Claude Code 工作流](https://mp.weixin.qq.com/s/example)，实现了从任务队列、Git Worktree 隔离到 Web 看板的完整多 Agent 开发流水线。
+Inspired by [Yuanming Hu's Claude Code workflow](https://mp.weixin.qq.com/s/example), implementing a complete multi-Agent development pipeline from task queue, Git Worktree isolation to Web dashboard.
 
-## 核心能力
+## Core Capabilities
 
-- **任务队列** — 维护优先级任务列表，Worker 按优先级自动领取执行
-- **Git Worktree 并行化** — 每个 Worker 在独立 worktree 中工作，通过 symlink 共享关键文件
-- **Plan Mode 封装** — 批量生成 plan，支持多轮对话反馈，统一 review 后再执行
-- **守护进程模式** — Ralph Loop 持续轮询，干完一个活自动接下一个
-- **Rebase 合并 + 冲突自动修复** — 使用 rebase 策略合并，冲突时调用 Claude 自动解决
-- **合并前测试验证** — 合并前自动运行测试，失败时自动修复重试
-- **PROGRESS.md 经验沉淀** — 每次任务完成后记录经验教训和 commit ID
-- **Stream JSON 实时监控** — 解析 worker 输出，实时掌握执行进度
-- **Web Manager 看板** — 暗色主题看板界面，支持手机端操作
+- **Task Queue** -- Priority-based task list, workers automatically pick up tasks by priority
+- **Mini Task** -- Lightweight tasks that bypass planning/approval, execute directly with `--run`
+- **Git Worktree Parallelization** -- Each worker operates in an isolated worktree with symlink-shared files
+- **Non-Git Support** -- Graceful degradation for non-Git projects (single worker, no isolation)
+- **Plan Mode** -- Batch plan generation (background by default), multi-round chat feedback, unified review before execution
+- **Daemon Mode** -- Ralph Loop continuously polls, automatically picks up the next task after completing one
+- **Rebase Merge + Auto Conflict Resolution** -- Rebase strategy with Claude-powered automatic conflict resolution
+- **Pre-merge Test Verification** -- Automatic test execution before merge, auto-fix and retry on failure
+- **Needs Input** -- Worker detects when Claude needs clarification, pauses for human input
+- **PROGRESS.md Experience Log** -- Records lessons learned and commit IDs after each task
+- **Token Usage Stats** -- Track token consumption per task/daily/monthly via ccusage integration
+- **Stream JSON Real-time Monitoring** -- Parse worker output for real-time progress tracking
+- **Web Manager Dashboard** -- Dark-themed dashboard with sidebar navigation, mobile support
 
-## 安装
+## Installation
 
 ```bash
-# 创建虚拟环境
+# Create virtual environment
 python3 -m venv .venv
 source .venv/bin/activate
 
-# 安装
+# Install
 pip install -e .
 
-# 开发模式（含测试依赖）
+# Development mode (with test dependencies)
 pip install -e ".[dev]"
 
-# Web 看板（可选）
+# Web dashboard (optional)
 pip install flask
 ```
 
-> **注意：** Debian/Ubuntu 系统需先安装 `python3-venv`：`apt install python3-venv`
+> **Note:** Debian/Ubuntu systems need `python3-venv` first: `apt install python3-venv`
 
-后续使用前需激活虚拟环境：`source .venv/bin/activate`
+Activate the virtual environment before use: `source .venv/bin/activate`
 
-要求：Python 3.10+, Git, [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code), Linux/macOS
+Requirements: Python 3.10+, Git, [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code), Linux/macOS
 
-## 快速开始
+## Quick Start
 
 ```bash
-# 1. 在项目中初始化
+# 1. Initialize in your project
 cd your-project
 cf init
 
-# 2. 添加任务（支持优先级）
-cf task add -p "实现用户登录 API，包含 JWT 认证" -P 5 "用户登录"
-cf task add -p "编写单元测试覆盖所有 API 端点" "API 测试"
+# 2. Add tasks (with priority)
+cf task add -p "Implement user login API with JWT auth" -P 5 "User Login"
+cf task add -p "Write unit tests covering all API endpoints" "API Tests"
 
-# 3. 生成计划并审批
-cf plan              # 批量生成 plan
-cf plan review       # 交互式审批（支持多轮反馈）
+# 3. Quick task (skip planning, execute directly)
+cf task mini "run pytest and fix any failures" --run
 
-# 4. 执行
-cf run               # 单 worker 执行
-cf run -n 3          # 3 个并行 worker
-cf run --daemon      # 守护进程模式，持续轮询
+# 4. Generate plans and review
+cf plan              # Background plan generation (all pending tasks)
+cf plan status       # Check generation progress
+cf plan review       # Interactive review (multi-round feedback)
 
-# 5. 监控
-cf watch             # 实时监控 worker 状态
-cf web               # 启动 Web 看板界面
-cf status            # 查看任务状态总览
-cf progress          # 查看经验沉淀日志
+# 5. Execute
+cf run               # Single worker
+cf run -n 3          # 3 parallel workers
+cf run --daemon      # Daemon mode, continuous polling
+
+# 6. Monitor
+cf watch             # Real-time worker status
+cf web               # Start Web dashboard
+cf status            # Task status overview
+cf usage             # Token usage report
+cf progress          # Experience log
 ```
 
-## 命令总览
+## Command Reference
 
-| 命令 | 说明 |
-|------|------|
-| `cf init` | 初始化 `.claude-flow/` 目录 |
-| `cf task add "标题"` | 添加任务（`-p` prompt，`-f` 批量导入，`-P` 优先级） |
-| `cf task list` | 查看所有任务（按优先级排序） |
-| `cf task show <id>` | 查看任务详情 |
-| `cf task remove <id>` | 删除任务 |
-| `cf plan [-t id]` | 生成计划（可指定单个任务） |
-| `cf plan review` | 交互式审批计划（支持 `[f]eedback` 多轮对话） |
-| `cf plan approve <id>` | 审批指定计划（`--all` 全部审批） |
-| `cf run [-n N] [-d]` | 启动 Worker 执行（`-n` 并行数，`-d` 守护进程模式） |
-| `cf watch` | 实时监控 worker 活动 |
-| `cf web [--port 8080]` | 启动 Web 看板界面 |
-| `cf status` | 查看任务和 worker 状态总览 |
-| `cf log <id>` | 查看任务执行日志 |
-| `cf progress` | 查看 PROGRESS.md 经验沉淀 |
-| `cf clean` | 清理 worktree 和已合并分支 |
-| `cf reset <id>` | 重置失败任务为 pending |
-| `cf retry` | 重试所有失败任务 |
+| Command | Description |
+|---------|-------------|
+| `cf init` | Initialize `.claude-flow/` directory |
+| `cf task add "title"` | Add task (`-p` prompt, `-f` batch import, `-P` priority) |
+| `cf task mini "prompt"` | Add mini task (skip planning, `--run` to execute immediately) |
+| `cf task list` | List all tasks (sorted by priority) |
+| `cf task show <id>` | Show task details |
+| `cf task remove <id>` | Remove a task |
+| `cf plan [-t id]` | Generate plans (background by default, `-F` foreground) |
+| `cf plan status` | Check plan generation progress |
+| `cf plan review` | Interactive plan review (`[a]pprove / [c]hat / [e]dit / [s]kip`) |
+| `cf plan chat <id>` | Interactive chat planning (REPL or `-m` single message) |
+| `cf plan finalize <id>` | Generate plan document from chat session |
+| `cf plan approve <id>` | Approve plan (`--all` to approve all) |
+| `cf run [-n N] [-d]` | Start workers (`-n` parallel count, `-d` daemon mode) |
+| `cf watch` | Real-time worker activity monitor |
+| `cf web [--port 8080]` | Start Web dashboard |
+| `cf status` | Task and worker status overview |
+| `cf log <id>` | View task execution log (`--raw` for raw stream-json) |
+| `cf respond <id>` | Provide input to a task in `needs_input` status |
+| `cf usage` | Token usage report (per-session) |
+| `cf usage daily` | Daily aggregated usage (requires ccusage) |
+| `cf usage monthly` | Monthly aggregated usage (requires ccusage) |
+| `cf usage summary` | Overall usage summary |
+| `cf progress` | View PROGRESS.md experience log |
+| `cf clean` | Clean up worktrees and merged branches |
+| `cf reset <id>` | Reset failed/needs_input/zombie-running task |
+| `cf retry` | Retry all failed tasks |
 
-## 任务生命周期
+## Task Lifecycle
 
 ```
-pending → planning → planned → (review) → approved → running → merging → done
-                                                                    ↘ failed
+pending --> planning --> planned --> (review) --> approved --> running --> merging --> done
+                                                                 \          \
+                                                            needs_input    failed
 ```
 
-## 项目结构
+Mini tasks skip the planning cycle:
+```
+(mini) approved --> running --> merging --> done
+```
+
+## Task Types
+
+### Normal Task
+Full lifecycle with planning, review, and execution. Best for complex features.
+
+```bash
+cf task add -p "Implement user auth with JWT" "User Auth"
+cf plan
+cf plan review
+cf run
+```
+
+### Mini Task
+Skips planning/approval, goes directly to `approved` status. Ideal for quick fixes, script execution, or simple changes.
+
+```bash
+# Add and auto-execute
+cf task mini "fix the typo in README.md line 42" --run
+
+# Add only (execute later with cf run)
+cf task mini "update version to 2.0.0"
+```
+
+## Project Structure
 
 ```
 claude_flow/
-├── cli.py            # Click CLI 入口
-├── config.py         # 配置加载/保存（含全部新增配置项）
-├── models.py         # Task / TaskStatus 数据模型
-├── task_manager.py   # 任务 CRUD + 优先级队列 + 文件锁
-├── worker.py         # Worker 生命周期管理（含守护进程模式）
-├── worktree.py       # Git worktree 操作（含 symlink / rebase / push）
-├── planner.py        # Plan mode 封装（含多轮对话 / plan 拆分）
-├── progress.py       # PROGRESS.md 经验沉淀
-├── monitor.py        # Stream JSON 实时解析与监控
-└── web/              # Web Manager 看板界面
+├── cli.py            # Click CLI entry point
+├── config.py         # Config loading/saving (all configuration options)
+├── models.py         # Task / TaskStatus / TaskType data models
+├── task_manager.py   # Task CRUD + priority queue + file lock
+├── worker.py         # Worker lifecycle (daemon mode, streaming, auto-commit)
+├── worktree.py       # Git worktree ops (symlink, rebase, merge lock, push)
+├── planner.py        # Plan mode (multi-round chat, plan split)
+├── chat.py           # ChatSession model, ChatManager for interactive planning
+├── progress.py       # PROGRESS.md experience logging
+├── monitor.py        # Stream JSON real-time parsing and monitoring
+├── usage.py          # Token usage statistics (ccusage + log fallback)
+├── utils.py          # Shared utilities
+└── web/              # Web Manager dashboard
     ├── __init__.py
-    ├── app.py        # Flask 应用工厂
-    ├── api.py        # REST API（9 个端点）
+    ├── app.py        # Flask application factory
+    ├── api.py        # REST API (20+ endpoints)
     └── templates/
-        └── index.html  # 暗色看板 UI
+        └── index.html  # Dark-themed dashboard UI
 ```
 
-## 测试
+## Tests
 
 ```bash
 pytest -v
 ```
 
-## 许可证
+## License
 
 MIT

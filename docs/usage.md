@@ -1,25 +1,27 @@
-# Claude Flow 使用文档
+# Claude Flow Usage Guide
 
-## 安装与环境
+## Installation & Environment
 
-### 前置要求
+### Prerequisites
 
 - Python 3.10+
-- Git（支持 worktree）
-- Claude Code CLI（已安装并可通过 `claude` 命令调用）
-- Linux 或 macOS（文件锁依赖 `fcntl`）
+- Git (with worktree support)
+- Claude Code CLI (installed and available via `claude` command)
+- Linux or macOS (file locking depends on `fcntl`)
 
-### 安装
+### Installation
 
 ```bash
 git clone <repo-url> && cd claude-flow
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -e .
 
-# Web 看板功能（可选）
+# Web dashboard (optional)
 pip install flask
 ```
 
-验证安装：
+Verify installation:
 
 ```bash
 cf --help
@@ -27,93 +29,112 @@ cf --help
 
 ---
 
-## 初始化
+## Initialization
 
-在目标项目根目录下运行：
+Run in the target project root:
 
 ```bash
 cd /path/to/your-project
 cf init
 ```
 
-该命令会创建以下目录结构：
+This creates the following directory structure:
 
 ```
 your-project/
 └── .claude-flow/
-    ├── config.json       # 配置文件
-    ├── tasks.json        # 任务队列（自动生成）
-    ├── tasks.lock        # 文件锁（自动生成）
-    ├── logs/             # 执行日志
-    ├── plans/            # 生成的计划文件
-    └── worktrees/        # 工作树（执行时创建，完成后清理）
+    ├── config.json       # Configuration file
+    ├── tasks.json        # Task queue (auto-generated)
+    ├── tasks.lock        # File lock (auto-generated)
+    ├── logs/             # Execution logs
+    ├── plans/            # Generated plan files
+    ├── chats/            # Chat session data
+    └── worktrees/        # Worktrees (created during execution, cleaned after)
 ```
 
-同时自动将临时文件添加到 `.gitignore`。
+Temporary files are automatically added to `.gitignore`.
+
+> **Non-Git projects:** `cf init` also works in non-Git directories. In this mode, worktree isolation is disabled and only single-worker execution is supported.
 
 ---
 
-## 任务管理
+## Task Management
 
-### 添加单个任务
-
-```bash
-# 通过 -p 直接指定 prompt
-cf task add -p "实现 RESTful 用户注册 API，包含邮箱验证和密码加密" "用户注册"
-
-# 带优先级添加（数字越大越优先）
-cf task add -p "紧急修复登录 bug" -P 10 "紧急修复"
-
-# 不带 -p 会打开编辑器编写 prompt
-cf task add "数据库迁移"
-```
-
-### 批量导入
-
-准备文件 `tasks.txt`，每行格式为 `标题 | prompt`：
-
-```
-用户登录 | 实现 JWT 登录接口，支持邮箱和手机号
-用户注册 | 实现注册接口，包含邮箱验证
-密码重置 | 实现密码重置流程，发送重置链接到邮箱
-```
-
-导入：
+### Adding Tasks
 
 ```bash
-cf task add -f tasks.txt "批量导入"
+# Specify prompt directly with -p
+cf task add -p "Implement RESTful user registration API with email verification" "User Registration"
+
+# With priority (higher number = higher priority)
+cf task add -p "Urgent login bug fix" -P 10 "Urgent Fix"
+
+# Without -p opens an editor to write the prompt
+cf task add "Database Migration"
 ```
 
-> 注意：使用 `-f` 时 title 参数会被忽略，标题从文件中读取。
+### Mini Tasks
 
-### 查看任务
+Mini tasks bypass the full planning cycle (skip planning/approval, go directly to `approved` status). Ideal for quick fixes, script execution, or simple changes.
 
 ```bash
-# 列表视图（按优先级降序排列）
+# Add a mini task
+cf task mini "run pytest and fix any failures"
+
+# Add with a custom title
+cf task mini -t "Fix typo" "fix the typo in README.md line 42"
+
+# Add and immediately execute
+cf task mini "update the version number to 2.0.0" --run
+```
+
+### Batch Import
+
+Prepare a file `tasks.txt`, each line in the format `title | prompt`:
+
+```
+User Login | Implement JWT login API supporting email and phone
+User Registration | Implement registration with email verification
+Password Reset | Implement password reset flow with email link
+```
+
+Import:
+
+```bash
+cf task add -f tasks.txt "batch import"
+```
+
+> Note: When using `-f`, the title argument is ignored; titles are read from the file.
+
+### Viewing Tasks
+
+```bash
+# List view (sorted by priority descending)
 cf task list
-#   ○ task-a1b2c3  pending    P10  紧急修复
-#   ○ task-d4e5f6  pending     P5  用户登录
-#   ✓ task-789abc  approved         用户注册
-#   ▶ task-def012  running          密码重置
+#   ○ task-a1b2c3  pending    P10  Urgent Fix
+#   ○ task-d4e5f6  pending     P5  User Login
+#   ✓ task-789abc  approved         User Registration
+#   ▶ task-def012  running          [mini] Password Reset
 
-# 详情视图
+# Detail view
 cf task show task-a1b2c3
 ```
 
-状态图标含义：
+Status icons:
 
-| 图标 | 状态 | 说明 |
-|------|------|------|
-| `○` | pending | 等待处理 |
-| `⟳` | planning | 正在生成计划 |
-| `◉` | planned | 计划已生成，等待审批 |
-| `✓` | approved | 已审批，等待执行 |
-| `▶` | running | 正在执行 |
-| `⇄` | merging | 正在合并 |
-| `●` | done | 已完成 |
-| `✗` | failed | 执行失败 |
+| Icon | Status | Description |
+|------|--------|-------------|
+| `○` | pending | Awaiting processing |
+| `⟳` | planning | Plan being generated |
+| `◉` | planned | Plan generated, awaiting review |
+| `✓` | approved | Approved, awaiting execution |
+| `▶` | running | Currently executing |
+| `⇄` | merging | Being merged |
+| `?` | needs_input | Claude needs clarification |
+| `●` | done | Completed |
+| `✗` | failed | Execution failed |
 
-### 删除任务
+### Removing Tasks
 
 ```bash
 cf task remove task-a1b2c3
@@ -121,121 +142,172 @@ cf task remove task-a1b2c3
 
 ---
 
-## Plan Mode 工作流
+## Plan Mode Workflow
 
-Plan mode 让 Claude Code 先生成实施计划，人工审核后再执行，适合需要质量把控的场景。
+Plan mode has Claude Code generate an implementation plan first, which is reviewed by a human before execution. Suitable for scenarios requiring quality control.
 
-### 生成计划
+### Generating Plans
 
 ```bash
-# 为所有 pending 任务生成计划
+# Generate plans for all pending tasks (background by default)
 cf plan
 
-# 为指定任务生成计划
+# Generate in foreground (blocking)
+cf plan -F
+
+# Generate for a specific task
 cf plan -t task-a1b2c3
+
+# Interactive chat-based planning
+cf plan -t task-a1b2c3 --interactive
 ```
 
-计划文件保存在 `.claude-flow/plans/task-xxx.md`，采用结构化格式（YAML front matter + Markdown body）。
+Plans are generated in background processes by default. Check progress with:
 
-### 审批计划
+```bash
+cf plan status
+```
 
-**交互式审批：**
+Plan files are saved in `.claude-flow/plans/task-xxx.md` using a structured format (YAML front matter + Markdown body).
+
+### Interactive Chat Planning
+
+Start a multi-round conversation to refine requirements before generating a plan:
+
+```bash
+# Start interactive planning session
+cf plan -t task-a1b2c3 --interactive
+
+# Continue the conversation (REPL mode)
+cf plan chat task-a1b2c3
+
+# Send a single message
+cf plan chat task-a1b2c3 -m "Add error handling for edge cases"
+
+# Generate plan document from chat history
+cf plan finalize task-a1b2c3
+```
+
+### Reviewing Plans
+
+**Interactive review:**
 
 ```bash
 cf plan review
 ```
 
-每个计划会展示内容并提供操作选项：
+Each plan is displayed with action options:
 
-| 按键 | 行为 |
-|------|------|
-| `a` | 审批通过，状态变为 approved |
-| `r` | 拒绝，输入原因后状态回到 pending（原因追加到 prompt） |
-| `s` | 跳过当前任务 |
-| `e` | 用编辑器打开计划文件，编辑后自动审批 |
-| `f` | **多轮反馈**：输入反馈意见，Claude 基于反馈重新生成计划 |
-| `q` | 退出审批 |
+| Key | Action |
+|-----|--------|
+| `a` | Approve, status becomes `approved` |
+| `c` | Open chat to discuss the plan with AI |
+| `s` | Skip current task |
+| `e` | Open plan file in editor, auto-approve after editing |
+| `q` | Exit review |
 
-**快速审批：**
+**Quick approve:**
 
 ```bash
-# 审批指定任务
+# Approve a specific task
 cf plan approve task-a1b2c3
 
-# 审批所有已生成计划的任务
+# Approve all planned tasks
 cf plan approve --all
 ```
 
-### 计划版本管理
+### Plan Version History
 
-每次通过 `[f]eedback` 重新生成计划时，之前的版本会自动保存为 `task-xxx_v1.md`、`task-xxx_v2.md`，最新版本始终在 `task-xxx.md`。
+Each time a plan is regenerated via chat feedback, the previous version is automatically saved as `task-xxx_v1.md`, `task-xxx_v2.md`, etc. The latest version is always at `task-xxx.md`.
 
 ---
 
-## 执行任务
+## Executing Tasks
 
-### 单 Worker 执行
+### Single Worker
 
 ```bash
-# 自动领取并执行所有 approved 任务（按优先级顺序）
+# Auto-pick and execute all approved tasks (by priority)
 cf run
 
-# 执行指定任务
+# Execute a specific task
 cf run task-a1b2c3
 ```
 
-### 多 Worker 并行执行
+### Multi-Worker Parallel Execution
 
 ```bash
-# 3 个 Worker 并行
+# 3 workers in parallel
 cf run -n 3
 ```
 
-### 守护进程模式
+> **Note:** Non-Git projects are limited to single worker mode (no worktree isolation).
+
+### Daemon Mode
 
 ```bash
-# 持续轮询，干完一个活自动接下一个（Ctrl+C 优雅停止）
+# Continuous polling, auto-pick next task (Ctrl+C to stop)
 cf run --daemon
 
-# 多 Worker 守护进程
+# Multi-worker daemon
 cf run -n 3 --daemon
 ```
 
-守护进程模式下，Worker 会在没有任务时每隔 `daemon_poll_interval` 秒（默认 10 秒）检查一次新任务，直到收到 SIGINT/SIGTERM 信号。
+In daemon mode, workers check for new tasks every `daemon_poll_interval` seconds (default 10) when idle, until receiving SIGINT/SIGTERM.
 
-### Worker 执行流程
+### Worker Execution Flow
 
-每个 Worker 的完整执行流程：
+Each worker's complete execution flow:
 
-1. 通过文件锁从任务队列领取一个 approved 任务（按优先级降序）
-2. 创建独立的 git worktree：`.claude-flow/worktrees/task-xxx/`
-3. 设置 symlink 共享文件（如配置了 `shared_symlinks`）
-4. 在 worktree 中运行 Claude Code（端口 = `base_port + worker_id`）
-5. **合并前测试验证**（如配置了 `pre_merge_commands`）
-   - 测试失败时调用 Claude 修复，最多重试 `max_test_retries` 次
-6. **Rebase 合并**到主分支（支持冲突自动解决，最多重试 `max_merge_retries` 次）
-7. **远程推送**（如配置了 `auto_push`）
-8. **记录经验**到 PROGRESS.md（如启用了 `enable_progress_log`）
-9. 清理 worktree，标记任务为 done
-10. 循环领取下一个任务
+1. Claim an `approved` task via file lock (by priority descending)
+2. Create an isolated git worktree: `.claude-flow/worktrees/task-xxx/`
+3. Set up symlinks for shared files (if `shared_symlinks` configured)
+4. Run Claude Code in the worktree (port = `base_port + worker_id`)
+5. Detect if Claude needs clarification → `needs_input` status (if no code changes produced)
+6. **Repo contamination check** -- detect and rescue if Claude accidentally modified the main repo
+7. **Auto-commit** uncommitted changes in worktree
+8. **Pre-merge test verification** (if `pre_merge_commands` configured)
+   - On failure, call Claude to fix, retry up to `max_test_retries` times
+9. **Rebase merge** to main branch (with auto conflict resolution, up to `max_merge_retries` retries)
+   - Merge lock prevents concurrent merges from multiple workers
+10. **Remote push** (if `auto_push` configured)
+11. **Log experience** to PROGRESS.md (if `enable_progress_log` enabled)
+12. Clean up worktree, mark task as `done`
+13. Loop to pick up next task
 
 ---
 
-## 监控
+## Responding to Needs Input
 
-### 实时监控
+When Claude Code needs clarification during execution, the task enters `needs_input` status. Claude's question is stored in the task's error field.
 
 ```bash
-# 实时查看 worker 活动（每 2 秒刷新）
+# View what Claude is asking
+cf task show task-a1b2c3
+
+# Provide additional context
+cf respond task-a1b2c3 -m "Use PostgreSQL, the database schema is in docs/schema.sql"
+```
+
+The task will be re-queued as `approved` with the supplementary information appended to the prompt.
+
+---
+
+## Monitoring
+
+### Real-time Watch
+
+```bash
+# Watch worker activity (refreshes every 2 seconds)
 cf watch
 
-# 自定义刷新间隔
+# Custom refresh interval
 cf watch --interval 5
 ```
 
-显示每个 Worker 的当前任务、事件数、工具调用数、错误数和最近活动。
+Displays each worker's current task, event count, tool call count, error count, and recent activity.
 
-### 状态总览
+### Status Overview
 
 ```bash
 cf status
@@ -248,136 +320,195 @@ cf status
 #   Worker-0: task=task-a1b2c3 events=42
 ```
 
-### 执行日志
+### Execution Logs
 
 ```bash
+# View structured log (default)
 cf log task-a1b2c3
+
+# View raw stream-json log
+cf log task-a1b2c3 --raw
 ```
 
-### 经验沉淀
+### Experience Log
 
 ```bash
-# 查看 PROGRESS.md 经验日志
+# View PROGRESS.md
 cf progress
 ```
 
-PROGRESS.md 记录每次任务完成/失败后的经验教训，包含 commit ID、错误信息和 Claude 生成的经验总结。
+PROGRESS.md records lessons learned after each task completion/failure, including commit IDs, error messages, and Claude-generated experience summaries.
 
 ---
 
-## Web Manager 看板
+## Token Usage Statistics
 
-启动 Web 看板界面（需安装 Flask）：
+Track token consumption across tasks and sessions:
 
 ```bash
-# 默认端口 8080
+# Per-session (task) usage report
+cf usage
+
+# Daily aggregated report (requires ccusage)
+cf usage daily
+
+# Monthly aggregated report (requires ccusage)
+cf usage monthly
+
+# Overall summary
+cf usage summary
+
+# Filter by date range
+cf usage --since 2026-03-01 --until 2026-03-10
+cf usage daily --since 2026-03-01
+```
+
+Usage data sources:
+1. **Primary**: `ccusage` CLI (via `npx ccusage@latest`) for full-featured reporting
+2. **Fallback**: Parse stream-json logs from `.claude-flow/logs/` for basic per-task stats
+
+---
+
+## Web Manager Dashboard
+
+Start the Web dashboard (requires Flask):
+
+```bash
+# Default port 8080
 cf web
 
-# 指定端口
+# Custom port
 cf web --port 3000
 ```
 
-看板功能：
-- **7 列看板布局**：Pending / Planning / Planned / Approved / Running / Done / Failed
-- **任务卡片**：显示 ID、标题、优先级徽章、Worker ID
-- **点击展开详情**：查看 prompt、错误信息、时间戳
-- **新建任务表单**：直接在 Web 界面创建任务
-- **审批操作**：Planned 状态可直接 Approve / Reject
-- **失败处理**：Failed 状态可 Retry / Delete
-- **自动刷新**：每 5 秒轮询更新
-- **暗色主题**：护眼设计，响应式布局支持手机端
+### Dashboard Features
+
+- **Overview Dashboard**: Status counts, active workers, recent activity, success rate, pipeline view
+- **Sidebar Navigation**: Overview, All Tasks list, Workflow Guide
+- **Task Management**: Create (normal/mini), edit priority, batch delete
+- **Plan Workflow**: Auto Plan, Chat Plan (multi-round), View Plan, Approve
+- **Chat Dialog**: Real-time AI conversation with thinking indicator and Finalize Plan action
+- **Execution Control**: Run single task, Run All, daemon mode
+- **Needs Input**: Inline respond form for tasks awaiting human input
+- **Log Viewer**: Structured execution logs with tool calls, errors, and timeline
+- **Auto-refresh**: Polls every 5 seconds for live updates
+- **Dark Theme**: Eye-friendly design, responsive layout for mobile
 
 ### REST API
 
-Web Manager 提供以下 API 端点：
+Web Manager provides the following API endpoints:
 
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| `GET` | `/api/tasks` | 任务列表（支持 `?status=` 筛选） |
-| `POST` | `/api/tasks` | 创建任务（body: `{title, prompt, priority}`） |
-| `GET` | `/api/tasks/<id>` | 任务详情 |
-| `PATCH` | `/api/tasks/<id>` | 更新任务（状态/优先级） |
-| `DELETE` | `/api/tasks/<id>` | 删除任务 |
-| `POST` | `/api/tasks/<id>/approve` | 审批任务 |
-| `POST` | `/api/tasks/<id>/reject` | 拒绝任务（body: `{reason}`） |
-| `GET` | `/api/status` | 全局状态概览 |
-| `GET` | `/api/workers` | Worker 状态 |
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/tasks` | Task list (supports `?status=` filter) |
+| `POST` | `/api/tasks` | Create task (body: `{title, prompt, priority, task_type}`) |
+| `GET` | `/api/tasks/<id>` | Task details |
+| `PATCH` | `/api/tasks/<id>` | Update task (status/priority) |
+| `DELETE` | `/api/tasks/<id>` | Delete task (auto-stops running processes) |
+| `POST` | `/api/tasks/batch-delete` | Batch delete (body: `{task_ids: [...]}`) |
+| `POST` | `/api/tasks/<id>/approve` | Approve task |
+| `POST` | `/api/tasks/<id>/plan` | Trigger plan generation (body: `{mode: "auto"\|"interactive"}`) |
+| `GET` | `/api/tasks/<id>/plan` | Get plan content |
+| `GET` | `/api/tasks/<id>/chat` | Get chat session history |
+| `POST` | `/api/tasks/<id>/chat` | Send chat message (async, body: `{message}`) |
+| `POST` | `/api/tasks/<id>/chat/finalize` | Generate plan from chat |
+| `POST` | `/api/tasks/<id>/respond` | Respond to needs_input task (body: `{message}`) |
+| `POST` | `/api/tasks/<id>/run` | Execute single task (async) |
+| `POST` | `/api/tasks/<id>/reset` | Reset task status |
+| `GET` | `/api/tasks/<id>/log` | Get execution log |
+| `POST` | `/api/plan-all` | Batch plan all pending tasks |
+| `POST` | `/api/approve-all` | Approve all planned tasks |
+| `POST` | `/api/run` | Start workers (body: `{num_workers, daemon}`) |
+| `POST` | `/api/retry-all` | Retry all failed tasks |
+| `GET` | `/api/status` | Global status overview |
+| `GET` | `/api/overview` | Dashboard overview data |
+| `GET` | `/api/workers` | Worker status |
+| `GET` | `/api/usage/summary` | Token usage summary |
+| `GET` | `/api/usage/sessions` | Per-session usage |
+| `GET` | `/api/usage/daily` | Daily usage report |
+| `GET` | `/api/usage/monthly` | Monthly usage report |
 
-响应格式统一为 `{"ok": true, "data": ...}` 或 `{"ok": false, "error": "..."}`。
+Response format: `{"ok": true, "data": ...}` or `{"ok": false, "error": "..."}`.
 
 ---
 
-## 故障处理
+## Troubleshooting
 
-### 重置失败任务
+### Reset Failed Tasks
 
 ```bash
-# 重置单个任务为 pending
+# Reset a single task to pending (or approved for mini tasks)
 cf reset task-a1b2c3
 
-# 重试所有失败任务（failed → approved）
+# Reset a zombie running task (worker crashed without updating status)
+cf reset task-a1b2c3  # Detects running status, cleans up worktree
+
+# Retry all failed tasks (failed -> approved)
 cf retry
 ```
 
-### 清理残留
+### Clean Up Residuals
 
 ```bash
-# 清理所有 worktree 和临时分支
+# Clean all worktrees and temporary branches
 cf clean
 ```
 
 ---
 
-## 配置
+## Configuration
 
-编辑 `.claude-flow/config.json`：
+Edit `.claude-flow/config.json`:
 
 ```jsonc
 {
-  // 基础配置
-  "max_workers": 2,                // 最大并行 Worker 数
-  "main_branch": "main",           // 主分支名称
-  "claude_args": [],                // 传递给 Claude Code 的额外参数
-  "skip_permissions": true,         // 使用 --dangerously-skip-permissions
-  "task_timeout": 600,              // 任务超时时间（秒）
-  "plan_prompt_prefix": "请分析以下任务并输出实施计划，不要执行代码:",
-  "task_prompt_prefix": "你的任务是:",
+  // Basic settings
+  "max_workers": 2,                // Max parallel workers
+  "main_branch": "main",           // Main branch name
+  "claude_args": [],                // Extra args passed to Claude Code
+  "skip_permissions": true,         // Use --dangerously-skip-permissions
+  "task_timeout": 600,              // Task timeout in seconds
+  "plan_prompt_prefix": "...",      // Plan mode prompt prefix
+  "task_prompt_prefix": "...",      // Execution mode prompt prefix
 
-  // Worktree Symlink 共享
-  "shared_symlinks": ["dev-tasks.json", "api-key.json"],  // 共享文件列表
-  "forbidden_symlinks": ["PROGRESS.md"],                   // 禁止 symlink 的文件
+  // Plan phase tool restrictions
+  "plan_allowed_tools": ["Read", "Glob", "Grep"],  // Tools allowed during planning (empty = no restriction)
 
-  // 合并策略
-  "auto_merge": true,              // 任务完成后是否自动合并
-  "merge_mode": "rebase",          // 合并模式：rebase（默认）或 merge
-  "merge_strategy": "--no-ff",     // merge 模式下的策略
-  "max_merge_retries": 5,          // rebase 冲突最大重试次数
+  // Worktree symlink sharing
+  "shared_symlinks": ["dev-tasks.json", "api-key.json"],  // Files to symlink
+  "forbidden_symlinks": ["PROGRESS.md"],                   // Files never symlinked
 
-  // 合并前测试
-  "pre_merge_commands": ["pytest -v"],  // 合并前执行的测试命令
-  "max_test_retries": 3,           // 测试失败最大重试次数
+  // Merge strategy
+  "auto_merge": true,              // Auto-merge after task completion
+  "merge_mode": "rebase",          // Merge mode: rebase (default) or merge
+  "merge_strategy": "--no-ff",     // Strategy for merge mode
+  "max_merge_retries": 5,          // Max retries for rebase conflicts
 
-  // 远程推送
-  "auto_push": false,              // 合并后是否自动推送到远程
+  // Pre-merge testing
+  "pre_merge_commands": ["pytest -v"],  // Test commands before merge
+  "max_test_retries": 3,           // Max retries for test failures
 
-  // PROGRESS.md 经验沉淀
-  "enable_progress_log": true,     // 是否启用经验记录
-  "progress_file": "PROGRESS.md",  // 经验日志文件名
+  // Remote push
+  "auto_push": false,              // Push to remote after merge
 
-  // Worker 端口分配
-  "base_port": 5200,               // 端口基数（Worker-0 = 5200, Worker-1 = 5201, ...）
+  // PROGRESS.md experience logging
+  "enable_progress_log": true,     // Enable experience recording
+  "progress_file": "PROGRESS.md",  // Experience log filename
 
-  // 守护进程模式
-  "daemon_poll_interval": 10,      // 无任务时轮询间隔（秒）
+  // Worker port assignment
+  "base_port": 5200,               // Port base (Worker-0 = 5200, Worker-1 = 5201, ...)
+
+  // Daemon mode
+  "daemon_poll_interval": 10,      // Poll interval when idle (seconds)
 
   // Web Manager
-  "web_port": 8080                 // Web 看板默认端口
+  "web_port": 8080                 // Web dashboard default port
 }
 ```
 
-### 常用配置场景
+### Common Configuration Scenarios
 
-**保守模式**（禁用自动合并，手动检查每个任务的产出）：
+**Conservative mode** (disable auto-merge, manually inspect each task):
 
 ```json
 {
@@ -387,7 +518,7 @@ cf clean
 }
 ```
 
-**高并发模式**（适合大量独立任务）：
+**High concurrency mode** (for many independent tasks):
 
 ```json
 {
@@ -400,7 +531,7 @@ cf clean
 }
 ```
 
-**带测试验证的生产模式**：
+**Production mode with test verification**:
 
 ```json
 {
@@ -415,67 +546,67 @@ cf clean
 }
 ```
 
-**Symlink 共享配置**（多 Worker 共享开发配置文件）：
+### Environment Variables
 
-```json
-{
-  "shared_symlinks": ["dev-tasks.json", "api-key.json", ".env.local"],
-  "forbidden_symlinks": ["PROGRESS.md"]
-}
-```
-
-### 环境变量
-
-| 变量名 | 用途 |
-|--------|------|
-| `CF_PROJECT_ROOT` | 覆盖自动检测的项目根目录 |
-| `EDITOR` | `cf plan review` 编辑模式使用的编辑器（默认 `vi`） |
-| `PORT` | Worker 执行时自动设置，值为 `base_port + worker_id` |
-| `WORKER_ID` | Worker 执行时自动设置，当前 Worker 编号 |
+| Variable | Purpose |
+|----------|---------|
+| `CF_PROJECT_ROOT` | Override auto-detected project root |
+| `EDITOR` | Editor for `cf plan review` edit mode (default `vi`) |
+| `PORT` | Auto-set during execution, value = `base_port + worker_id` |
+| `WORKER_ID` | Auto-set during execution, current worker number |
 
 ---
 
-## 完整使用示例
+## Complete Usage Example
 
 ```bash
-# 初始化
+# Initialize
 cd my-web-app
 cf init
 
-# 添加任务（带优先级）
-cf task add -p "实现 GET /api/users 接口，返回分页用户列表" -P 5 "用户列表 API"
-cf task add -p "实现 POST /api/users 接口，包含输入校验" -P 5 "创建用户 API"
-cf task add -p "为用户 API 编写 pytest 测试，覆盖正常和异常路径" -P 3 "用户 API 测试"
+# Add tasks (with priority)
+cf task add -p "Implement GET /api/users endpoint with pagination" -P 5 "User List API"
+cf task add -p "Implement POST /api/users endpoint with input validation" -P 5 "Create User API"
+cf task add -p "Write pytest tests for user API, cover normal and edge cases" -P 3 "User API Tests"
 
-# 生成并审批计划
-cf plan
-cf plan review    # 使用 [f] 提供反馈，[a] 审批
+# Quick fix (mini task, immediate execution)
+cf task mini "fix the import error in app.py line 12" --run
 
-# 并行执行（守护进程模式）
+# Generate and review plans
+cf plan                  # Background generation
+cf plan status           # Check progress
+cf plan review           # Use [a] approve, [c] chat, [e] edit
+
+# Parallel execution (daemon mode)
 cf run -n 2 --daemon
 
-# 在另一个终端监控
-cf watch          # 实时监控
-cf web            # 或打开 Web 看板
+# Monitor in another terminal
+cf watch                 # Real-time monitor
+cf web                   # Or open Web dashboard
 
-# 检查结果
+# Check results
 cf status
 cf log task-xxx
-cf progress       # 查看经验沉淀
+cf usage                 # Token usage report
+cf progress              # Experience log
 
-# 处理失败任务
-cf retry
+# Handle special cases
+cf respond task-xxx -m "Use PostgreSQL for the database"  # Answer Claude's question
+cf retry                 # Retry failed tasks
 cf run
 ```
 
 ---
 
-## 注意事项
+## Notes
 
-1. **Git 仓库要求**：项目必须是 Git 仓库，且至少有一次 commit
-2. **合并冲突**：使用 rebase 模式时，Claude 会自动尝试解决冲突（最多 5 次）；merge 模式下冲突任务直接标记 failed
-3. **Claude Code**：需要确保 `claude` 命令可用且已配置 API key
-4. **文件锁**：使用 `fcntl.flock` 实现，仅支持 Linux/macOS
-5. **Web Manager**：需额外安装 Flask（`pip install flask`）
-6. **端口分配**：每个 Worker 分配专属端口（base_port + worker_id），通过 `PORT` 环境变量传递
-7. **PROGRESS.md**：经验日志直接写入主仓库（非 worktree），使用 `git -C` 操作
+1. **Git repository requirement**: Project must be a Git repository with at least one commit (or use non-Git degraded mode)
+2. **Merge conflicts**: In rebase mode, Claude automatically attempts to resolve conflicts (up to 5 retries); in merge mode, conflicted tasks are marked as failed
+3. **Merge lock**: Multiple workers use a file-based merge lock to prevent concurrent merge operations
+4. **Repo contamination detection**: Workers detect if Claude accidentally modified the main repo and automatically rescue changes to the worktree
+5. **Claude Code**: Ensure the `claude` command is available and API key is configured
+6. **File locking**: Uses `fcntl.flock`, only supports Linux/macOS
+7. **Web Manager**: Requires Flask (`pip install flask`)
+8. **Port assignment**: Each worker gets a dedicated port (base_port + worker_id), passed via the `PORT` environment variable
+9. **PROGRESS.md**: Experience log is written to the main repo (not worktree), using `git -C` operations
+10. **Token usage**: Full reporting requires `ccusage` (`npx ccusage@latest`); basic per-task stats are available from logs without it

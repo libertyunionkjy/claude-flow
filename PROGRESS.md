@@ -1,5 +1,43 @@
 # Progress Log
 
+## [2026-03-10 00:56:42] task-49a4cd - 研究
+**Status**: FAILED
+**Commit**: d8130b1
+
+**错误信息**: Merge conflict
+
+**任务 Prompt**: 如果claude flow 运行所在的目录并不是一个git目录，该怎么办？
+
+---
+
+## [2026-03-10 00:55:02] task-b007dd - 完善测试框架
+**Status**: FAILED
+**Commit**: 0b392ec
+
+**错误信息**: Merge conflict
+
+**任务 Prompt**: 请按照 docs/plans/2026-03-09-test-restructure.md 中的实施计划，从 Task 1 开始逐步执行测试框架重构。每完成一个 Task 后运行测试验证，确认通过后再进入下一个。
+计划完整性确认
+维度	状态
+目录结构	明确（unit/integration/e2e/boundary 四层）
+搬迁映射	14 个文件 → 对应子目录，含 git mv 命令
+Task 1	目录创建 + 文件搬迁 + conftest 扩展
+Task 2	集成测试 conftest（fullproject fixture）
+Task 3	testconcurrency.py — 10 并发（~8 用例）
+Task 4	testboundaryinputs.py — 边界值（~18 用例）
+Task 5	testexceptionrecovery.py — 异常恢复（~16 用例）
+Task 6	testconfigrobustness.py — 配置健壮性（~16 用例）
+Task 7	E2E conftest + teste2ecli.py（5 mock + 1 smoke）
+Task 8	teste2eweb.py（8 mock + 1 smoke）
+Task 9	pyproject.toml pytest 配置更新
+Task 10	清理 + 全量验证 + 覆盖率报告
+Smoke 标记	@pytest.mark.smoke，CI 默认 -m "not smoke"
+每步完整代码	全部内联在 plan 中，可直接复制
+每步验证命令	全部包含 pytest 运行命令和预期结果
+每步 commit msg	全部遵循 conventional commit 格式
+
+---
+
 ## [2026-03-10 00:41:26] task-0e2e28 - FEATURE
 **Status**: FAILED
 **Commit**: d34afd4
