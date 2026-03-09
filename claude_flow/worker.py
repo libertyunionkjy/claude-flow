@@ -72,36 +72,25 @@ class Worker:
         cmd.extend(self._cfg.claude_args)
 
         log_file = self._logs_dir / f"{task.id}.log"
+        json_log_file = self._logs_dir / f"{task.id}.json"
         # 设置环境变量（端口分配）
         env = os.environ.copy()
         env["PORT"] = str(self.port)
         env["WORKER_ID"] = str(self.worker_id)
 
         try:
-            result = subprocess.run(
-                cmd, cwd=str(wt_path),
-                stdin=subprocess.DEVNULL,
-                capture_output=True, text=True,
-                timeout=self._cfg.task_timeout,
-                env=env,
+            returncode = self._run_streaming(
+                cmd, cwd=str(wt_path), env=env,
+                task=task, log_file=log_file, json_log_file=json_log_file,
             )
-            # 保存原始 log 作为备份
-            log_file.write_text(result.stdout + "\n" + result.stderr)
-
-            # 解析 stream-json 并保存结构化 JSON 日志
-            self._save_structured_log(task, result.stdout)
-
-            # 解析 stream-json 输出并更新进度
-            self._parse_and_update_progress(task, result.stdout)
-
         except subprocess.TimeoutExpired:
             self._tm.update_status(task.id, TaskStatus.FAILED, "Timeout")
             self._log_progress(task, False, "Timeout", wt_path)
             self._wt.remove(task.id, task.branch)
             return False
 
-        if result.returncode != 0:
-            error_msg = f"Exit code {result.returncode}"
+        if returncode != 0:
+            error_msg = f"Exit code {returncode}"
             self._tm.update_status(task.id, TaskStatus.FAILED, error_msg)
             self._log_progress(task, False, error_msg, wt_path)
             self._wt.remove(task.id, task.branch)
@@ -111,8 +100,9 @@ class Worker:
         has_changes = self._auto_commit(task, wt_path)
 
         # 检查分支上是否有新 commit（相对于 main）
+        stdout_content = log_file.read_text() if log_file.exists() else ""
         if not has_changes and not self._has_new_commits(task.branch, wt_path):
-            claude_reply = self._extract_claude_result(result.stdout)
+            claude_reply = self._extract_claude_result(stdout_content)
             error_msg = claude_reply or "No code changes produced"
             logger.warning(f"{prefix} No changes detected, marking as needs_input")
             self._tm.update_status(task.id, TaskStatus.NEEDS_INPUT, error_msg)
@@ -263,6 +253,101 @@ class Worker:
 
         logger.error(f"{prefix} Pre-merge tests failed after {self._cfg.max_test_retries} retries")
         return False
+
+    def _run_streaming(
+        self,
+        cmd: list[str],
+        *,
+        cwd: str,
+        env: dict,
+        task: Task,
+        log_file: Path,
+        json_log_file: Path,
+    ) -> int:
+        """流式执行子进程，实时写入 raw log 和结构化 JSON 日志。
+
+        使用 Popen 替代 subprocess.run，逐行读取 stdout 并追加写入日志文件，
+        使得 RUNNING 状态的任务可以通过 View Log 实时查看进度。
+
+        Returns:
+            子进程退出码。
+
+        Raises:
+            subprocess.TimeoutExpired: 超时时抛出。
+        """
+        import json as _json
+        from .monitor import StreamJsonParser
+
+        parser = StreamJsonParser()
+        start_time = time.time()
+
+        proc = subprocess.Popen(
+            cmd, cwd=cwd, env=env,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+
+        stderr_lines: list[str] = []
+        flush_counter = 0
+
+        try:
+            with open(log_file, "w") as lf:
+                for line in proc.stdout:
+                    # 写入 raw log 文件
+                    lf.write(line)
+                    flush_counter += 1
+                    if flush_counter % 5 == 0:
+                        lf.flush()
+
+                    # 解析 stream-json 并增量保存结构化日志
+                    parser.parse_line(line)
+                    if flush_counter % 10 == 0:
+                        self._flush_structured_log(parser, task.id, json_log_file)
+
+                    # 超时检查
+                    if time.time() - start_time > self._cfg.task_timeout:
+                        proc.kill()
+                        proc.wait()
+                        raise subprocess.TimeoutExpired(cmd, self._cfg.task_timeout)
+
+                # 读取 stderr
+                stderr_output = proc.stderr.read() if proc.stderr else ""
+                if stderr_output:
+                    lf.write("\n" + stderr_output)
+                    lf.flush()
+
+            proc.wait()
+
+            # 最终保存完整的结构化日志
+            self._flush_structured_log(parser, task.id, json_log_file)
+
+            # 更新进度摘要
+            summary = parser.get_summary()
+            progress_text = (
+                f"Tools: {summary.get('tool_use', 0)}, "
+                f"Errors: {summary.get('error', 0)}"
+            )
+            self._tm.update_progress(task.id, progress_text)
+
+        except Exception:
+            proc.kill()
+            proc.wait()
+            raise
+
+        return proc.returncode
+
+    def _flush_structured_log(self, parser, task_id: str, json_log_file: Path) -> None:
+        """将当前解析状态持久化为结构化 JSON 日志文件。"""
+        try:
+            import json as _json
+            structured = parser.to_structured_log(task_id)
+            json_log_file.write_text(
+                _json.dumps(structured, indent=2, ensure_ascii=False)
+            )
+        except Exception:
+            pass  # 写入失败不影响主流程
 
     def _parse_and_update_progress(self, task: Task, stdout: str) -> None:
         """解析 stream-json 输出并更新任务进度。"""

@@ -27,7 +27,8 @@ class TestWorker:
         task = tm.add("Test", "prompt")
         tm.update_status(task.id, TaskStatus.APPROVED)
         claimed = tm.claim_next(worker_id=0)
-        with patch("claude_flow.worker.subprocess.run") as mock_run:
+        with patch.object(worker, "_run_streaming", return_value=0), \
+             patch("claude_flow.worker.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0, stdout="done", stderr="")
             result = worker.execute_task(claimed)
         assert result is True
@@ -37,8 +38,7 @@ class TestWorker:
         task = tm.add("Test", "prompt")
         tm.update_status(task.id, TaskStatus.APPROVED)
         claimed = tm.claim_next(worker_id=0)
-        with patch("claude_flow.worker.subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="error")
+        with patch.object(worker, "_run_streaming", return_value=1):
             result = worker.execute_task(claimed)
         assert result is False
 

@@ -1562,6 +1562,7 @@
         let respondingTaskId = null;
         let viewingPlanTaskId = null;
         let viewingLogTaskId = null;
+        let logAutoRefreshTimer = null;
         let refreshTimer = null;
         let activeMobileTab = 'pending';
 
@@ -2214,6 +2215,16 @@
             document.getElementById('logModal').classList.add('active');
 
             await loadLog(taskId);
+
+            // Auto-refresh log for running tasks
+            _clearLogAutoRefresh();
+            if (task && task.status === 'running') {
+                logAutoRefreshTimer = setInterval(function() {
+                    if (viewingLogTaskId) {
+                        loadLog(viewingLogTaskId);
+                    }
+                }, 3000);
+            }
         }
 
         async function loadLog(taskId) {
@@ -2303,7 +2314,15 @@
             }
         }
 
+        function _clearLogAutoRefresh() {
+            if (logAutoRefreshTimer) {
+                clearInterval(logAutoRefreshTimer);
+                logAutoRefreshTimer = null;
+            }
+        }
+
         function closeLogModal() {
+            _clearLogAutoRefresh();
             viewingLogTaskId = null;
             document.getElementById('logModal').classList.remove('active');
         }
