@@ -17,3 +17,4 @@ build/
 
 # Claude Code session data
 .claude/
+.playwright-mcp/
