@@ -162,51 +162,119 @@ def approve_task(task_id: str):
     return _ok(updated.to_dict())
 
 
-@api_bp.route("/tasks/<task_id>/reply", methods=["POST"])
-@api_bp.route("/tasks/<task_id>/feedback", methods=["POST"])
-def reply_task(task_id: str):
-    """Reply to a plan (answer AI's questions or provide revision feedback).
+    # -- Chat endpoints (replaced reply/feedback) ----------------------------
 
-    body: {message}. Only works on planned tasks.
-    Status flow: planned -> planning -> planned (async).
-    The /feedback route is kept for backward compatibility.
+
+@api_bp.route("/tasks/<task_id>/chat", methods=["GET"])
+def get_chat(task_id: str):
+    """Get chat session history for a task."""
+    chat_mgr = current_app.config["CHAT_MANAGER"]
+    session = chat_mgr.get_session(task_id)
+
+    if not session:
+        return _ok({"task_id": task_id, "exists": False, "messages": []})
+
+    return _ok({
+        "task_id": task_id,
+        "exists": True,
+        "mode": session.mode,
+        "status": session.status,
+        "messages": [m.to_dict() for m in session.messages],
+    })
+
+
+@api_bp.route("/tasks/<task_id>/chat", methods=["POST"])
+def send_chat(task_id: str):
+    """Send a message in the chat session and get AI response.
+
+    body: {message}. Creates a session if one doesn't exist.
+    The AI response is returned synchronously.
     """
     tm = current_app.config["TASK_MANAGER"]
-    planner = current_app.config["PLANNER"]
+    chat_mgr = current_app.config["CHAT_MANAGER"]
     task = tm.get(task_id)
 
     if not task:
         return _err(f"Task {task_id} not found", 404)
-
-    if task.status != TaskStatus.PLANNED:
-        return _err(
-            f"Task {task_id} is {task.status.value}, feedback only works on planned tasks"
-        )
 
     data = request.get_json(silent=True) or {}
     message = data.get("message", "").strip()
     if not message:
         return _err("message is required")
 
-    # Transition: planned -> planning
+    # Create session if it doesn't exist
+    session = chat_mgr.get_session(task_id)
+    if not session:
+        session = chat_mgr.create_session(task_id, mode="interactive")
+        # Update task plan_mode
+        _update_plan_mode(tm, task_id, "interactive")
+
+    if session.status != "active":
+        return _err("Chat session is finalized, cannot send new messages")
+
+    # Ensure task is in planning state
+    if task.status == TaskStatus.PENDING:
+        tm.update_status(task_id, TaskStatus.PLANNING)
+
+    # Send message and get AI response (synchronous)
+    ai_response = chat_mgr.send_message(task_id, message, task_prompt=task.prompt)
+
+    if ai_response is None:
+        return _err("Failed to get AI response")
+
+    # Return updated session
+    updated_session = chat_mgr.get_session(task_id)
+    return _ok({
+        "task_id": task_id,
+        "ai_response": ai_response,
+        "messages": [m.to_dict() for m in updated_session.messages],
+    })
+
+
+@api_bp.route("/tasks/<task_id>/chat/finalize", methods=["POST"])
+def finalize_chat(task_id: str):
+    """Generate a plan document from the chat session (async).
+
+    Finalizes the chat session and triggers plan generation from
+    the conversation history.
+    """
+    tm = current_app.config["TASK_MANAGER"]
+    planner = current_app.config["PLANNER"]
+    chat_mgr = current_app.config["CHAT_MANAGER"]
+    task = tm.get(task_id)
+
+    if not task:
+        return _err(f"Task {task_id} not found", 404)
+
+    session = chat_mgr.get_session(task_id)
+    if not session:
+        return _err(f"No chat session for task {task_id}", 404)
+
+    if not session.messages:
+        return _err("Chat session has no messages")
+
+    # Mark session as finalized
+    chat_mgr.finalize(task_id)
+
+    # Transition to planning
     tm.update_status(task_id, TaskStatus.PLANNING)
 
-    # Run re-generation in background thread
-    def _regenerate():
+    # Generate plan in background thread
+    def _generate():
         try:
-            plan_file = planner.generate_interactive(task, feedback=message)
+            plan_file = planner.generate_from_chat(task, session)
             if plan_file:
                 tm.update_status(task_id, TaskStatus.PLANNED)
                 _update_plan_file(tm, task_id, str(plan_file))
             else:
                 tm.update_status(
                     task_id, TaskStatus.FAILED,
-                    task.error or "Plan regeneration failed",
+                    task.error or "Plan generation from chat failed",
                 )
         except Exception as e:
             tm.update_status(task_id, TaskStatus.FAILED, str(e))
 
-    thread = threading.Thread(target=_regenerate, daemon=True)
+    thread = threading.Thread(target=_generate, daemon=True)
     thread.start()
 
     updated = tm.get(task_id)
@@ -291,30 +359,55 @@ def worker_status():
 
 @api_bp.route("/tasks/<task_id>/plan", methods=["POST"])
 def plan_task(task_id: str):
-    """触发计划生成（异步）。仅对 pending 状态的任务有效。"""
+    """Trigger plan generation (async).
+
+    body (optional): {mode: "auto"|"interactive"}
+    - auto (default): AI generates plan directly in background.
+    - interactive: Creates a chat session for multi-round planning.
+    """
     tm = current_app.config["TASK_MANAGER"]
     planner = current_app.config["PLANNER"]
+    chat_mgr = current_app.config["CHAT_MANAGER"]
     task = tm.get(task_id)
 
     if not task:
-        return _err(f"任务 {task_id} 不存在", 404)
+        return _err(f"Task {task_id} not found", 404)
 
     if task.status != TaskStatus.PENDING:
-        return _err(f"任务 {task_id} 当前状态为 {task.status.value}，仅 pending 状态可生成计划")
+        return _err(
+            f"Task {task_id} is {task.status.value}, only pending tasks can start planning"
+        )
 
-    # 先将状态改为 planning
+    data = request.get_json(silent=True) or {}
+    mode = data.get("mode", "auto")
+
+    if mode not in ("auto", "interactive"):
+        return _err(f"Invalid mode: {mode}, must be 'auto' or 'interactive'")
+
+    # Update plan_mode on task
+    _update_plan_mode(tm, task_id, mode)
+
+    if mode == "interactive":
+        # Create chat session and set status to planning
+        chat_mgr.create_session(task_id, mode="interactive")
+        tm.update_status(task_id, TaskStatus.PLANNING)
+        updated = tm.get(task_id)
+        return _ok(updated.to_dict())
+
+    # Auto mode: generate plan in background
     tm.update_status(task_id, TaskStatus.PLANNING)
 
-    # 在后台线程执行计划生成（避免阻塞请求）
     def _generate():
         try:
             plan_file = planner.generate(task)
             if plan_file:
                 tm.update_status(task_id, TaskStatus.PLANNED)
-                # 持久化 plan_file 路径
                 _update_plan_file(tm, task_id, str(plan_file))
             else:
-                tm.update_status(task_id, TaskStatus.FAILED, task.error or "Plan generation failed")
+                tm.update_status(
+                    task_id, TaskStatus.FAILED,
+                    task.error or "Plan generation failed",
+                )
         except Exception as e:
             tm.update_status(task_id, TaskStatus.FAILED, str(e))
 
@@ -524,15 +617,36 @@ def reset_task(task_id: str):
 
 @api_bp.route("/tasks/<task_id>/log", methods=["GET"])
 def get_task_log(task_id: str):
-    """获取任务执行日志。"""
-    project_root = current_app.config["PROJECT_ROOT"]
-    log_file = project_root / ".claude-flow" / "logs" / f"{task_id}.log"
+    """获取任务执行日志。
 
-    if not log_file.exists():
+    优先返回结构化 JSON 日志（structured=true），回退到原始文本。
+    """
+    import json as _json
+
+    project_root = current_app.config["PROJECT_ROOT"]
+    logs_dir = project_root / ".claude-flow" / "logs"
+
+    # Prefer structured JSON log
+    json_file = logs_dir / f"{task_id}.json"
+    if json_file.exists():
+        try:
+            log_data = _json.loads(json_file.read_text())
+            return _ok({
+                "task_id": task_id,
+                "exists": True,
+                "structured": True,
+                "data": log_data,
+            })
+        except (ValueError, OSError):
+            pass  # Fall through to raw log
+
+    # Fallback to raw log
+    raw_file = logs_dir / f"{task_id}.log"
+    if not raw_file.exists():
         return _ok({"task_id": task_id, "content": "", "exists": False})
 
-    content = log_file.read_text()
-    return _ok({"task_id": task_id, "content": content, "exists": True})
+    content = raw_file.read_text()
+    return _ok({"task_id": task_id, "content": content, "exists": True, "structured": False})
 
 
 # -- 重试所有失败任务 -----------------------------------------------------------
@@ -554,12 +668,24 @@ def retry_all_tasks():
 # -- 辅助函数 ------------------------------------------------------------------
 
 def _update_plan_file(tm, task_id: str, plan_file_path: str):
-    """更新任务的 plan_file 字段（通过 _with_lock 保证安全）。"""
+    """Update task's plan_file field (thread-safe via file lock)."""
     def _do():
         tasks = tm._load()
         for t in tasks:
             if t.id == task_id:
                 t.plan_file = plan_file_path
+                tm._save(tasks)
+                return
+    tm._with_lock(_do)
+
+
+def _update_plan_mode(tm, task_id: str, mode: str):
+    """Update task's plan_mode field (thread-safe via file lock)."""
+    def _do():
+        tasks = tm._load()
+        for t in tasks:
+            if t.id == task_id:
+                t.plan_mode = mode
                 tm._save(tasks)
                 return
     tm._with_lock(_do)

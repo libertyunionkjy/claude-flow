@@ -9,6 +9,7 @@ from pathlib import Path
 
 import click
 
+from .chat import ChatManager
 from .config import Config
 from .models import TaskStatus
 from .planner import Planner
@@ -84,13 +85,13 @@ def init(ctx):
     """Initialize .claude-flow/ in the current project."""
     root = ctx.obj["root"]
     cf_dir = root / ".claude-flow"
-    for sub in ["logs", "plans", "worktrees"]:
+    for sub in ["logs", "plans", "worktrees", "chats"]:
         (cf_dir / sub).mkdir(parents=True, exist_ok=True)
     cfg = Config()
     cfg.save(root)
-    # Add .claude-flow/worktrees and lock/log files to .gitignore
+    # Add .claude-flow/worktrees, lock, log, chats to .gitignore
     gitignore = root / ".gitignore"
-    ignore_lines = [".claude-flow/worktrees/", ".claude-flow/tasks.lock", ".claude-flow/logs/"]
+    ignore_lines = [".claude-flow/worktrees/", ".claude-flow/tasks.lock", ".claude-flow/logs/", ".claude-flow/chats/"]
     existing = gitignore.read_text() if gitignore.exists() else ""
     to_add = [l for l in ignore_lines if l not in existing]
     if to_add:
@@ -282,9 +283,15 @@ def _plan_background(root, cfg, tm, tasks):
 @main.group(invoke_without_command=True)
 @click.option("-t", "--task-id", "task_id", default=None, help="Plan a specific task by ID")
 @click.option("-F", "--foreground", is_flag=True, help="Run in foreground (blocking mode)")
+@click.option("-i", "--interactive", is_flag=True, help="Use interactive chat mode")
 @click.pass_context
-def plan(ctx, task_id, foreground):
-    """Generate plans for pending tasks (background by default)."""
+def plan(ctx, task_id, foreground, interactive):
+    """Generate plans for tasks.
+
+    Use -t TASK_ID to plan a specific task.
+    Otherwise, plan all pending tasks (auto mode only).
+    Use --interactive to start a chat-based planning session.
+    """
     if ctx.invoked_subcommand is not None:
         return
     root = ctx.obj["root"]
@@ -292,6 +299,23 @@ def plan(ctx, task_id, foreground):
     tm = TaskManager(root)
     plans_dir = root / ".claude-flow" / "plans"
     planner = Planner(root, plans_dir, cfg, task_manager=tm)
+
+    if interactive:
+        # Interactive mode requires a specific task
+        if not task_id:
+            click.echo("Error: --interactive requires a task_id")
+            return
+        t = tm.get(task_id)
+        if not t:
+            click.echo(f"Task {task_id} not found")
+            return
+        chat_mgr = ChatManager(root, cfg)
+        chat_mgr.create_session(task_id, mode="interactive")
+        tm.update_status(task_id, TaskStatus.PLANNING)
+        click.echo(f"Interactive planning session started for {task_id}")
+        click.echo(f"Use 'cf plan chat {task_id} -m \"message\"' to send messages")
+        click.echo(f"Use 'cf plan finalize {task_id}' to generate the plan document")
+        return
 
     if task_id:
         tasks = [tm.get(task_id)]
@@ -374,31 +398,22 @@ def plan_review(ctx):
 
             _reset_terminal()
             action = click.prompt(
-                "[a]pprove  [r]eply  [s]kip  [e]dit  [q]uit",
+                "[a]pprove  [c]hat  [s]kip  [e]dit  [q]uit",
                 type=str, default="s"
             )
             if action == "a":
                 planner.approve(t)
                 tm.update_status(t.id, TaskStatus.APPROVED)
                 click.echo(f"  {t.id} approved")
-            elif action in ("r", "f"):
-                # 多轮对话：回复 AI 的问题或提供修改意见后重新生成
-                _reset_terminal()
-                feedback = click.prompt("Your reply", default="")
-                click.echo(f"  Regenerating plan with feedback...")
+            elif action == "c":
+                # Start interactive chat for this task
+                chat_mgr = ChatManager(root, cfg)
+                session = chat_mgr.get_session(t.id)
+                if not session:
+                    chat_mgr.create_session(t.id, mode="interactive")
                 tm.update_status(t.id, TaskStatus.PLANNING)
-                try:
-                    new_plan = planner.generate_interactive(t, feedback=feedback)
-                except KeyboardInterrupt:
-                    tm.update_status(t.id, TaskStatus.PLANNED)
-                    click.echo(f"\n  Interrupted, {t.id} rolled back to planned")
-                    return
-                if new_plan:
-                    tm.update_status(t.id, TaskStatus.PLANNED)
-                    click.echo(f"  New plan saved to {new_plan}")
-                else:
-                    tm.update_status(t.id, TaskStatus.FAILED, t.error)
-                    click.echo(f"  Regeneration failed: {t.error}")
+                click.echo(f"  Chat session started for {t.id}")
+                click.echo(f"  Use 'cf plan chat {t.id} -m \"message\"' to continue")
             elif action == "e":
                 editor = os.environ.get("EDITOR", "vi")
                 subprocess.run([editor, str(plan_path)])
@@ -410,6 +425,114 @@ def plan_review(ctx):
     except (KeyboardInterrupt, click.Abort):
         click.echo("\nReview interrupted.")
         return
+
+
+@plan.command("chat")
+@click.argument("task_id")
+@click.option("-m", "--message", default=None, help="Message to send to AI")
+@click.pass_context
+def plan_chat(ctx, task_id, message):
+    """Send a chat message for interactive planning."""
+    root = ctx.obj["root"]
+    cfg = Config.load(root)
+    tm = TaskManager(root)
+    chat_mgr = ChatManager(root, cfg)
+
+    t = tm.get(task_id)
+    if not t:
+        click.echo(f"Task {task_id} not found")
+        return
+
+    session = chat_mgr.get_session(task_id)
+    if not session:
+        click.echo(f"No chat session for {task_id}. Start one with: cf plan {task_id} --interactive")
+        return
+
+    if session.status != "active":
+        click.echo(f"Chat session for {task_id} is finalized")
+        return
+
+    if message:
+        # Single message mode
+        click.echo(f"Sending message to AI...")
+        response = chat_mgr.send_message(task_id, message, task_prompt=t.prompt)
+        if response:
+            click.echo(f"\nAI: {response}")
+        else:
+            click.echo("Failed to get AI response")
+    else:
+        # Interactive REPL mode
+        click.echo(f"Chat session for: {t.title} ({task_id})")
+        click.echo(f"Type your messages. Enter empty line to quit.\n")
+
+        # Show existing history
+        if session.messages:
+            for msg in session.messages:
+                prefix = "You" if msg.role == "user" else "AI"
+                click.echo(f"  {prefix}: {msg.content[:200]}{'...' if len(msg.content) > 200 else ''}\n")
+
+        _reset_terminal()
+        while True:
+            try:
+                user_input = click.prompt("You", default="", show_default=False)
+            except (KeyboardInterrupt, click.Abort, EOFError):
+                click.echo("\nChat ended.")
+                break
+            if not user_input.strip():
+                break
+            click.echo("  Thinking...")
+            response = chat_mgr.send_message(task_id, user_input, task_prompt=t.prompt)
+            if response:
+                click.echo(f"\n  AI: {response}\n")
+            else:
+                click.echo("  Failed to get response\n")
+
+        click.echo(f"Use 'cf plan finalize {task_id}' to generate the plan document")
+
+
+@plan.command("finalize")
+@click.argument("task_id")
+@click.pass_context
+def plan_finalize(ctx, task_id):
+    """Generate a plan document from the chat session."""
+    root = ctx.obj["root"]
+    cfg = Config.load(root)
+    tm = TaskManager(root)
+    plans_dir = root / ".claude-flow" / "plans"
+    planner = Planner(root, plans_dir, cfg, task_manager=tm)
+    chat_mgr = ChatManager(root, cfg)
+
+    t = tm.get(task_id)
+    if not t:
+        click.echo(f"Task {task_id} not found")
+        return
+
+    session = chat_mgr.get_session(task_id)
+    if not session:
+        click.echo(f"No chat session for {task_id}")
+        return
+
+    if not session.messages:
+        click.echo("Chat session has no messages")
+        return
+
+    click.echo(f"Generating plan from chat session ({len(session.messages)} messages)...")
+    chat_mgr.finalize(task_id)
+    tm.update_status(task_id, TaskStatus.PLANNING)
+
+    try:
+        plan_file = planner.generate_from_chat(t, session)
+    except KeyboardInterrupt:
+        tm.update_status(task_id, TaskStatus.PLANNING)
+        click.echo(f"\n  Interrupted")
+        return
+
+    if plan_file:
+        tm.update_status(task_id, TaskStatus.PLANNED)
+        click.echo(f"  Plan saved to {plan_file}")
+    else:
+        tm.update_status(task_id, TaskStatus.FAILED, t.error)
+        click.echo(f"  Plan generation failed: {t.error}")
 
 
 @plan.command("approve")
@@ -602,13 +725,38 @@ def status(ctx):
 
 @main.command()
 @click.argument("task_id")
+@click.option("--raw", is_flag=True, help="Show raw stream-json log instead of formatted output")
 @click.pass_context
-def log(ctx, task_id):
+def log(ctx, task_id, raw):
     """View task execution log."""
+    import json as _json
+
     root = ctx.obj["root"]
-    log_file = root / ".claude-flow" / "logs" / f"{task_id}.log"
-    if log_file.exists():
-        click.echo(log_file.read_text())
+    logs_dir = root / ".claude-flow" / "logs"
+
+    if raw:
+        raw_file = logs_dir / f"{task_id}.log"
+        if raw_file.exists():
+            click.echo(raw_file.read_text())
+        else:
+            click.echo(f"No raw log for {task_id}")
+        return
+
+    # Prefer structured JSON log
+    json_file = logs_dir / f"{task_id}.json"
+    if json_file.exists():
+        try:
+            from .monitor import format_structured_log_for_cli
+            log_data = _json.loads(json_file.read_text())
+            click.echo(format_structured_log_for_cli(log_data))
+            return
+        except Exception:
+            pass  # Fall through to raw log
+
+    # Fallback to raw log
+    raw_file = logs_dir / f"{task_id}.log"
+    if raw_file.exists():
+        click.echo(raw_file.read_text())
     else:
         click.echo(f"No log for {task_id}")
 

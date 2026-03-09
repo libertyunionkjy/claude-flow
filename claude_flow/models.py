@@ -40,6 +40,7 @@ class Task:
     priority: int = 0
     progress: Optional[str] = None
     retry_count: int = 0
+    plan_mode: Optional[str] = None  # "auto" | "interactive"
 
     def to_dict(self) -> dict:
         return {
@@ -57,6 +58,7 @@ class Task:
             "priority": self.priority,
             "progress": self.progress,
             "retry_count": self.retry_count,
+            "plan_mode": self.plan_mode,
         }
 
     @classmethod
@@ -76,4 +78,5 @@ class Task:
             priority=d.get("priority", 0),
             progress=d.get("progress"),
             retry_count=d.get("retry_count", 0),
+            plan_mode=d.get("plan_mode"),
         )

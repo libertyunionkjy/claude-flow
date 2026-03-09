@@ -119,20 +119,26 @@ class TestFullLifecycle:
         # stdin isolation enforced across all attempts
         claude_subprocess_guard.assert_stdin_isolated()
 
-    def test_plan_feedback_and_regenerate(self, cf_project, claude_subprocess_guard):
-        """Plan feedback triggers regeneration via generate_interactive."""
+    def test_plan_from_chat_session(self, cf_project, claude_subprocess_guard):
+        """Plan generation from chat session produces a plan document."""
         cfg, tm, planner, wt, worker = self._build_stack(cf_project)
+        from claude_flow.chat import ChatManager, ChatSession, ChatMessage
 
         task = tm.add("Feat A", "Implement feature A")
-        claude_subprocess_guard.set_plan_output("# Plan v1\nInitial plan")
-        planner.generate(task)
-        tm.update_status(task.id, TaskStatus.PLANNED)
-        assert task.status == TaskStatus.PLANNED
 
-        # Provide feedback and regenerate (no "rejected" wording)
-        claude_subprocess_guard.set_plan_output("# Plan v2\nWith error handling")
-        task.status = TaskStatus.PLANNING
-        plan_file = planner.generate_interactive(task, feedback="needs error handling")
+        # Create a chat session with discussion history
+        chat_session = ChatSession(
+            task_id=task.id,
+            messages=[
+                ChatMessage(role="user", content="How should we implement this?"),
+                ChatMessage(role="assistant", content="I suggest using approach B"),
+                ChatMessage(role="user", content="Sounds good, needs error handling too"),
+            ],
+        )
+
+        # Generate plan from chat
+        claude_subprocess_guard.set_plan_output("# Plan v1\nWith error handling")
+        plan_file = planner.generate_from_chat(task, chat_session)
         assert plan_file is not None
         assert task.status == TaskStatus.PLANNED
 

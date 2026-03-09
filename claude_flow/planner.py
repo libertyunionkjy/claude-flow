@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import re
-import signal
 import subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, List, Optional
 
+from .chat import ChatSession
 from .config import Config
 from .models import Task, TaskStatus
 from .utils import can_skip_permissions
@@ -107,41 +107,42 @@ class Planner:
         task.status = TaskStatus.APPROVED
 
     # ------------------------------------------------------------------
-    # 新增：多轮对话支持
+    # Chat-based plan generation
     # ------------------------------------------------------------------
 
-    def generate_interactive(
-        self, task: Task, feedback: Optional[str] = None
+    def generate_from_chat(
+        self, task: Task, chat_session: ChatSession
     ) -> Optional[Path]:
-        """支持多轮对话的计划生成。
+        """Generate a structured plan document from a chat session.
 
-        如果 feedback 不为 None，将 feedback 作为用户反馈附加到 prompt 中，
-        让 Claude 基于之前的计划和反馈重新生成。
+        Builds a prompt from the conversation history and calls Claude
+        to produce a final implementation plan in markdown format.
         """
         task.status = TaskStatus.PLANNING
 
-        # 确定当前版本号
+        # Determine version number
         existing_versions = self.list_versions(task.id)
         next_version = len(existing_versions) + 1
 
-        # 构建 prompt
-        prompt_parts = [self._config.plan_prompt_prefix, "", task.prompt]
-
-        # 如果存在之前的计划文件，读取其内容作为上下文
-        current_plan_file = self._plans_dir / f"{task.id}.md"
-        if current_plan_file.exists():
-            previous_plan = current_plan_file.read_text()
+        # Build prompt from chat history
+        prompt_parts = [
+            self._config.plan_prompt_prefix,
+            "",
+            f"## Task: {task.title}",
+            f"{task.prompt}",
+            "",
+            "## Discussion Summary",
+            "",
+        ]
+        for msg in chat_session.messages:
+            prefix = "User" if msg.role == "user" else "Assistant"
+            prompt_parts.append(f"**{prefix}**: {msg.content}")
             prompt_parts.append("")
-            prompt_parts.append("--- 之前的计划 ---")
-            prompt_parts.append(previous_plan)
 
-        # 附加用户反馈
-        if feedback is not None:
-            prompt_parts.append("")
-            prompt_parts.append(f"--- 用户反馈 ---\n{feedback}")
-            prompt_parts.append("")
-            prompt_parts.append("请根据以上反馈对计划进行改进和重新生成。")
-
+        prompt_parts.append(
+            "Based on the above discussion, generate a final structured "
+            "implementation plan in markdown format."
+        )
         prompt = "\n".join(prompt_parts)
 
         cmd = ["claude", "-p", prompt, "--print", "--output-format", "text"]
@@ -166,15 +167,13 @@ class Planner:
 
         plan_content = result.stdout
 
-        # 格式化为结构化计划
+        # Format and save
         formatted = self._format_plan(task, plan_content, version=next_version)
 
-        # 保存版本文件 {task_id}_v{version}.md
         self._plans_dir.mkdir(parents=True, exist_ok=True)
         version_file = self._plans_dir / f"{task.id}_v{next_version}.md"
         version_file.write_text(formatted)
 
-        # 同时更新 {task_id}.md 为最新版本
         current_plan_file = self._plans_dir / f"{task.id}.md"
         current_plan_file.write_text(formatted)
 

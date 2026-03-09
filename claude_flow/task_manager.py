@@ -22,7 +22,10 @@ class TaskManager:
     def _load(self) -> List[Task]:
         if not self._tasks_file.exists():
             return []
-        data = json.loads(self._tasks_file.read_text())
+        content = self._tasks_file.read_text().strip()
+        if not content:
+            return []
+        data = json.loads(content)
         return [Task.from_dict(d) for d in data]
 
     def _save(self, tasks: List[Task]) -> None:

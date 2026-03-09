@@ -103,10 +103,10 @@ class TestTaskCRUD:
         assert data["data"]["priority"] == 5
 
 
-# -- Approve / Reply ---------------------------------------------------------
+# -- Approve / Chat ----------------------------------------------------------
 
 
-class TestApproveReply:
+class TestApproveChat:
     def test_approve_task(self, client, tm, web_app):
         task = tm.add("T1", "P1")
         tm.update_status(task.id, TaskStatus.PLANNED)
@@ -121,74 +121,87 @@ class TestApproveReply:
         data = resp.get_json()
         assert data["ok"] is False
 
-    def test_reply_task(self, client, tm, web_app):
-        """Reply triggers re-planning with user message (new /reply route)."""
+    def test_chat_get_empty(self, client, tm):
+        """GET /chat returns empty when no session exists."""
         task = tm.add("T1", "P1")
-        tm.update_status(task.id, TaskStatus.PLANNED)
+        resp = client.get(f"/api/tasks/{task.id}/chat")
+        data = resp.get_json()
+        assert data["ok"] is True
+        assert data["data"]["exists"] is False
 
-        planner = web_app.config["PLANNER"]
-        plans_dir = web_app.config["PROJECT_ROOT"] / ".claude-flow" / "plans"
-        plans_dir.mkdir(parents=True, exist_ok=True)
+    def test_chat_send_creates_session(self, client, tm, web_app):
+        """POST /chat creates a session and returns AI response."""
+        task = tm.add("T1", "P1")
 
-        def fake_generate_interactive(t, feedback=None):
-            plan_file = plans_dir / f"{t.id}.md"
-            plan_file.write_text(f"# Plan with reply: {feedback}")
-            t.status = TaskStatus.PLANNED
-            t.plan_file = str(plan_file)
-            return plan_file
-
-        with patch.object(planner, 'generate_interactive', side_effect=fake_generate_interactive):
+        with patch("claude_flow.chat.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=0, stdout="AI response here", stderr=""
+            )
             resp = client.post(
-                f"/api/tasks/{task.id}/reply",
-                json={"message": "Use option B"},
+                f"/api/tasks/{task.id}/chat",
+                json={"message": "How should we implement this?"},
             )
             data = resp.get_json()
             assert data["ok"] is True
-            assert data["data"]["status"] == "planning"
+            assert data["data"]["ai_response"] == "AI response here"
+            assert len(data["data"]["messages"]) == 2  # user + assistant
 
-    def test_feedback_route_backward_compat(self, client, tm, web_app):
-        """Old /feedback route still works (backward compatibility)."""
+    def test_chat_get_with_history(self, client, tm, web_app):
+        """GET /chat returns messages after a send."""
         task = tm.add("T1", "P1")
-        tm.update_status(task.id, TaskStatus.PLANNED)
 
-        planner = web_app.config["PLANNER"]
-        plans_dir = web_app.config["PROJECT_ROOT"] / ".claude-flow" / "plans"
-        plans_dir.mkdir(parents=True, exist_ok=True)
-
-        def fake_generate_interactive(t, feedback=None):
-            plan_file = plans_dir / f"{t.id}.md"
-            plan_file.write_text(f"# Plan with feedback: {feedback}")
-            t.status = TaskStatus.PLANNED
-            t.plan_file = str(plan_file)
-            return plan_file
-
-        with patch.object(planner, 'generate_interactive', side_effect=fake_generate_interactive):
-            resp = client.post(
-                f"/api/tasks/{task.id}/feedback",
-                json={"message": "Use option A"},
+        with patch("claude_flow.chat.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=0, stdout="Sure, here is my suggestion", stderr=""
             )
-            data = resp.get_json()
-            assert data["ok"] is True
-            assert data["data"]["status"] == "planning"
+            client.post(
+                f"/api/tasks/{task.id}/chat",
+                json={"message": "Hello"},
+            )
 
-    def test_reply_task_wrong_status(self, client, tm, web_app):
-        """Reply only works on planned tasks."""
+        resp = client.get(f"/api/tasks/{task.id}/chat")
+        data = resp.get_json()
+        assert data["ok"] is True
+        assert data["data"]["exists"] is True
+        assert len(data["data"]["messages"]) == 2
+
+    def test_chat_send_empty_message(self, client, tm):
+        """POST /chat requires non-empty message."""
         task = tm.add("T1", "P1")
         resp = client.post(
-            f"/api/tasks/{task.id}/reply",
-            json={"message": "some reply"},
+            f"/api/tasks/{task.id}/chat",
+            json={"message": ""},
         )
         data = resp.get_json()
         assert data["ok"] is False
 
-    def test_reply_task_empty_message(self, client, tm, web_app):
-        """Reply requires non-empty message."""
+    def test_chat_finalize(self, client, tm, web_app):
+        """POST /chat/finalize triggers plan generation from chat."""
         task = tm.add("T1", "P1")
-        tm.update_status(task.id, TaskStatus.PLANNED)
-        resp = client.post(
-            f"/api/tasks/{task.id}/reply",
-            json={"message": ""},
-        )
+
+        # First create a chat session with messages
+        with patch("claude_flow.chat.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=0, stdout="AI plan idea", stderr=""
+            )
+            client.post(
+                f"/api/tasks/{task.id}/chat",
+                json={"message": "Plan this feature"},
+            )
+
+        # Then finalize
+        with patch.object(
+            web_app.config["PLANNER"], "generate_from_chat", return_value=None
+        ):
+            resp = client.post(f"/api/tasks/{task.id}/chat/finalize")
+            data = resp.get_json()
+            assert data["ok"] is True
+            assert data["data"]["status"] == "planning"
+
+    def test_chat_finalize_no_session(self, client, tm):
+        """Finalize fails if no chat session exists."""
+        task = tm.add("T1", "P1")
+        resp = client.post(f"/api/tasks/{task.id}/chat/finalize")
         data = resp.get_json()
         assert data["ok"] is False
 

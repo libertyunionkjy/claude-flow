@@ -24,6 +24,8 @@ cf (main)
  |    |-- show <task_id>       # 查看任务详情
  |    |-- remove <task_id>     # 删除任务
  |-- plan (group, invoke_without_command=True)
+ |    |-- chat <task_id>       # 交互式聊天规划（REPL 或 -m 消息）
+ |    |-- finalize <task_id>   # 从聊天生成计划文档
  |    |-- review               # 交互式审批
  |    |-- approve [task_id]    # 批准计划（--all 全部）
  |-- run [-n N] [task_id]      # 启动 Worker 执行
@@ -42,7 +44,9 @@ cf (main)
 | `TaskStatus` | `models.py` | 任务状态枚举（8 种状态） |
 | `Config` | `config.py` | 配置 dataclass，支持加载/保存/合并默认值 |
 | `TaskManager` | `task_manager.py` | 任务 CRUD、文件锁并发安全、claim_next 领取任务 |
-| `Planner` | `planner.py` | Claude Code plan mode 封装，生成/读取/审批/拒绝计划 |
+| `ChatSession` | `chat.py` | 聊天会话数据模型（dataclass），含消息列表和状态 |
+| `ChatManager` | `chat.py` | 管理交互式计划对话，持久化 `.claude-flow/chats/` |
+| `Planner` | `planner.py` | Claude Code plan mode 封装，自动/交互式生成计划文档 |
 | `Worker` | `worker.py` | 单个 Worker 的执行循环：领取 -> worktree -> claude -> merge -> cleanup |
 | `WorktreeManager` | `worktree.py` | Git worktree 创建/移除/合并/列表/批量清理 |
 
@@ -116,7 +120,8 @@ A: 通过 `subprocess.run(["claude", "-p", prompt, ...])` 调用 Claude Code CLI
 | 文件 | 行数 | 职责 |
 |------|------|------|
 | `__init__.py` | 2 | 包声明，版本号 |
-| `models.py` | 69 | Task dataclass、TaskStatus 枚举 |
+| `models.py` | 82 | Task dataclass、TaskStatus 枚举 |
+| `chat.py` | 190 | ChatSession/ChatMessage 模型、ChatManager |
 | `config.py` | 55 | Config dataclass、加载/保存/默认值 |
 | `task_manager.py` | 121 | 任务 CRUD、文件锁、claim_next |
 | `planner.py` | 50 | Plan 生成/读取/审批/拒绝 |

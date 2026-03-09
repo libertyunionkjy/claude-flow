@@ -391,6 +391,113 @@
             background: #3a3a5a;
         }
 
+        /* -- Chat Modal ---------------------------------------------------- */
+        .chat-container {
+            display: flex;
+            flex-direction: column;
+            height: 60vh;
+            max-height: 500px;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px;
+            background: #0a0a16;
+            border: 1px solid #2a2a4a;
+            border-radius: 8px;
+            margin-bottom: 12px;
+        }
+
+        .chat-bubble {
+            max-width: 85%;
+            padding: 10px 14px;
+            margin-bottom: 10px;
+            border-radius: 12px;
+            font-size: 13px;
+            line-height: 1.6;
+            word-wrap: break-word;
+            white-space: pre-wrap;
+        }
+
+        .chat-bubble.user {
+            background: #1a3a5c;
+            color: #e0e8f0;
+            margin-left: auto;
+            border-bottom-right-radius: 4px;
+        }
+
+        .chat-bubble.assistant {
+            background: #1e1e3a;
+            color: #d0d0e0;
+            margin-right: auto;
+            border-bottom-left-radius: 4px;
+        }
+
+        .chat-bubble .chat-role {
+            font-size: 11px;
+            color: #6688aa;
+            margin-bottom: 4px;
+            font-weight: 600;
+        }
+
+        .chat-bubble.user .chat-role { color: #4da6ff; }
+        .chat-bubble.assistant .chat-role { color: #a888cc; }
+
+        .chat-input-area {
+            display: flex;
+            gap: 8px;
+        }
+
+        .chat-input-area textarea {
+            flex: 1;
+            padding: 10px 12px;
+            background: #0f0f23;
+            border: 1px solid #2a2a4a;
+            border-radius: 8px;
+            color: #e0e0e0;
+            font-size: 14px;
+            font-family: inherit;
+            resize: none;
+            min-height: 44px;
+            max-height: 120px;
+        }
+
+        .chat-input-area textarea:focus {
+            outline: none;
+            border-color: #00d4ff;
+        }
+
+        .chat-input-area button {
+            align-self: flex-end;
+        }
+
+        .chat-actions-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .chat-typing {
+            color: #6688aa;
+            font-size: 12px;
+            font-style: italic;
+            padding: 4px 14px;
+            display: none;
+        }
+
+        /* -- Plan mode selector ------------------------------------------- */
+        .plan-mode-btns {
+            display: flex;
+            gap: 6px;
+        }
+
+        .plan-mode-btns .btn {
+            font-size: 12px;
+            padding: 5px 10px;
+        }
+
         /* -- Plan / Log 查看区域 --------------------------------------------- */
         .plan-content, .log-content {
             background: #0f0f23;
@@ -412,6 +519,59 @@
             color: #a0a0c0;
             white-space: pre-wrap;
         }
+
+        /* -- Structured Log 样式 --------------------------------------------- */
+        .log-summary {
+            display: flex;
+            gap: 16px;
+            padding: 8px 12px;
+            margin-bottom: 8px;
+            background: #12122a;
+            border-radius: 6px;
+            font-size: 12px;
+            color: #8888bb;
+        }
+        .log-summary .stat { font-weight: 600; }
+        .log-summary .stat-tools { color: #64b5f6; }
+        .log-summary .stat-errors { color: #ef5350; }
+        .log-summary .stat-cost { color: #ffd54f; }
+
+        .log-event {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+        .log-event:hover { background: rgba(255,255,255,0.03); }
+        .log-event .ev-ts {
+            flex-shrink: 0;
+            color: #555577;
+            min-width: 65px;
+            font-size: 11px;
+        }
+        .log-event .ev-icon {
+            flex-shrink: 0;
+            width: 32px;
+            text-align: center;
+            font-size: 11px;
+            font-weight: 700;
+            border-radius: 3px;
+            padding: 1px 4px;
+        }
+        .log-event .ev-content {
+            flex: 1;
+            word-break: break-word;
+            color: #c0c0dd;
+        }
+
+        .ev-icon-text     { background: #1a3a5c; color: #90caf9; }
+        .ev-icon-tool_use { background: #1a2a4a; color: #82b1ff; }
+        .ev-icon-error    { background: #4a1a1a; color: #ef9a9a; }
+        .ev-icon-result   { background: #1a3a1a; color: #a5d6a7; }
+        .ev-icon-system   { background: #1a1a2a; color: #777; }
 
         /* -- Markdown 渲染样式 ----------------------------------------------- */
         .plan-content h1, .plan-content h2, .plan-content h3,
@@ -1138,18 +1298,22 @@
                     <span class="guide-step-arrow">&#9660;</span>
                 </div>
                 <div class="guide-step-body">
-                    <p>Claude Code analyzes each task in <strong>Plan Mode</strong> and generates a detailed implementation plan. During this phase, the task status is <strong>Planning</strong>.</p>
+                    <p>Choose a planning mode for each task:</p>
+                    <ul style="margin: 8px 0 8px 20px; font-size: 13px; color: #b0b0cc;">
+                        <li><strong>Auto Plan</strong> - AI generates a complete plan directly (best for bug fixes and small features)</li>
+                        <li><strong>Chat Plan</strong> - Multi-round conversation to refine requirements and design before generating the plan</li>
+                    </ul>
                     <div class="guide-cmd-row">
                         <div class="guide-cmd-box">
                             <span class="cmd-label cli">CLI</span>
-                            <code>cf plan</code>
+                            <code>cf plan &lt;task_id&gt;</code> (auto) or <code>cf plan &lt;task_id&gt; --interactive</code>
                         </div>
                         <div class="guide-cmd-box">
                             <span class="cmd-label web">Web</span>
-                            <span class="cmd-text">Click <strong>Plan All</strong> or card's <strong>Plan</strong> button</span>
+                            <span class="cmd-text">Click <strong>Auto Plan</strong> or <strong>Chat Plan</strong> on the card</span>
                         </div>
                     </div>
-                    <p>Once complete, the task moves to <strong>Planned</strong> status. Plans are saved as Markdown files in <code>.claude-flow/plans/</code>.</p>
+                    <p>Both modes produce a Markdown plan document in <code>.claude-flow/plans/</code>.</p>
                 </div>
             </div>
 
@@ -1173,10 +1337,10 @@
                         </div>
                         <div class="guide-cmd-box">
                             <span class="cmd-label web">Web</span>
-                            <span class="cmd-text">Click <strong>View Plan</strong> to read, then <strong>Approve</strong> or <strong>Reply</strong></span>
+                            <span class="cmd-text">Click <strong>View Plan</strong> to read, then <strong>Approve</strong> or <strong>Chat</strong></span>
                         </div>
                     </div>
-                    <div class="guide-tip"><strong>Reply: </strong>Use Reply to answer AI's questions (e.g. choosing between options) or to provide revision feedback. Claude Code will regenerate the plan incorporating your reply. The task returns to <strong>Planning</strong>.</div>
+                    <div class="guide-tip"><strong>Chat: </strong>Open the chat dialog to discuss the plan with AI, ask questions, or request revisions. Click <strong>Generate Plan</strong> in the chat to regenerate from the conversation.</div>
                 </div>
             </div>
 
@@ -1324,17 +1488,24 @@
         </div>
     </div>
 
-    <!-- Reply modal -->
-    <div class="modal-overlay" id="replyModal">
-        <div class="modal">
-            <h2>Reply</h2>
-            <div class="form-group">
-                <label for="replyMessage">Your reply (answer questions or provide revision notes)</label>
-                <textarea id="replyMessage" placeholder="Answer AI's question or provide revision feedback..."></textarea>
+    <!-- Chat modal -->
+    <div class="modal-overlay" id="chatModal">
+        <div class="modal modal-lg">
+            <div class="chat-actions-top">
+                <h2 id="chatModalTitle">Chat</h2>
+                <div>
+                    <button class="btn btn-success btn-small" id="chatFinalizeBtn" onclick="finalizeChat()">Generate Plan</button>
+                    <button class="btn btn-cancel btn-small" onclick="closeChatModal()">Close</button>
+                </div>
             </div>
-            <div class="modal-actions">
-                <button class="btn btn-cancel" onclick="closeReplyModal()">Cancel</button>
-                <button class="btn btn-warning" onclick="submitReply()">Submit</button>
+            <div class="chat-container">
+                <div class="chat-messages" id="chatMessages"></div>
+                <div class="chat-typing" id="chatTyping">AI is thinking...</div>
+                <div class="chat-input-area">
+                    <textarea id="chatInput" placeholder="Describe your requirements, ask questions, or refine the plan..." rows="2"
+                              onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChatMessage();}"></textarea>
+                    <button class="btn btn-primary" onclick="sendChatMessage()" id="chatSendBtn">Send</button>
+                </div>
             </div>
         </div>
     </div>
@@ -1363,7 +1534,7 @@
             <div class="modal-actions">
                 <button class="btn btn-cancel" onclick="closePlanModal()">Close</button>
                 <button class="btn btn-success" id="planApproveBtn" onclick="approveFromPlan()" style="display:none;">Approve</button>
-                <button class="btn btn-warning" id="planReplyBtn" onclick="replyFromPlan()" style="display:none;">Reply</button>
+                <button class="btn btn-warning" id="planChatBtn" onclick="chatFromPlan()" style="display:none;">Chat</button>
             </div>
         </div>
     </div>
@@ -1387,7 +1558,7 @@
         /* -- 全局状态 -------------------------------------------------------- */
         let allTasks = [];
         let expandedCards = new Set();
-        let replyTaskId = null;
+        let chatTaskId = null;
         let respondingTaskId = null;
         let viewingPlanTaskId = null;
         let viewingLogTaskId = null;
@@ -1582,13 +1753,20 @@
 
             switch (status) {
                 case 'pending':
-                    btns.push(actionBtn('Plan', 'info', 'planTask', id));
+                    btns.push(actionBtn('Auto Plan', 'info', 'planTaskAuto', id));
+                    btns.push(actionBtn('Chat Plan', 'warning', 'planTaskInteractive', id));
                     btns.push(actionBtn('Delete', 'danger', 'deleteTask', id));
+                    break;
+
+                case 'planning':
+                    if (task.plan_mode === 'interactive') {
+                        btns.push(actionBtn('Open Chat', 'warning', 'openChatModal', id));
+                    }
                     break;
 
                 case 'planned':
                     btns.push(actionBtn('Approve', 'success', 'approveTask', id));
-                    btns.push(actionBtn('Reply', 'warning', 'openReplyModal', id));
+                    btns.push(actionBtn('Chat', 'warning', 'openChatModal', id));
                     break;
 
                 case 'approved':
@@ -1638,12 +1816,28 @@
         }
 
         /* -- 任务操作: Plan --------------------------------------------------- */
-        async function planTask(event, taskId) {
+        async function planTaskAuto(event, taskId) {
             event.stopPropagation();
-            const data = await api('/tasks/' + taskId + '/plan', { method: 'POST' });
+            const data = await api('/tasks/' + taskId + '/plan', {
+                method: 'POST',
+                body: JSON.stringify({ mode: 'auto' }),
+            });
             if (data !== null) {
-                showToast('Plan generation started for ' + taskId);
+                showToast('Auto plan generation started for ' + taskId);
                 fetchTasks();
+            }
+        }
+
+        async function planTaskInteractive(event, taskId) {
+            event.stopPropagation();
+            const data = await api('/tasks/' + taskId + '/plan', {
+                method: 'POST',
+                body: JSON.stringify({ mode: 'interactive' }),
+            });
+            if (data !== null) {
+                showToast('Interactive planning started for ' + taskId);
+                fetchTasks();
+                openChatModal(event, taskId);
             }
         }
 
@@ -1655,7 +1849,7 @@
             }
         }
 
-        /* -- 任务操作: Approve / Reply ---------------------------------------- */
+        /* -- 任务操作: Approve ------------------------------------------------ */
         async function approveTask(event, taskId) {
             event.stopPropagation();
             const data = await api('/tasks/' + taskId + '/approve', { method: 'POST' });
@@ -1673,33 +1867,92 @@
             }
         }
 
-        /* -- Task action: Reply ------------------------------------------- */
-        function openReplyModal(event, taskId) {
-            event.stopPropagation();
-            replyTaskId = taskId;
-            document.getElementById('replyMessage').value = '';
-            document.getElementById('replyModal').classList.add('active');
-        }
+        /* -- Task action: Chat -------------------------------------------- */
+        async function openChatModal(event, taskId) {
+            if (event) event.stopPropagation();
+            chatTaskId = taskId;
+            const task = allTasks.find(t => t.id === taskId);
+            document.getElementById('chatModalTitle').textContent =
+                'Chat: ' + (task ? task.title : taskId);
+            document.getElementById('chatMessages').innerHTML = '';
+            document.getElementById('chatInput').value = '';
+            document.getElementById('chatTyping').style.display = 'none';
+            document.getElementById('chatModal').classList.add('active');
 
-        function closeReplyModal() {
-            replyTaskId = null;
-            document.getElementById('replyModal').classList.remove('active');
-        }
-
-        async function submitReply() {
-            if (!replyTaskId) return;
-            const message = document.getElementById('replyMessage').value.trim();
-            if (!message) {
-                showToast('Please enter your reply');
-                return;
+            // Load existing chat history
+            const data = await api('/tasks/' + taskId + '/chat');
+            if (data !== null && data.exists && data.messages.length > 0) {
+                renderChatMessages(data.messages);
             }
-            const data = await api('/tasks/' + replyTaskId + '/reply', {
+            document.getElementById('chatInput').focus();
+        }
+
+        function closeChatModal() {
+            chatTaskId = null;
+            document.getElementById('chatModal').classList.remove('active');
+        }
+
+        function renderChatMessages(messages) {
+            const container = document.getElementById('chatMessages');
+            container.innerHTML = '';
+            messages.forEach(function(msg) {
+                const bubble = document.createElement('div');
+                bubble.className = 'chat-bubble ' + msg.role;
+                const roleLabel = msg.role === 'user' ? 'You' : 'AI';
+                bubble.innerHTML = '<div class="chat-role">' + roleLabel + '</div>'
+                    + renderMarkdown(msg.content);
+                container.appendChild(bubble);
+            });
+            container.scrollTop = container.scrollHeight;
+        }
+
+        async function sendChatMessage() {
+            if (!chatTaskId) return;
+            const input = document.getElementById('chatInput');
+            const message = input.value.trim();
+            if (!message) return;
+
+            // Show user message immediately
+            const container = document.getElementById('chatMessages');
+            const userBubble = document.createElement('div');
+            userBubble.className = 'chat-bubble user';
+            userBubble.innerHTML = '<div class="chat-role">You</div>'
+                + renderMarkdown(message);
+            container.appendChild(userBubble);
+            container.scrollTop = container.scrollHeight;
+
+            input.value = '';
+            document.getElementById('chatSendBtn').disabled = true;
+            document.getElementById('chatTyping').style.display = 'block';
+
+            const data = await api('/tasks/' + chatTaskId + '/chat', {
                 method: 'POST',
                 body: JSON.stringify({ message: message }),
             });
+
+            document.getElementById('chatSendBtn').disabled = false;
+            document.getElementById('chatTyping').style.display = 'none';
+
             if (data !== null) {
-                showToast('Reply submitted, regenerating plan...');
-                closeReplyModal();
+                // Show AI response
+                const aiBubble = document.createElement('div');
+                aiBubble.className = 'chat-bubble assistant';
+                aiBubble.innerHTML = '<div class="chat-role">AI</div>'
+                    + renderMarkdown(data.ai_response);
+                container.appendChild(aiBubble);
+                container.scrollTop = container.scrollHeight;
+            }
+            input.focus();
+        }
+
+        async function finalizeChat() {
+            if (!chatTaskId) return;
+            const data = await api('/tasks/' + chatTaskId + '/chat/finalize', {
+                method: 'POST',
+            });
+            if (data !== null) {
+                showToast('Plan generation started from chat...');
+                closeChatModal();
                 fetchTasks();
             }
         }
@@ -1914,10 +2167,10 @@
             document.getElementById('planModalTitle').textContent = 'Plan: ' + (task ? task.title : taskId);
             document.getElementById('planContent').innerHTML = '<p style="color:#8888aa;">Loading...</p>';
 
-            // 显示/隐藏 approve/reply 按钮
+            // Show/hide approve/chat buttons
             const isPlanned = task && task.status === 'planned';
             document.getElementById('planApproveBtn').style.display = isPlanned ? 'inline-block' : 'none';
-            document.getElementById('planReplyBtn').style.display = isPlanned ? 'inline-block' : 'none';
+            document.getElementById('planChatBtn').style.display = isPlanned ? 'inline-block' : 'none';
 
             document.getElementById('planModal').classList.add('active');
 
@@ -1944,12 +2197,11 @@
             }
         }
 
-        async function replyFromPlan() {
+        async function chatFromPlan() {
             if (!viewingPlanTaskId) return;
-            replyTaskId = viewingPlanTaskId;
+            const taskId = viewingPlanTaskId;
             closePlanModal();
-            document.getElementById('replyMessage').value = '';
-            document.getElementById('replyModal').classList.add('active');
+            openChatModal(null, taskId);
         }
 
         /* -- Log 查看 -------------------------------------------------------- */
@@ -1966,13 +2218,82 @@
 
         async function loadLog(taskId) {
             const data = await api('/tasks/' + taskId + '/log');
-            if (data !== null) {
-                if (data.exists && data.content) {
-                    document.getElementById('logContent').textContent = data.content;
-                } else {
-                    document.getElementById('logContent').textContent = 'No log data available.';
-                }
+            if (data === null) return;
+
+            const el = document.getElementById('logContent');
+            if (!data.exists) {
+                el.textContent = 'No log data available.';
+                return;
             }
+
+            if (data.structured && data.data) {
+                el.innerHTML = renderStructuredLog(data.data);
+            } else if (data.content) {
+                el.textContent = data.content;
+            } else {
+                el.textContent = 'No log data available.';
+            }
+        }
+
+        function renderStructuredLog(logData) {
+            const events = logData.events || [];
+            const summary = logData.summary || {};
+            const cost = logData.cost_usd;
+
+            const iconMap = {
+                text:     { label: 'MSG', cls: 'ev-icon-text' },
+                tool_use: { label: 'USE', cls: 'ev-icon-tool_use' },
+                error:    { label: 'ERR', cls: 'ev-icon-error' },
+                result:   { label: 'RES', cls: 'ev-icon-result' },
+                system:   { label: 'SYS', cls: 'ev-icon-system' },
+            };
+
+            // Summary bar
+            const costStr = cost != null ? '$' + cost.toFixed(4) : 'n/a';
+            let html = '<div class="log-summary">'
+                + '<span><span class="stat stat-tools">' + (summary.tool_use || 0) + '</span> tools</span>'
+                + '<span><span class="stat stat-errors">' + (summary.error || 0) + '</span> errors</span>'
+                + '<span><span class="stat stat-cost">' + costStr + '</span></span>'
+                + '<span>' + (summary.total || 0) + ' events</span>'
+                + '</div>';
+
+            // Filter noisy events
+            const filtered = events.filter(function(ev) {
+                if (ev.type === 'system') {
+                    var c = (ev.content || '').toLowerCase();
+                    if (!c || c.includes('hook') || c.startsWith('[user]')) return false;
+                }
+                return true;
+            });
+
+            // Detect if timestamps are meaningful (more than 1 distinct value)
+            const tsSet = new Set(filtered.map(function(e) { return e.ts || ''; }));
+            const hasRealTs = tsSet.size > 1;
+
+            // Events
+            filtered.forEach(function(ev, idx) {
+                const evType = ev.type || 'system';
+                const tsRaw = (ev.ts || '').includes('T') ? ev.ts.split('T')[1].substring(0, 8) : (ev.ts || '');
+                const tsCol = hasRealTs ? tsRaw : '#' + (idx + 1);
+                const icon = iconMap[evType] || iconMap.system;
+                const tool = ev.tool ? '<strong>' + escapeHtml(ev.tool) + '</strong> ' : '';
+
+                var contentHtml;
+                if (evType === 'result') {
+                    // Result: render full content as Markdown
+                    contentHtml = '<div class="md-body">' + renderMarkdown(ev.content || '') + '</div>';
+                } else {
+                    contentHtml = escapeHtml(ev.content || '').substring(0, 200);
+                }
+
+                html += '<div class="log-event">'
+                    + '<span class="ev-ts">' + tsCol + '</span>'
+                    + '<span class="ev-icon ' + icon.cls + '">' + icon.label + '</span>'
+                    + '<span class="ev-content">' + tool + contentHtml + '</span>'
+                    + '</div>';
+            });
+
+            return html;
         }
 
         async function refreshLog() {
@@ -2109,7 +2430,7 @@
         document.addEventListener('keydown', function (e) {
             if (e.key === 'Escape') {
                 closeNewTaskModal();
-                closeReplyModal();
+                closeChatModal();
                 closeRespondModal();
                 closePlanModal();
                 closeLogModal();
@@ -2122,7 +2443,7 @@
         });
 
         /* -- 模态框外部点击关闭 ------------------------------------------------ */
-        ['newTaskModal', 'replyModal', 'respondModal', 'planModal', 'logModal'].forEach(function(id) {
+        ['newTaskModal', 'chatModal', 'respondModal', 'planModal', 'logModal'].forEach(function(id) {
             document.getElementById(id).addEventListener('click', function(e) {
                 if (e.target === this) {
                     this.classList.remove('active');
