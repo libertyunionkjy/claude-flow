@@ -2617,11 +2617,18 @@
 
         async function finalizeChat() {
             if (!chatTaskId) return;
+            var btn = document.getElementById('chatFinalizeBtn');
+            if (btn.disabled) return;
+            btn.disabled = true;
+            btn.textContent = 'Generating...';
             var data = await api('/tasks/' + chatTaskId + '/chat/finalize', { method: 'POST' });
             if (data !== null) {
                 showToast('Plan generation started from chat...');
                 closeChatModal();
                 fetchTasks();
+            } else {
+                btn.disabled = false;
+                btn.textContent = 'Generate Plan';
             }
         }
 
@@ -3322,6 +3329,10 @@
 
         async function finalizeDetailChat() {
             if (!detailTaskId) return;
+            var btn = document.getElementById('detailChatFinalizeBtn');
+            if (btn.disabled) return;
+            btn.disabled = true;
+            btn.textContent = 'Generating...';
             var data = await api('/tasks/' + detailTaskId + '/chat/finalize', { method: 'POST' });
             if (data !== null) {
                 showToast('Plan generation started from chat...');
@@ -3331,6 +3342,9 @@
                     if (task) renderTaskDetail(task);
                     switchDetailTab('plan');
                 }
+            } else {
+                btn.disabled = false;
+                btn.textContent = 'Generate Plan';
             }
         }
 

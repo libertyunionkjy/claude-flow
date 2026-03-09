@@ -359,6 +359,9 @@ def finalize_chat(task_id: str):
     if not session:
         return _err(f"No chat session for task {task_id}", 404)
 
+    if session.status == "finalized":
+        return _err("Chat session is already finalized, plan generation in progress")
+
     if not session.messages:
         return _err("Chat session has no messages")
 
