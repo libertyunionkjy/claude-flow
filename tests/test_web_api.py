@@ -133,10 +133,12 @@ class TestApproveChat:
         """POST /chat creates a session and returns accepted (async mode)."""
         task = tm.add("T1", "P1")
 
-        with patch("claude_flow.chat.subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(
-                returncode=0, stdout="AI response here", stderr=""
-            )
+        mock_proc = MagicMock()
+        mock_proc.communicate.return_value = ("AI response here", "")
+        mock_proc.returncode = 0
+        mock_proc.poll.return_value = 0
+
+        with patch("claude_flow.chat.subprocess.Popen", return_value=mock_proc):
             resp = client.post(
                 f"/api/tasks/{task.id}/chat",
                 json={"message": "How should we implement this?"},
@@ -146,9 +148,9 @@ class TestApproveChat:
             assert data["data"]["accepted"] is True
             assert data["data"]["thinking"] is True
 
-        # Wait for background thread to complete
-        import time
-        time.sleep(0.5)
+            # Wait for background thread to complete
+            import time
+            time.sleep(0.5)
 
         # Verify the AI response arrived via GET
         resp = client.get(f"/api/tasks/{task.id}/chat")
@@ -162,10 +164,12 @@ class TestApproveChat:
         """GET /chat returns messages and thinking status after a send."""
         task = tm.add("T1", "P1")
 
-        with patch("claude_flow.chat.subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(
-                returncode=0, stdout="Sure, here is my suggestion", stderr=""
-            )
+        mock_proc = MagicMock()
+        mock_proc.communicate.return_value = ("Sure, here is my suggestion", "")
+        mock_proc.returncode = 0
+        mock_proc.poll.return_value = 0
+
+        with patch("claude_flow.chat.subprocess.Popen", return_value=mock_proc):
             client.post(
                 f"/api/tasks/{task.id}/chat",
                 json={"message": "Hello"},

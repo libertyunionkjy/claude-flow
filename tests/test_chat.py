@@ -246,17 +246,18 @@ class TestChatManager:
         """send_message_async records user message, sets thinking=True, returns True."""
         chat_mgr.create_session("task-async-1")
 
-        with patch("claude_flow.chat.subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(
-                returncode=0, stdout="Async AI response", stderr=""
-            )
+        mock_proc = MagicMock()
+        mock_proc.communicate.return_value = ("Async AI response", "")
+        mock_proc.returncode = 0
+        mock_proc.poll.return_value = 0
+
+        with patch("claude_flow.chat.subprocess.Popen", return_value=mock_proc):
             accepted = chat_mgr.send_message_async("task-async-1", "Hello async")
 
-        assert accepted is True
-        # Session should have user message and thinking=True initially
-        # (the background thread may or may not have completed)
-        import time
-        time.sleep(0.5)  # Wait for background thread
+            assert accepted is True
+            # Wait for background thread to complete
+            import time
+            time.sleep(0.5)
 
         session = chat_mgr.get_session("task-async-1")
         assert len(session.messages) == 2  # user + assistant
@@ -287,17 +288,19 @@ class TestChatManager:
         """send_initial_prompt_async starts background AI analysis."""
         chat_mgr.create_session("task-async-3")
 
-        with patch("claude_flow.chat.subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(
-                returncode=0, stdout="Initial analysis complete", stderr=""
-            )
+        mock_proc = MagicMock()
+        mock_proc.communicate.return_value = ("Initial analysis complete", "")
+        mock_proc.returncode = 0
+        mock_proc.poll.return_value = 0
+
+        with patch("claude_flow.chat.subprocess.Popen", return_value=mock_proc):
             accepted = chat_mgr.send_initial_prompt_async(
                 "task-async-3", "Build a REST API"
             )
 
-        assert accepted is True
-        import time
-        time.sleep(0.5)  # Wait for background thread
+            assert accepted is True
+            import time
+            time.sleep(0.5)  # Wait for background thread
 
         session = chat_mgr.get_session("task-async-3")
         assert len(session.messages) == 1
