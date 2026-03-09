@@ -3,8 +3,23 @@ from __future__ import annotations
 
 import logging
 import os
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+
+def is_git_repo(path: Path) -> bool:
+    """Check if the given path is inside a git repository.
+
+    Walks up the directory tree looking for a .git directory or file
+    (git worktrees use a .git file pointing to the main repo).
+    Uses pure filesystem check to avoid subprocess dependency.
+    """
+    for parent in [path, *path.parents]:
+        git_path = parent / ".git"
+        if git_path.exists():
+            return True
+    return False
 
 
 def is_running_as_root() -> bool:

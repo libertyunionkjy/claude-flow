@@ -23,10 +23,11 @@ MERGE_LOCK_FILE = "merge.lock"
 
 
 class WorktreeManager:
-    def __init__(self, repo_root: Path, worktree_dir: Path):
+    def __init__(self, repo_root: Path, worktree_dir: Path, is_git: bool = True):
         self._repo = repo_root
         self._wt_dir = worktree_dir
         self._merge_lock_file = self._wt_dir / MERGE_LOCK_FILE
+        self._is_git = is_git
 
     def _run(self, args: List[str], cwd: Path | None = None, check: bool = True,
              timeout: Optional[int] = None) -> subprocess.CompletedProcess:
@@ -130,7 +131,14 @@ class WorktreeManager:
     # ------------------------------------------------------------------
 
     def create(self, task_id: str, branch: str, config: Config = None) -> Path:
-        """创建 worktree 并设置 symlink 共享文件。"""
+        """创建 worktree 并设置 symlink 共享文件。
+
+        Non-git mode: returns the project root directly (no isolation).
+        """
+        if not self._is_git:
+            # Non-git mode: run directly in project root, no isolation
+            return self._repo
+
         wt_path = self._wt_dir / task_id
         wt_path.parent.mkdir(parents=True, exist_ok=True)
         self._run(["git", "worktree", "add", "-b", branch, str(wt_path)])
@@ -153,6 +161,8 @@ class WorktreeManager:
     # ------------------------------------------------------------------
 
     def remove(self, task_id: str, branch: str) -> None:
+        if not self._is_git:
+            return  # Non-git mode: nothing to remove
         wt_path = self._wt_dir / task_id
         self._run(["git", "worktree", "remove", str(wt_path), "--force"], check=False)
         self._run(["git", "branch", "-D", branch], check=False)
@@ -164,6 +174,9 @@ class WorktreeManager:
     def merge(self, branch: str, main_branch: str, strategy: str = "--no-ff",
               config: Config = None,
               task_title: str = "", task_prompt: str = "") -> bool:
+        if not self._is_git:
+            return True  # Non-git mode: skip merge
+
         def _do() -> bool:
             try:
                 self._run(["git", "checkout", main_branch])
@@ -279,6 +292,9 @@ class WorktreeManager:
         5. 最多重试 max_retries 次
         6. 全部失败则 git rebase --abort，返回 False
         """
+        if not self._is_git:
+            return True  # Non-git mode: skip rebase
+
         def _do() -> bool:
             has_remote = self._has_remote()
 
@@ -408,6 +424,8 @@ class WorktreeManager:
 
     def push(self, main_branch: str) -> bool:
         """将主分支推送到远程仓库。"""
+        if not self._is_git:
+            return False  # Non-git mode: cannot push
         result = self._run(["git", "push", "origin", main_branch], check=False, timeout=NETWORK_TIMEOUT)
         return result.returncode == 0
 
@@ -421,6 +439,8 @@ class WorktreeManager:
         return [d.name for d in self._wt_dir.iterdir() if d.is_dir()]
 
     def cleanup_all(self) -> int:
+        if not self._is_git:
+            return 0  # Non-git mode: nothing to clean up
         count = 0
         for task_id in self.list_active():
             branch = f"cf/{task_id}"
