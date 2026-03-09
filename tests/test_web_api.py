@@ -195,6 +195,7 @@ class TestApproveChat:
     def test_chat_finalize(self, client, tm, web_app):
         """POST /chat/finalize triggers plan generation from chat."""
         import time
+        import threading
         task = tm.add("T1", "P1")
 
         # First create a chat session with messages
@@ -209,14 +210,23 @@ class TestApproveChat:
             # Wait for async response to complete
             time.sleep(0.5)
 
+        # Block the background thread so it doesn't finish before our assertion
+        barrier = threading.Event()
+
+        def _blocking_generate(*args, **kwargs):
+            barrier.wait(timeout=5)
+            return "fake-plan.md"
+
         # Then finalize
         with patch.object(
-            web_app.config["PLANNER"], "generate_from_chat", return_value=None
+            web_app.config["PLANNER"], "generate_from_chat",
+            side_effect=_blocking_generate,
         ):
             resp = client.post(f"/api/tasks/{task.id}/chat/finalize")
             data = resp.get_json()
             assert data["ok"] is True
             assert data["data"]["status"] == "planning"
+            barrier.set()  # Unblock background thread
 
     def test_chat_finalize_no_session(self, client, tm):
         """Finalize fails if no chat session exists."""
@@ -249,11 +259,19 @@ class TestPlanAPI:
 
     def test_plan_task_starts_planning(self, client, tm):
         """Plan task should set status to planning and return ok."""
+        import threading
         task = tm.add("T1", "P1")
 
-        # Mock the planner.generate to avoid actually calling Claude
+        # Block the background thread so it doesn't finish before our assertion
+        barrier = threading.Event()
+
+        def _blocking_generate(*args, **kwargs):
+            barrier.wait(timeout=5)
+            return "fake-plan.md"
+
         with patch.object(
-            client.application.config["PLANNER"], "generate", return_value=None
+            client.application.config["PLANNER"], "generate",
+            side_effect=_blocking_generate,
         ):
             resp = client.post(f"/api/tasks/{task.id}/plan")
             data = resp.get_json()
@@ -261,6 +279,7 @@ class TestPlanAPI:
             # Status should transition to planning
             updated = tm.get(task.id)
             assert updated.status == TaskStatus.PLANNING
+            barrier.set()  # Unblock background thread
 
     def test_get_plan_not_found(self, client, tm):
         task = tm.add("T1", "P1")

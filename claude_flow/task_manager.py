@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import fcntl
 import json
+import logging
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
@@ -9,7 +11,10 @@ from typing import List, Optional
 from .models import Task, TaskStatus
 
 TASKS_FILE = "tasks.json"
+TASKS_BACKUP = "tasks.json.bak"
 LOCK_FILE = "tasks.lock"
+
+logger = logging.getLogger(__name__)
 
 
 class TaskManager:
@@ -17,6 +22,7 @@ class TaskManager:
         self._root = project_root
         self._cf_dir = project_root / ".claude-flow"
         self._tasks_file = self._cf_dir / TASKS_FILE
+        self._backup_file = self._cf_dir / TASKS_BACKUP
         self._lock_file = self._cf_dir / LOCK_FILE
 
     def _load(self) -> List[Task]:
@@ -24,20 +30,68 @@ class TaskManager:
             return []
         content = self._tasks_file.read_text().strip()
         if not content:
-            return []
-        data = json.loads(content)
+            # Main file is empty/corrupt -- try backup
+            return self._load_from_backup()
+        try:
+            data = json.loads(content)
+        except json.JSONDecodeError:
+            logger.warning("tasks.json is corrupted, recovering from backup")
+            return self._load_from_backup()
         return [Task.from_dict(d) for d in data]
 
+    def _load_from_backup(self) -> List[Task]:
+        if not self._backup_file.exists():
+            return []
+        content = self._backup_file.read_text().strip()
+        if not content:
+            return []
+        try:
+            data = json.loads(content)
+            logger.info("Recovered %d tasks from backup", len(data))
+            # Restore main file from backup
+            self._atomic_write(self._tasks_file, content)
+            return [Task.from_dict(d) for d in data]
+        except (json.JSONDecodeError, Exception) as e:
+            logger.error("Backup file is also corrupted: %s", e)
+            return []
+
+    @staticmethod
+    def _atomic_write(target: Path, content: str) -> None:
+        """Write content to target file atomically via temp file + os.replace."""
+        tmp = target.with_suffix(".tmp")
+        tmp.write_text(content)
+        os.replace(tmp, target)
+
     def _save(self, tasks: List[Task]) -> None:
-        self._tasks_file.write_text(
-            json.dumps([t.to_dict() for t in tasks], indent=2, ensure_ascii=False)
+        content = json.dumps(
+            [t.to_dict() for t in tasks], indent=2, ensure_ascii=False
         )
+        # Backup: hard-link current file before overwriting (cheap, no IO copy)
+        if self._tasks_file.exists():
+            try:
+                # Remove stale backup, then hard-link current -> backup
+                self._backup_file.unlink(missing_ok=True)
+                os.link(self._tasks_file, self._backup_file)
+            except OSError:
+                pass  # Best-effort backup
+        # Atomic write to main file
+        self._atomic_write(self._tasks_file, content)
 
     def _with_lock(self, fn):
         """Execute fn with exclusive file lock."""
         self._lock_file.parent.mkdir(parents=True, exist_ok=True)
         with open(self._lock_file, "w") as lock:
             fcntl.flock(lock, fcntl.LOCK_EX)
+            try:
+                return fn()
+            finally:
+                fcntl.flock(lock, fcntl.LOCK_UN)
+
+    def _with_shared_lock(self, fn):
+        """Execute fn with shared file lock (allows concurrent reads)."""
+        self._lock_file.parent.mkdir(parents=True, exist_ok=True)
+        with open(self._lock_file, "w") as lock:
+            fcntl.flock(lock, fcntl.LOCK_SH)
             try:
                 return fn()
             finally:
@@ -53,16 +107,20 @@ class TaskManager:
         return self._with_lock(_do)
 
     def list_tasks(self, status: Optional[TaskStatus] = None) -> List[Task]:
-        tasks = self._load()
-        if status:
-            return [t for t in tasks if t.status == status]
-        return tasks
+        def _do():
+            tasks = self._load()
+            if status:
+                return [t for t in tasks if t.status == status]
+            return tasks
+        return self._with_shared_lock(_do)
 
     def get(self, task_id: str) -> Optional[Task]:
-        for t in self._load():
-            if t.id == task_id:
-                return t
-        return None
+        def _do():
+            for t in self._load():
+                if t.id == task_id:
+                    return t
+            return None
+        return self._with_shared_lock(_do)
 
     def remove(self, task_id: str) -> bool:
         def _do():
