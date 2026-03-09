@@ -9,6 +9,13 @@ import pytest
 from claude_flow.config import Config
 
 
+def pytest_configure(config):
+    """Register custom markers."""
+    config.addinivalue_line(
+        "markers", "smoke: marks tests that require real claude CLI (deselect with '-m \"not smoke\"')"
+    )
+
+
 @pytest.fixture
 def git_repo(tmp_path: Path) -> Path:
     """Create a minimal git repo with one commit and return its path."""
