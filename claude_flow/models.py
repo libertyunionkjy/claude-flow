@@ -19,6 +19,11 @@ class TaskStatus(Enum):
     FAILED = "failed"
 
 
+class TaskType(Enum):
+    NORMAL = "normal"
+    MINI = "mini"
+
+
 def _generate_task_id() -> str:
     short = uuid.uuid4().hex[:6]
     return f"task-{short}"
@@ -30,6 +35,7 @@ class Task:
     prompt: str
     id: str = field(default_factory=_generate_task_id)
     status: TaskStatus = TaskStatus.PENDING
+    task_type: TaskType = TaskType.NORMAL
     branch: Optional[str] = None
     plan_file: Optional[str] = None
     worker_id: Optional[int] = None
@@ -42,12 +48,18 @@ class Task:
     retry_count: int = 0
     plan_mode: Optional[str] = None  # "auto" | "interactive"
 
+    @property
+    def is_mini(self) -> bool:
+        """Check if this is a mini task (skips planning/approval)."""
+        return self.task_type == TaskType.MINI
+
     def to_dict(self) -> dict:
         return {
             "id": self.id,
             "title": self.title,
             "prompt": self.prompt,
             "status": self.status.value,
+            "task_type": self.task_type.value,
             "branch": self.branch,
             "plan_file": self.plan_file,
             "worker_id": self.worker_id,
@@ -68,6 +80,7 @@ class Task:
             title=d["title"],
             prompt=d["prompt"],
             status=TaskStatus(d["status"]),
+            task_type=TaskType(d["task_type"]) if d.get("task_type") else TaskType.NORMAL,
             branch=d.get("branch"),
             plan_file=d.get("plan_file"),
             worker_id=d.get("worker_id"),
