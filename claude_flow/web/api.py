@@ -94,11 +94,15 @@ def create_task():
         except (ValueError, TypeError):
             return _err("priority 必须是整数")
 
+    submodules = data.get("submodules", [])
+    if not isinstance(submodules, list):
+        return _err("submodules 必须是数组")
+
     task_type = data.get("task_type", "normal")
     if task_type == "mini":
-        task = tm.add_mini(title, prompt, priority=priority)
+        task = tm.add_mini(title, prompt, priority=priority, submodules=submodules)
     else:
-        task = tm.add(title, prompt, priority=priority)
+        task = tm.add(title, prompt, priority=priority, submodules=submodules)
     return _ok(task.to_dict()), 201
 
 
@@ -969,6 +973,33 @@ def _update_plan_mode(tm, task_id: str, mode: str):
     tm._with_lock(_do)
 
 
+# -- Submodules endpoint ----------------------------------------------------
+
+@api_bp.route("/submodules", methods=["GET"])
+def list_submodules():
+    """返回项目中所有 submodule 的路径列表（从 .gitmodules 解析）。"""
+    import configparser
+
+    is_git = current_app.config.get("IS_GIT", True)
+    if not is_git:
+        return _ok([])
+
+    root = current_app.config["PROJECT_ROOT"]
+    gitmodules_path = root / ".gitmodules"
+    if not gitmodules_path.exists():
+        return _ok([])
+
+    parser = configparser.ConfigParser()
+    parser.read(str(gitmodules_path))
+
+    paths = []
+    for section in parser.sections():
+        if parser.has_option(section, "path"):
+            paths.append(parser.get(section, "path"))
+
+    return _ok(paths)
+
+
 # -- Mini Task endpoints ----------------------------------------------------
 
 @api_bp.route("/mini-tasks", methods=["GET"])
@@ -994,7 +1025,11 @@ def create_mini_task():
     if not title:
         return _err("title is required")
 
-    task = tm.add_mini(title, prompt)
+    submodules = data.get("submodules", [])
+    if not isinstance(submodules, list):
+        return _err("submodules must be an array")
+
+    task = tm.add_mini(title, prompt, submodules=submodules)
     return _ok(task.to_dict()), 201
 
 
@@ -1026,7 +1061,8 @@ def start_mini_task(task_id: str):
     is_git = current_app.config.get("IS_GIT", True)
     wt = WorktreeManager(root, root / cfg.worktree_dir, is_git=is_git)
     try:
-        wt_path = wt.create(task_id, branch, config=cfg)
+        wt_path = wt.create(task_id, branch, config=cfg,
+                            submodules=task.submodules or None)
     except subprocess.CalledProcessError as e:
         return _err(f"Worktree creation failed: {e.stderr}", 500)
 
