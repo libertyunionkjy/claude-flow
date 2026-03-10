@@ -110,3 +110,39 @@ class TestWorker:
         repo, tm, wt, worker = self._setup(git_repo)
         contaminated = worker._check_repo_contamination()
         assert contaminated == []
+
+    def test_strip_worktree_constraint_from_claude_md(self, git_repo):
+        """worktree 中 CLAUDE.md 的 worktree 约束段落应被清理。"""
+        repo, tm, wt, worker = self._setup(git_repo)
+        wt_path = wt.create("task-strip", "cf/task-strip")
+
+        # 模拟 Claude Code 在 CLAUDE.md 末尾追加 worktree 约束
+        claude_md = wt_path / "CLAUDE.md"
+        original = "# Project\n\nSome content.\n"
+        polluted = (
+            original + "\n\n"
+            "## Worktree 工作目录约束（自动生成）\n\n"
+            "你当前工作在一个 Git Worktree 隔离环境中：\n"
+            f"- **工作目录**：`{wt_path}`\n"
+        )
+        claude_md.write_text(polluted, encoding="utf-8")
+
+        worker._strip_worktree_constraint_from_claude_md(wt_path)
+
+        result = claude_md.read_text(encoding="utf-8")
+        assert "Worktree 工作目录约束" not in result
+        assert "# Project" in result
+        assert "Some content." in result
+
+    def test_strip_worktree_constraint_no_marker(self, git_repo):
+        """没有 worktree 约束标记的 CLAUDE.md 不应被修改。"""
+        repo, tm, wt, worker = self._setup(git_repo)
+        wt_path = wt.create("task-clean", "cf/task-clean")
+
+        claude_md = wt_path / "CLAUDE.md"
+        original = "# Project\n\nClean content.\n"
+        claude_md.write_text(original, encoding="utf-8")
+
+        worker._strip_worktree_constraint_from_claude_md(wt_path)
+
+        assert claude_md.read_text(encoding="utf-8") == original

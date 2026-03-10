@@ -171,6 +171,9 @@ class Worker:
         if contaminated_files:
             self._rescue_contaminated_changes(wt_path, contaminated_files)
 
+        # 清理 Claude Code 可能写入 CLAUDE.md 的 worktree 约束段落
+        self._strip_worktree_constraint_from_claude_md(wt_path)
+
         # 自动提交 worktree 中的未提交变更
         has_changes = self._auto_commit(task, wt_path)
 
@@ -506,6 +509,45 @@ class Worker:
             except (ValueError, KeyError):
                 continue
         return None
+
+    # Worktree 约束段落的标记，用于检测和清理
+    _WT_CONSTRAINT_MARKER = "## Worktree 工作目录约束"
+
+    def _strip_worktree_constraint_from_claude_md(self, wt_path: Path) -> None:
+        """清理 worktree 中所有 CLAUDE.md 文件里被 Claude Code 自行追加的 worktree 约束段落。
+
+        Claude Code 在 worktree 中运行时，可能会读取 prompt 中的 worktree 路径约束，
+        然后"贴心地"将其写入 CLAUDE.md。这些内容如果随提交合并到 main 分支，
+        会导致 CLAUDE.md 包含指向已删除 worktree 的硬编码路径。
+        """
+        import re
+
+        # 扫描 worktree 中所有 CLAUDE.md 文件
+        claude_md_files = list(wt_path.rglob("CLAUDE.md"))
+        for md_file in claude_md_files:
+            # 跳过 .claude-flow 子目录中的文件
+            try:
+                md_file.relative_to(wt_path / ".claude-flow")
+                continue
+            except ValueError:
+                pass
+
+            try:
+                content = md_file.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                continue
+
+            if self._WT_CONSTRAINT_MARKER not in content:
+                continue
+
+            # 移除从标记开始到文件末尾的内容（该段落总是追加在最后）
+            marker_pos = content.find(self._WT_CONSTRAINT_MARKER)
+            # 同时清理标记前的连续空行
+            cleaned = content[:marker_pos].rstrip("\n") + "\n"
+
+            if cleaned != content:
+                md_file.write_text(cleaned, encoding="utf-8")
+                logger.info(f"Stripped worktree constraint from {md_file.relative_to(wt_path)}")
 
     def _auto_commit(self, task: Task, wt_path: Path) -> bool:
         """检查 worktree 中是否有未提交的变更，如有则自动提交。

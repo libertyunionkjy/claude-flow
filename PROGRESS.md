@@ -1,5 +1,35 @@
 # Progress Log
 
+## [2026-03-10 11:42:20] task-84272e - 实现mini task
+**Status**: FAILED
+**Commit**: c51dafb
+
+**错误信息**: Merge conflict
+
+**任务 Prompt**: 我写了一个实现文档，位于 docs/plans/2026-03-09-mini-task.md，这个Mini task 目前只在代码中实现了一小部分，请你帮我实现其余的部分
+
+---
+
+## [2026-03-10 11:27:07] task-3a5046 - 优化
+**Status**: SUCCESS
+**Commit**: 30d30d3
+
+以下是任务经验总结：
+
+---
+
+**任务总结：Web 端删除确认框优化**
+
+**做了什么：** 将 Web 端删除任务时的浏览器原生 `confirm()` 对话框替换为页面内自定义 Modal 确认框，涉及单个删除、详情页删除和批量删除三处调用点。同时修复了 `api.py` 中后台线程访问 Flask `current_app` 导致的 "Working outside of application context" 错误。
+
+**遇到的问题：** `confirm()` 是同步 API，而自定义 Modal 是异步的，需要用 `Promise` 包装并将调用处改为 `async/await`；此外发现 `is_git` 配置在后台线程中读取 `current_app` 会报错。
+
+**解决方案：** 新增 `showConfirm()` 函数返回 Promise，通过事件监听 resolve true/false，复用已有的 `.modal-overlay` 样式；将 `is_git` 的读取提前到请求上下文中完成。
+
+**经验教训：** 替换浏览器原生 API 时要全局搜索所有调用点，避免遗漏；Flask 后台线程不能访问请求上下文对象，需在主线程预读配置值。
+
+---
+
 ## [2026-03-10 10:38:43] task-49c125 - BUG
 **Status**: FAILED
 **Commit**: fc92fee
