@@ -73,3 +73,54 @@ class TestTaskManagerSubmodules:
         tm = TaskManager(tmp_path)
         task = tm.add("Test", "prompt")
         assert task.submodules == []
+
+
+import subprocess
+from pathlib import Path
+import pytest
+from claude_flow.worktree import WorktreeManager
+
+
+class TestWorktreeSubmoduleInit:
+    def test_create_with_submodule_initializes_submodule(self, git_repo_with_submodule):
+        """Worktree creation with submodules should init the specified submodule."""
+        info = git_repo_with_submodule
+        repo, sub_path = info["repo"], info["sub_path"]
+        wt_dir = repo / ".claude-flow" / "worktrees"
+        wt_dir.mkdir(parents=True, exist_ok=True)
+        mgr = WorktreeManager(repo, wt_dir)
+
+        wt_path = mgr.create("task-sub1", "cf/task-sub1", submodules=[sub_path])
+
+        sub_in_wt = wt_path / sub_path
+        assert sub_in_wt.exists()
+        assert (sub_in_wt / "lib.py").exists()
+
+    def test_create_without_submodule_leaves_empty(self, git_repo_with_submodule):
+        """Worktree creation without submodules should not init submodules."""
+        info = git_repo_with_submodule
+        repo, sub_path = info["repo"], info["sub_path"]
+        wt_dir = repo / ".claude-flow" / "worktrees"
+        wt_dir.mkdir(parents=True, exist_ok=True)
+        mgr = WorktreeManager(repo, wt_dir)
+
+        wt_path = mgr.create("task-nosub", "cf/task-nosub")
+        assert not (wt_path / sub_path / "lib.py").exists()
+
+    def test_create_with_invalid_submodule_raises(self, git_repo_with_submodule):
+        """Worktree creation with invalid submodule path should raise."""
+        info = git_repo_with_submodule
+        repo = info["repo"]
+        wt_dir = repo / ".claude-flow" / "worktrees"
+        wt_dir.mkdir(parents=True, exist_ok=True)
+        mgr = WorktreeManager(repo, wt_dir)
+
+        with pytest.raises(subprocess.CalledProcessError):
+            mgr.create("task-bad", "cf/task-bad", submodules=["nonexistent/path"])
+
+    def test_create_non_git_ignores_submodules(self, non_git_dir):
+        """Non-git mode should ignore submodules param."""
+        wt_dir = non_git_dir / ".claude-flow" / "worktrees"
+        mgr = WorktreeManager(non_git_dir, wt_dir, is_git=False)
+        result = mgr.create("task-ng", "cf/task-ng", submodules=["libs/core"])
+        assert result == non_git_dir

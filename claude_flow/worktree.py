@@ -149,10 +149,33 @@ class WorktreeManager:
             target.symlink_to(source.resolve())
 
     # ------------------------------------------------------------------
+    # Submodule 初始化
+    # ------------------------------------------------------------------
+
+    def _init_submodules(self, wt_path: Path, submodules: list[str]) -> None:
+        """在 worktree 中选择性初始化指定的 submodule。
+
+        只初始化任务指定的 submodule，不触碰其他 submodule。
+        利用主仓库 .git/modules/ 共享对象存储，update 本质是 checkout。
+        初始化失败时抛出 CalledProcessError，由调用方处理。
+
+        使用 -c protocol.file.allow=always 允许本地 file:// 协议 clone
+        （Git 2.38+ 默认禁用了 local file:// clone）。
+        """
+        for sub_path in submodules:
+            self._run(["git", "submodule", "init", sub_path], cwd=wt_path)
+            self._run(
+                ["git", "-c", "protocol.file.allow=always",
+                 "submodule", "update", sub_path],
+                cwd=wt_path,
+            )
+
+    # ------------------------------------------------------------------
     # 创建 worktree
     # ------------------------------------------------------------------
 
-    def create(self, task_id: str, branch: str, config: Config = None) -> Path:
+    def create(self, task_id: str, branch: str, config: Config = None,
+               submodules: list[str] | None = None) -> Path:
         """创建 worktree 并设置 symlink 共享文件。
 
         Non-git mode: returns the project root directly (no isolation).
@@ -172,6 +195,10 @@ class WorktreeManager:
                 shared=config.shared_symlinks,
                 forbidden=config.forbidden_symlinks,
             )
+
+        # 初始化指定的 submodule
+        if submodules:
+            self._init_submodules(wt_path, submodules)
 
         return wt_path
 

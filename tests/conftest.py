@@ -212,3 +212,50 @@ def claude_subprocess_guard(monkeypatch) -> ClaudeSubprocessGuard:
     monkeypatch.setattr("claude_flow.worker.subprocess.Popen", guard.mock_popen)
     monkeypatch.setattr("claude_flow.worker.subprocess.run", guard.mock_run)
     return guard
+
+
+@pytest.fixture
+def git_repo_with_submodule(tmp_path: Path) -> dict:
+    """Create a git repo with a submodule and return paths.
+
+    Returns dict with keys: repo, sub_remote, sub_path.
+    """
+    # Create a repo to serve as the submodule "remote"
+    sub_remote = tmp_path / "sub_remote"
+    subprocess.run(["git", "init", "-b", "main", str(sub_remote)],
+                   check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(sub_remote), "config", "user.email", "test@test.com"],
+                   check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(sub_remote), "config", "user.name", "Test"],
+                   check=True, capture_output=True)
+    (sub_remote / "lib.py").write_text("# library code\ndef hello():\n    return 'hello'\n")
+    subprocess.run(["git", "-C", str(sub_remote), "add", "."],
+                   check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(sub_remote), "commit", "-m", "init lib"],
+                   check=True, capture_output=True)
+
+    # Create main repo
+    repo = tmp_path / "main_project"
+    subprocess.run(["git", "init", "-b", "main", str(repo)],
+                   check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(repo), "config", "user.email", "test@test.com"],
+                   check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(repo), "config", "user.name", "Test"],
+                   check=True, capture_output=True)
+    (repo / "README.md").write_text("# Main Project")
+    subprocess.run(["git", "-C", str(repo), "add", "."],
+                   check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(repo), "commit", "-m", "init main"],
+                   check=True, capture_output=True)
+
+    # Add submodule (protocol.file.allow=always needed for Git 2.38+)
+    sub_path = "libs/mylib"
+    subprocess.run(
+        ["git", "-C", str(repo), "-c", "protocol.file.allow=always",
+         "submodule", "add", str(sub_remote), sub_path],
+        check=True, capture_output=True,
+    )
+    subprocess.run(["git", "-C", str(repo), "commit", "-m", "add submodule"],
+                   check=True, capture_output=True)
+
+    return {"repo": repo, "sub_remote": sub_remote, "sub_path": sub_path}
