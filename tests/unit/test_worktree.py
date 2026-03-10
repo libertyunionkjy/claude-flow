@@ -3,6 +3,7 @@ import threading
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 from claude_flow.worktree import WorktreeManager, MERGE_LOCK_FILE
+from claude_flow.config import Config
 
 
 class TestWorktreeManager:
@@ -112,4 +113,75 @@ class TestWorktreeManager:
         assert success is True
         # 锁文件应被创建
         assert (wt_dir / MERGE_LOCK_FILE).exists()
+
+    def test_ff_merge_fallback_on_upstream_change(self, git_repo):
+        """ff-only 失败后应降级到 --no-ff merge。
+
+        模拟场景：rebase 成功后，main 分支被其他 worker 修改，
+        ff-only 失败，应降级到 --no-ff 完成合并。
+        """
+        wt_dir = git_repo / ".claude-flow" / "worktrees"
+        mgr = WorktreeManager(git_repo, wt_dir)
+
+        # 创建 worktree 并提交
+        wt_path = mgr.create("task-ff1", "cf/task-ff1")
+        (wt_path / "feature.txt").write_text("feature content")
+        subprocess.run(["git", "-C", str(wt_path), "add", "."], check=True, capture_output=True)
+        subprocess.run(["git", "-C", str(wt_path), "commit", "-m", "feat: add feature"],
+                       check=True, capture_output=True)
+
+        # 在 main 上也提交（不同文件，无冲突但无法 ff-only）
+        (git_repo / "other.txt").write_text("other content")
+        subprocess.run(["git", "-C", str(git_repo), "add", "."], check=True, capture_output=True)
+        subprocess.run(["git", "-C", str(git_repo), "commit", "-m", "main: other change"],
+                       check=True, capture_output=True)
+
+        # _ff_merge 应降级到 --no-ff 成功
+        success = mgr._ff_merge("cf/task-ff1", "main", wt_path=wt_path)
+        assert success is True
+        # 两个文件都应存在于 main
+        assert (git_repo / "feature.txt").exists()
+        assert (git_repo / "other.txt").exists()
+
+        mgr.remove("task-ff1", "cf/task-ff1")
+
+    def test_conflict_prompt_includes_diff_content(self, git_repo):
+        """冲突 prompt 应包含 diff 内容和提交历史，而非仅文件名。"""
+        wt_dir = git_repo / ".claude-flow" / "worktrees"
+        mgr = WorktreeManager(git_repo, wt_dir)
+
+        prompt = mgr._build_conflict_prompt(
+            ["file_a.py", "file_b.py"],
+            task_title="Test Feature",
+            task_prompt="Implement test feature",
+            cwd=git_repo,
+        )
+
+        # 应包含完整任务上下文（不截断）
+        assert "Test Feature" in prompt
+        assert "Implement test feature" in prompt
+        # 应包含结构化标题
+        assert "## 任务标题" in prompt
+        assert "## 任务描述" in prompt
+        assert "## 冲突文件详情" in prompt
+        assert "## 近期提交历史" in prompt
+        assert "## 要求" in prompt
+        # 应包含文件名
+        assert "file_a.py" in prompt
+        assert "file_b.py" in prompt
+
+    def test_conflict_prompt_long_task_prompt_not_truncated(self, git_repo):
+        """长任务描述不应被截断（旧版截断到 800 字）。"""
+        wt_dir = git_repo / ".claude-flow" / "worktrees"
+        mgr = WorktreeManager(git_repo, wt_dir)
+
+        long_prompt = "A" * 2000
+        prompt = mgr._build_conflict_prompt(
+            ["file.py"],
+            task_title="Test",
+            task_prompt=long_prompt,
+            cwd=git_repo,
+        )
+        # 完整 2000 字应全部在 prompt 中
+        assert long_prompt in prompt
 

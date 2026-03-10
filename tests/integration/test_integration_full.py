@@ -375,6 +375,92 @@ class TestWorktreeMerge:
         assert count >= 3
         assert len(wt.list_active()) == 0
 
+    def test_ff_merge_fallback_with_diverged_branches(self, cf_project, claude_subprocess_guard):
+        """ff-only 失败时应降级到 --no-ff 完成合并，不丢失代码。"""
+        cfg, tm, planner, wt, worker = _build_stack(cf_project)
+
+        wt_path = wt.create("task-ff2", "cf/task-ff2")
+
+        # 在 main 上提交（不同文件）
+        (cf_project / "main_file.txt").write_text("main")
+        subprocess.run(["git", "add", "."], cwd=str(cf_project), check=True, capture_output=True)
+        subprocess.run(["git", "commit", "-m", "main commit"],
+                       cwd=str(cf_project), check=True, capture_output=True)
+
+        # 在分支上提交（不同文件）
+        (wt_path / "branch_file.txt").write_text("branch")
+        subprocess.run(["git", "add", "."], cwd=str(wt_path), check=True, capture_output=True)
+        subprocess.run(["git", "commit", "-m", "branch commit"],
+                       cwd=str(wt_path), check=True, capture_output=True)
+
+        # 直接调用 _ff_merge（模拟 rebase 后 main 已变化的场景）
+        success = wt._ff_merge("cf/task-ff2", "main", wt_path=wt_path)
+        assert success is True
+
+        # 验证两个文件都存在
+        assert (cf_project / "main_file.txt").exists()
+        assert (cf_project / "branch_file.txt").exists()
+
+        wt.remove("task-ff2", "cf/task-ff2")
+
+    def test_rebase_and_merge_with_timeout(self, cf_project, claude_subprocess_guard):
+        """rebase_and_merge 传入 timeout 参数应被接受（不报错）。"""
+        cfg, tm, planner, wt, worker = _build_stack(cf_project)
+        cfg.skip_permissions = False
+
+        wt_path = wt.create("task-tm1", "cf/task-tm1")
+        (wt_path / "timeout_test.txt").write_text("timeout")
+        subprocess.run(["git", "add", "."], cwd=str(wt_path), check=True, capture_output=True)
+        subprocess.run(["git", "commit", "-m", "timeout test"],
+                       cwd=str(wt_path), check=True, capture_output=True)
+
+        success = wt.rebase_and_merge("cf/task-tm1", "main", timeout=600)
+        assert success is True
+        assert (cf_project / "timeout_test.txt").exists()
+
+        wt.remove("task-tm1", "cf/task-tm1")
+
+    def test_concurrent_rebase_merge_both_succeed(self, cf_project, claude_subprocess_guard):
+        """两个 worker 并发 rebase_and_merge 不同文件，都应成功。"""
+        cfg, tm, planner, wt, worker = _build_stack(cf_project)
+
+        # 创建两个 worktree，各自改不同文件
+        wt_a = wt.create("task-cr1", "cf/task-cr1")
+        (wt_a / "cr_a.txt").write_text("cr_a")
+        subprocess.run(["git", "add", "."], cwd=str(wt_a), check=True, capture_output=True)
+        subprocess.run(["git", "commit", "-m", "cr_a"],
+                       cwd=str(wt_a), check=True, capture_output=True)
+
+        wt_b = wt.create("task-cr2", "cf/task-cr2")
+        (wt_b / "cr_b.txt").write_text("cr_b")
+        subprocess.run(["git", "add", "."], cwd=str(wt_b), check=True, capture_output=True)
+        subprocess.run(["git", "commit", "-m", "cr_b"],
+                       cwd=str(wt_b), check=True, capture_output=True)
+
+        results: list[bool] = []
+        errors: list[Exception] = []
+
+        def do_rebase(branch):
+            try:
+                results.append(wt.rebase_and_merge(branch, "main"))
+            except Exception as e:
+                errors.append(e)
+
+        t1 = threading.Thread(target=do_rebase, args=("cf/task-cr1",))
+        t2 = threading.Thread(target=do_rebase, args=("cf/task-cr2",))
+        t1.start()
+        t2.start()
+        t1.join(timeout=15)
+        t2.join(timeout=15)
+
+        assert len(errors) == 0, f"Rebase errors: {errors}"
+        assert all(results), f"Expected both to succeed: {results}"
+        assert (cf_project / "cr_a.txt").exists()
+        assert (cf_project / "cr_b.txt").exists()
+
+        wt.remove("task-cr1", "cf/task-cr1")
+        wt.remove("task-cr2", "cf/task-cr2")
+
 
 # ---------------------------------------------------------------------------
 # 3. TestCLIWorkflow -- End-to-end CLI commands

@@ -204,6 +204,7 @@ class Worker:
                     config=self._cfg,
                     task_title=task.title,
                     task_prompt=task.prompt,
+                    timeout=self._cfg.task_timeout,
                 )
             else:
                 success = self._wt.merge(
@@ -217,6 +218,13 @@ class Worker:
                 self._tm.update_status(task.id, TaskStatus.FAILED, "CONFLICT")
                 self._log_progress(task, False, "Merge conflict", wt_path)
                 return False
+
+            # 合并后测试验证（在 worktree 中验证合并结果的正确性）
+            if self._cfg.pre_merge_commands:
+                post_merge_ok = self._run_pre_merge_tests(task, wt_path)
+                if not post_merge_ok:
+                    logger.warning(f"{prefix} Post-merge tests failed for {task.id}, "
+                                   "task still marked as done (merge already completed)")
 
             # 远程推送
             if self._cfg.auto_push:

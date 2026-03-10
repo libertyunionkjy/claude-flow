@@ -1,5 +1,25 @@
 # Progress Log
 
+## [2026-03-10 10:38:43] task-49c125 - BUG
+**Status**: FAILED
+**Commit**: fc92fee
+
+**错误信息**: Merge conflict
+
+**任务 Prompt**: 现在如果我删除一个 task ，但是这个 task 的 worktree 不会自动删除，branch 也不会自动删除
+
+---
+
+## [2026-03-10 01:50:37] task-39ab5d - 研究
+**Status**: FAILED
+**Commit**: 91510d2
+
+**错误信息**: Merge conflict
+
+**任务 Prompt**: 帮我看一下Mini task 这个需求有没有正确实现
+
+---
+
 ## [2026-03-10 00:56:42] task-49a4cd - 研究
 **Status**: FAILED
 **Commit**: d8130b1

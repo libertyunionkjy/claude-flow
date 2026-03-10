@@ -4,6 +4,7 @@ import fcntl
 import logging
 import os
 import subprocess
+import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable, List, Optional, TypeVar
 
@@ -37,8 +38,10 @@ class WorktreeManager:
         # interactive rebase todo lists. Setting both to 'true' (the shell builtin
         # that exits 0) ensures all git operations run non-interactively.
         env = os.environ.copy()
-        env.setdefault("GIT_EDITOR", "true")
-        env.setdefault("GIT_SEQUENCE_EDITOR", "true")
+        # Force override to prevent any editor from blocking non-interactive workers,
+        # regardless of user's ~/.gitconfig core.editor setting.
+        env["GIT_EDITOR"] = "true"
+        env["GIT_SEQUENCE_EDITOR"] = "true"
         try:
             return subprocess.run(
                 args, cwd=cwd or self._repo,
@@ -176,6 +179,7 @@ class WorktreeManager:
                             conflict_files,
                             task_title=task_title,
                             task_prompt=task_prompt,
+                            cwd=self._repo,
                         )
                         claude_cmd = ["claude", "-p", prompt, "--dangerously-skip-permissions"]
                         claude_result = self._run(claude_cmd, check=False)
@@ -228,48 +232,81 @@ class WorktreeManager:
         return result.returncode != 0
 
     def _build_conflict_prompt(self, conflict_files: List[str],
-                               task_title: str = "", task_prompt: str = "") -> str:
-        """构建包含任务上下文和冲突详情的 prompt。"""
-        parts = [
-            "你正在解决一个 Git rebase 冲突。",
-        ]
-        if task_title:
-            parts.append(f"任务标题: {task_title}")
-        if task_prompt:
-            # 截断过长的 prompt
-            prompt_text = task_prompt[:800] if len(task_prompt) > 800 else task_prompt
-            parts.append(f"任务描述: {prompt_text}")
+                               task_title: str = "", task_prompt: str = "",
+                               cwd: Path | None = None) -> str:
+        """构建包含任务上下文、冲突 diff 和提交历史的 prompt。
 
-        parts.append(f"\n以下文件存在冲突，请逐一解决:")
+        与旧版仅包含文件名不同，新版包含每个冲突文件的完整 diff 输出
+        和近期提交历史，给 Claude 充足的上下文来完成合并。
+        """
+        work_dir = cwd or self._repo
+
+        parts = [
+            "你正在解决一个 Git rebase 冲突。请仔细阅读以下上下文，完成冲突解决。",
+        ]
+
+        # 任务上下文（不截断，给完整信息）
+        if task_title:
+            parts.append(f"\n## 任务标题\n{task_title}")
+        if task_prompt:
+            parts.append(f"\n## 任务描述\n{task_prompt}")
+
+        # 近期提交历史
+        log_result = self._run(
+            ["git", "log", "--oneline", "-10"],
+            cwd=work_dir, check=False,
+        )
+        if log_result.stdout.strip():
+            parts.append(f"\n## 近期提交历史\n```\n{log_result.stdout.strip()}\n```")
+
+        # 冲突文件的 diff 详情
+        parts.append("\n## 冲突文件详情")
         for f in conflict_files:
-            parts.append(f"  - {f}")
+            parts.append(f"\n### {f}")
+            diff_result = self._run(
+                ["git", "diff", f],
+                cwd=work_dir, check=False,
+            )
+            diff_text = diff_result.stdout.strip()
+            # 限制单文件 diff 长度，防止 prompt 过大
+            if len(diff_text) > 4000:
+                diff_text = diff_text[:4000] + "\n... (diff truncated)"
+            if diff_text:
+                parts.append(f"```diff\n{diff_text}\n```")
+            else:
+                parts.append("(no diff output)")
 
         parts.append(
-            "\n要求:\n"
-            "1. 读取每个冲突文件，理解冲突双方的意图\n"
-            "2. 保留双方的有效改动，合理合并\n"
-            "3. 删除所有冲突标记 (<<<<<<<, =======, >>>>>>>)\n"
-            "4. 确保合并后的代码逻辑正确、可运行"
+            "\n## 要求\n"
+            "1. 读取每个冲突文件的完整内容\n"
+            "2. 理解冲突双方的意图，结合任务描述判断应保留哪些改动\n"
+            "3. 保留双方的有效改动，合理合并\n"
+            "4. 删除所有冲突标记 (<<<<<<<, =======, >>>>>>>)\n"
+            "5. 确保合并后的代码逻辑正确、语法正确、可运行\n"
+            "6. 不要遗漏任何冲突文件"
         )
         return "\n".join(parts)
 
     def rebase_and_merge(self, branch: str, main_branch: str, max_retries: int = 5,
                          config: Config = None,
-                         task_title: str = "", task_prompt: str = "") -> bool:
+                         task_title: str = "", task_prompt: str = "",
+                         timeout: int = 0) -> bool:
         """使用 rebase 策略合并分支。
 
         流程：
         1. git fetch origin（如果有 remote）
         2. 在 worktree 中执行 git rebase origin/main（或 git rebase main）
-        3. 成功后 checkout main，执行 git merge --ff-only
+        3. 成功后 checkout main，执行 git merge --ff-only（含重试降级）
         4. 冲突时使用 claude 解决冲突，然后 git rebase --continue
-        5. 最多重试 max_retries 次
-        6. 全部失败则 git rebase --abort，返回 False
+        5. 冲突解决后在 worktree 中执行 pre_merge_commands 验证
+        6. 最多重试 max_retries 次
+        7. 超时或全部失败则 git rebase --abort，返回 False
         """
         if not self._is_git:
             return True  # Non-git mode: skip rebase
 
         def _do() -> bool:
+            start_time = time.time()
             has_remote = self._has_remote()
 
             # 确定 rebase 的目标
@@ -289,8 +326,8 @@ class WorktreeManager:
             )
 
             if rebase_result.returncode == 0:
-                # rebase 成功，执行 ff-only 合并
-                return self._ff_merge(branch, main_branch)
+                # rebase 成功，执行 ff-only 合并（传入 wt_path 支持重试降级）
+                return self._ff_merge(branch, main_branch, wt_path=wt_path)
 
             # 步骤 3: 冲突处理 — 最多重试 max_retries 次
             skip_ok = config is not None and can_skip_permissions(
@@ -298,6 +335,11 @@ class WorktreeManager:
             )
 
             for attempt in range(max_retries):
+                # 超时保护：预留 20% 时间给清理操作
+                if timeout > 0 and (time.time() - start_time) > timeout * 0.8:
+                    logger.warning(f"Conflict resolution approaching timeout ({timeout}s), aborting")
+                    break
+
                 if not skip_ok:
                     logger.warning("Cannot auto-resolve conflicts: skip_permissions not available")
                     break
@@ -312,17 +354,18 @@ class WorktreeManager:
                         cwd=wt_path, check=False,
                     )
                     if continue_result.returncode == 0:
-                        return self._ff_merge(branch, main_branch)
+                        return self._ff_merge(branch, main_branch, wt_path=wt_path)
                     break
 
                 logger.info(f"Rebase conflict (attempt {attempt + 1}/{max_retries}), "
                             f"files: {conflict_files}")
 
-                # 构建包含任务上下文的冲突解决 prompt
+                # 构建包含任务上下文和 diff 的冲突解决 prompt
                 prompt = self._build_conflict_prompt(
                     conflict_files,
                     task_title=task_title,
                     task_prompt=task_prompt,
+                    cwd=wt_path,
                 )
                 claude_cmd = ["claude", "-p", prompt, "--dangerously-skip-permissions"]
                 claude_result = self._run(
@@ -350,7 +393,7 @@ class WorktreeManager:
 
                 if continue_result.returncode == 0:
                     # rebase 成功，执行 ff-only 合并
-                    return self._ff_merge(branch, main_branch)
+                    return self._ff_merge(branch, main_branch, wt_path=wt_path)
 
             # 全部失败，abort rebase
             self._run(["git", "rebase", "--abort"], cwd=wt_path, check=False)
@@ -373,22 +416,60 @@ class WorktreeManager:
 
         # 回退：遍历 worktree 列表查找
         result = self._run(["git", "worktree", "list", "--porcelain"], check=False)
+        path: Path | None = None
         for line in result.stdout.splitlines():
             if line.startswith("worktree "):
                 path = Path(line.split(" ", 1)[1])
-            elif line.startswith("branch ") and line.endswith(f"/{branch}"):
+            elif line.startswith("branch ") and line.endswith(f"/{branch}") and path is not None:
                 return path
 
         # 最终回退到主仓库
         return self._repo
 
-    def _ff_merge(self, branch: str, main_branch: str) -> bool:
-        """checkout 主分支并执行 fast-forward 合并。"""
+    def _ff_merge(self, branch: str, main_branch: str,
+                  wt_path: Path | None = None) -> bool:
+        """checkout 主分支并执行 fast-forward 合并。
+
+        如果 ff-only 失败（main 已有新提交），尝试在 worktree 中重新 rebase
+        后再次 ff-only。若仍失败，降级到 --no-ff merge 保证不丢代码。
+        """
         try:
             self._run(["git", "checkout", main_branch])
             self._run(["git", "merge", "--ff-only", branch])
             return True
         except subprocess.CalledProcessError:
+            pass
+
+        # ff-only 失败：main 在 rebase 期间被其他 worker 修改
+        if wt_path is not None:
+            logger.info(f"ff-only merge failed for {branch}, attempting re-rebase")
+            # 重新 fetch + rebase
+            has_remote = self._has_remote()
+            rebase_target = f"origin/{main_branch}" if has_remote else main_branch
+            if has_remote:
+                self._run(["git", "fetch", "origin"], check=False, timeout=NETWORK_TIMEOUT)
+            re_rebase = self._run(
+                ["git", "rebase", rebase_target], cwd=wt_path, check=False,
+            )
+            if re_rebase.returncode == 0:
+                try:
+                    self._run(["git", "checkout", main_branch])
+                    self._run(["git", "merge", "--ff-only", branch])
+                    return True
+                except subprocess.CalledProcessError:
+                    pass
+            else:
+                # re-rebase 也冲突，abort
+                self._run(["git", "rebase", "--abort"], cwd=wt_path, check=False)
+
+        # 最终降级：--no-ff merge（生成 merge commit，但保证不丢代码）
+        logger.warning(f"ff-only merge failed for {branch}, falling back to --no-ff")
+        try:
+            self._run(["git", "checkout", main_branch])
+            self._run(["git", "merge", "--no-ff", branch, "-m", f"merge {branch}"])
+            return True
+        except subprocess.CalledProcessError:
+            self._run(["git", "merge", "--abort"], check=False)
             self._run(["git", "checkout", main_branch], check=False)
             return False
 
