@@ -48,6 +48,7 @@ class Task:
     progress: Optional[str] = None
     retry_count: int = 0
     plan_mode: Optional[str] = None  # "auto" | "interactive"
+    submodules: list[str] = field(default_factory=list)
 
     @property
     def is_mini(self) -> bool:
@@ -72,6 +73,7 @@ class Task:
             "progress": self.progress,
             "retry_count": self.retry_count,
             "plan_mode": self.plan_mode,
+            "submodules": self.submodules,
         }
 
     @classmethod
@@ -93,4 +95,5 @@ class Task:
             progress=d.get("progress"),
             retry_count=d.get("retry_count", 0),
             plan_mode=d.get("plan_mode"),
+            submodules=d.get("submodules", []),
         )

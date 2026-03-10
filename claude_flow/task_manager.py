@@ -97,16 +97,16 @@ class TaskManager:
             finally:
                 fcntl.flock(lock, fcntl.LOCK_UN)
 
-    def add(self, title: str, prompt: str, priority: int = 0) -> Task:
+    def add(self, title: str, prompt: str, priority: int = 0, submodules: list[str] | None = None) -> Task:
         def _do():
             tasks = self._load()
-            task = Task(title=title, prompt=prompt, priority=priority)
+            task = Task(title=title, prompt=prompt, priority=priority, submodules=submodules or [])
             tasks.append(task)
             self._save(tasks)
             return task
         return self._with_lock(_do)
 
-    def add_mini(self, title: str, prompt: str, priority: int = 0) -> Task:
+    def add_mini(self, title: str, prompt: str, priority: int = 0, submodules: list[str] | None = None) -> Task:
         """Add a mini task that skips planning/approval and is immediately executable."""
         def _do():
             tasks = self._load()
@@ -116,6 +116,7 @@ class TaskManager:
                 priority=priority,
                 task_type=TaskType.MINI,
                 status=TaskStatus.APPROVED,
+                submodules=submodules or [],
             )
             tasks.append(task)
             self._save(tasks)
