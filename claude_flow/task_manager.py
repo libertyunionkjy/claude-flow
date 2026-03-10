@@ -122,11 +122,15 @@ class TaskManager:
             return task
         return self._with_lock(_do)
 
-    def list_tasks(self, status: Optional[TaskStatus] = None) -> List[Task]:
+    def list_tasks(
+        self, status: Optional[TaskStatus] = None, task_type: Optional[str] = None
+    ) -> List[Task]:
         def _do():
             tasks = self._load()
             if status:
-                return [t for t in tasks if t.status == status]
+                tasks = [t for t in tasks if t.status == status]
+            if task_type:
+                tasks = [t for t in tasks if t.task_type.value == task_type]
             return tasks
         return self._with_shared_lock(_do)
 

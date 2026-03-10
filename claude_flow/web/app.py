@@ -14,6 +14,7 @@ from ..chat import ChatManager
 from ..config import Config
 from ..models import TaskStatus
 from ..planner import Planner
+from ..pty_manager import PtyManager
 from ..task_manager import TaskManager
 from ..usage import UsageManager
 
@@ -80,12 +81,31 @@ def create_app(project_root: Path, config: Config) -> Flask:
     app.config["CHAT_MANAGER"] = chat_manager
     app.config["USAGE_MANAGER"] = UsageManager(project_root, config)
 
+    # PTY Manager for mini task terminals
+    pty_manager = PtyManager()
+    app.config["PTY_MANAGER"] = pty_manager
+
     # Recover tasks stuck in PLANNING state due to interrupted finalize
     _recover_stuck_planning_tasks(task_manager, chat_manager, plans_dir)
+
+    # Recover interrupted mini task sessions on startup
+    _recover_interrupted_sessions(task_manager, pty_manager)
 
     # 注册 API 蓝图
     from .api import api_bp
     app.register_blueprint(api_bp)
+
+    # Register WebSocket routes (graceful fallback if flask-sock missing)
+    try:
+        from flask_sock import Sock
+        sock = Sock(app)
+        from .ws import register_ws_routes
+        register_ws_routes(sock, app)
+    except ImportError:
+        import logging
+        logging.getLogger(__name__).warning(
+            "flask-sock not installed, WebSocket terminal disabled"
+        )
 
     # 看板首页路由
     @app.route("/")
@@ -93,3 +113,11 @@ def create_app(project_root: Path, config: Config) -> Flask:
         return render_template("index.html")
 
     return app
+
+
+def _recover_interrupted_sessions(tm: TaskManager, pty_mgr: PtyManager) -> None:
+    """Mark any running mini tasks as INTERRUPTED on server restart."""
+    running_minis = tm.list_tasks(status=TaskStatus.RUNNING, task_type="mini")
+    for task in running_minis:
+        tm.update_status(task.id, TaskStatus.INTERRUPTED,
+                        "Server restarted, PTY session lost")

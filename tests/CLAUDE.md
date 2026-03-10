@@ -38,6 +38,9 @@ pytest -k "test_claim" -v
 | `test_worktree.py` | `worktree.py` | 5 | 真实 git 操作（git_repo） |
 | `test_worker.py` | `worker.py` | 3 | mock subprocess.run + git_repo |
 | `test_cli.py` | `cli.py` | 4 | CliRunner + git_repo |
+| `test_pty_manager.py` | `pty_manager.py` | 7 | mock pty.fork / os.kill |
+| `test_mini_task.py` | Mini Task 模型/API | 多项 | Flask test client + MagicMock |
+| `test_mini_task_integration.py` | Mini Task 集成 | 8 | Flask test client + MagicMock |
 
 ## 关键依赖与配置
 
@@ -52,6 +55,7 @@ pytest -k "test_claim" -v
 2. **文件操作测试**（`test_task_manager.py`）：使用 `tmp_path`，测试 JSON 持久化和文件锁
 3. **Git 操作测试**（`test_worktree.py`）：使用 `git_repo` fixture，真实执行 git 命令
 4. **集成测试**（`test_worker.py`, `test_cli.py`）：结合 git_repo + mock 外部 CLI 调用
+5. **Mini Task 测试**（`test_pty_manager.py`, `test_mini_task.py`, `test_mini_task_integration.py`）：Flask test client + MagicMock PTY
 
 ## 相关文件清单
 
@@ -66,9 +70,13 @@ pytest -k "test_claim" -v
 | `test_worktree.py` | 54 | Worktree 创建/删除/合并测试 |
 | `test_worker.py` | 49 | Worker 执行/失败/空循环测试 |
 | `test_cli.py` | 41 | CLI init/task/status 命令测试 |
+| `test_pty_manager.py` | ~80 | PtySession/PtyManager 单元测试 |
+| `test_mini_task.py` | ~200 | Mini Task 模型/TaskManager/CLI/API 测试 |
+| `test_mini_task_integration.py` | ~130 | Mini Task 集成生命周期测试 |
 
 ## 变更记录 (Changelog)
 
 | 时间 | 操作 |
 |------|------|
+| 2026-03-10 | 新增 Mini Task 测试文件：test_pty_manager.py、test_mini_task_integration.py |
 | 2026-03-05T14:07:01 | 初始化测试文档（init-architect 自适应扫描） |

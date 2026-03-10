@@ -4,7 +4,7 @@
 
 ## 模块职责
 
-`claude_flow` 是项目的唯一 Python 包，实现了多实例 Claude Code 工作流管理的全部核心逻辑：CLI 命令解析、任务队列管理、计划生成与审批、Worker 执行引擎、Git Worktree 操作和配置管理。
+`claude_flow` 是项目的唯一 Python 包，实现了多实例 Claude Code 工作流管理的全部核心逻辑：CLI 命令解析、任务队列管理、计划生成与审批、Worker 执行引擎、Git Worktree 操作、配置管理，以及 Mini Task 轻量交互式任务（PTY 终端 + WebSocket + xterm.js）。
 
 ## 入口与启动
 
@@ -28,6 +28,9 @@ cf (main)
  |    |-- finalize <task_id>   # 从聊天生成计划文档
  |    |-- review               # 交互式审批
  |    |-- approve [task_id]    # 批准计划（--all 全部）
+ |-- task (group, 续)
+ |    |-- mini "标题" -p "prompt"  # 创建 Mini Task（跳过 plan/review）
+ |    |-- mini "标题" -p "prompt" --run  # 创建并立即启动 Mini Task
  |-- run [-n N] [task_id]      # 启动 Worker 执行
  |-- status                    # 状态总览
  |-- log <task_id>             # 查看日志
@@ -41,7 +44,8 @@ cf (main)
 | 类 | 文件 | 职责 |
 |----|------|------|
 | `Task` | `models.py` | 任务数据模型（dataclass），含序列化/反序列化 |
-| `TaskStatus` | `models.py` | 任务状态枚举（8 种状态） |
+| `TaskStatus` | `models.py` | 任务状态枚举（9 种状态，含 INTERRUPTED） |
+| `TaskType` | `models.py` | 任务类型枚举（NORMAL / MINI） |
 | `Config` | `config.py` | 配置 dataclass，支持加载/保存/合并默认值 |
 | `TaskManager` | `task_manager.py` | 任务 CRUD、文件锁并发安全、claim_next 领取任务 |
 | `ChatSession` | `chat.py` | 聊天会话数据模型（dataclass），含消息列表和状态 |
@@ -49,6 +53,8 @@ cf (main)
 | `Planner` | `planner.py` | Claude Code plan mode 封装，自动/交互式生成计划文档 |
 | `Worker` | `worker.py` | 单个 Worker 的执行循环：领取 -> worktree -> claude -> merge -> cleanup |
 | `WorktreeManager` | `worktree.py` | Git worktree 创建/移除/合并/列表/批量清理 |
+| `PtySession` | `pty_manager.py` | PTY 会话数据模型（dataclass）：task_id, pid, fd, wt_path |
+| `PtyManager` | `pty_manager.py` | PTY 会话生命周期管理：创建/读写/调整大小/清理 |
 
 ## 关键依赖与配置
 
@@ -57,7 +63,10 @@ cf (main)
 | 依赖 | 用途 |
 |------|------|
 | `click>=8.0` | CLI 框架 |
+| `flask>=2.0` | Web Manager 看板应用（可选） |
+| `flask-sock>=0.7` | WebSocket 支持，Mini Task 终端通信（可选） |
 | `fcntl` (stdlib) | 文件锁实现并发安全 |
+| `pty` (stdlib) | PTY 会话创建（Mini Task 终端） |
 | `subprocess` (stdlib) | 调用 git 和 claude CLI |
 | `json` (stdlib) | 任务和配置的 JSON 持久化 |
 
@@ -86,6 +95,7 @@ cf (main)
 | `title` | str | 任务标题 |
 | `prompt` | str | 给 Claude Code 的 prompt |
 | `status` | TaskStatus | 当前状态 |
+| `task_type` | TaskType | 任务类型（NORMAL / MINI） |
 | `branch` | Optional[str] | 工作分支名 "cf/{task_id}" |
 | `plan_file` | Optional[str] | 计划文件路径 |
 | `worker_id` | Optional[int] | 执行该任务的 Worker ID |
@@ -127,10 +137,49 @@ A: 通过 `subprocess.run(["claude", "-p", prompt, ...])` 调用 Claude Code CLI
 | `planner.py` | 50 | Plan 生成/读取/审批/拒绝 |
 | `worker.py` | 98 | Worker 执行循环 |
 | `worktree.py` | 52 | Git worktree 操作 |
+| `pty_manager.py` | ~120 | PTY 会话管理（创建/读写/清理） |
 | `cli.py` | 366 | Click CLI 全部命令 |
+
+## Mini Task 架构
+
+Mini Task 是轻量级交互式任务，跳过 plan/review 阶段，通过浏览器终端直接与 Claude CLI 交互。
+
+### 生命周期
+
+```
+approved --> running (PTY + worktree) --> merging --> done
+                                     \-> interrupted (服务器重启)
+```
+
+### 核心组件
+
+- **PtyManager** (`pty_manager.py`): 管理 PTY 伪终端会话，每个 Mini Task 对应一个 PTY 进程
+- **WebSocket 桥** (`web/ws.py`): 通过 flask-sock 将浏览器 xterm.js 与服务器 PTY 双向连接
+- **REST API** (`web/api.py`): 7 个 Mini Task 端点（创建/启动/停止/diff/合并/丢弃/列表）
+- **前端 UI** (`web/templates/index.html`): 侧边栏 Mini Task 列表 + xterm.js 终端 + Diff 预览
+- **恢复机制** (`web/app.py`): 服务器重启时将 RUNNING 状态的 Mini Task 标记为 INTERRUPTED
+
+### API 端点
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/mini-tasks` | 列出所有 Mini Task |
+| POST | `/api/mini-tasks` | 创建新 Mini Task |
+| POST | `/api/mini-tasks/<id>/start` | 启动 PTY + worktree |
+| POST | `/api/mini-tasks/<id>/stop` | 停止 PTY，自动提交 |
+| GET | `/api/mini-tasks/<id>/diff` | 查看变更 diff |
+| POST | `/api/mini-tasks/<id>/merge` | 合并到主分支 |
+| POST | `/api/mini-tasks/<id>/discard` | 丢弃变更 |
+
+### WebSocket
+
+| 路径 | 说明 |
+|------|------|
+| `/ws/terminal/<task_id>` | xterm.js 双向终端通信 |
 
 ## 变更记录 (Changelog)
 
 | 时间 | 操作 |
 |------|------|
+| 2026-03-10 | 添加 Mini Task 功能：PtyManager、WebSocket、REST API、前端 UI、INTERRUPTED 状态 |
 | 2026-03-05T14:07:01 | 初始化模块文档（init-architect 自适应扫描） |

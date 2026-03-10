@@ -17,6 +17,7 @@ class TaskStatus(Enum):
     NEEDS_INPUT = "needs_input"
     DONE = "done"
     FAILED = "failed"
+    INTERRUPTED = "interrupted"
 
 
 class TaskType(Enum):

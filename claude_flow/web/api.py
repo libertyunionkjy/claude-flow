@@ -967,3 +967,218 @@ def _update_plan_mode(tm, task_id: str, mode: str):
                 tm._save(tasks)
                 return
     tm._with_lock(_do)
+
+
+# -- Mini Task endpoints ----------------------------------------------------
+
+@api_bp.route("/mini-tasks", methods=["GET"])
+def list_mini_tasks():
+    """List all mini tasks."""
+    tm = current_app.config["TASK_MANAGER"]
+    tasks = tm.list_tasks(task_type="mini")
+    return _ok([t.to_dict() for t in tasks])
+
+
+@api_bp.route("/mini-tasks", methods=["POST"])
+def create_mini_task():
+    """Create a mini task. body: {title, prompt}"""
+    tm = current_app.config["TASK_MANAGER"]
+    data = request.get_json(silent=True)
+
+    if not data:
+        return _err("request body cannot be empty")
+
+    title = data.get("title")
+    prompt = data.get("prompt", "")
+
+    if not title:
+        return _err("title is required")
+
+    task = tm.add_mini(title, prompt)
+    return _ok(task.to_dict()), 201
+
+
+@api_bp.route("/mini-tasks/<task_id>/start", methods=["POST"])
+def start_mini_task(task_id: str):
+    """Start a mini task: create worktree, start PTY session, mark running."""
+    import subprocess
+    from datetime import datetime
+
+    tm = current_app.config["TASK_MANAGER"]
+    task = tm.get(task_id)
+
+    if not task:
+        return _err(f"Task {task_id} not found", 404)
+    if task.task_type.value != "mini":
+        return _err(f"Task {task_id} is not a mini task")
+    if task.status not in (TaskStatus.PENDING, TaskStatus.INTERRUPTED, TaskStatus.APPROVED):
+        return _err(f"Task {task_id} is {task.status.value}, cannot start")
+
+    root = current_app.config["PROJECT_ROOT"]
+    cfg = current_app.config["CF_CONFIG"]
+    pty_mgr = current_app.config.get("PTY_MANAGER")
+
+    if not pty_mgr:
+        return _err("PTY manager not available", 500)
+
+    # Create worktree
+    branch = f"cf/{task_id}"
+    is_git = current_app.config.get("IS_GIT", True)
+    wt = WorktreeManager(root, root / cfg.worktree_dir, is_git=is_git)
+    try:
+        wt_path = wt.create(task_id, branch, config=cfg)
+    except subprocess.CalledProcessError as e:
+        return _err(f"Worktree creation failed: {e.stderr}", 500)
+
+    # Update task status and branch
+    tm.update_status(task_id, TaskStatus.RUNNING)
+    def _set_branch():
+        tasks = tm._load()
+        for t in tasks:
+            if t.id == task_id:
+                t.branch = branch
+                t.started_at = datetime.now()
+                tm._save(tasks)
+                return
+    tm._with_lock(_set_branch)
+
+    # Start PTY session
+    try:
+        pty_mgr.create_session(
+            task_id, wt_path,
+            prompt=task.prompt,
+            skip_permissions=cfg.skip_permissions,
+        )
+    except Exception as e:
+        tm.update_status(task_id, TaskStatus.FAILED, f"PTY creation failed: {e}")
+        wt.remove(task_id, branch)
+        return _err(f"PTY creation failed: {e}", 500)
+
+    updated = tm.get(task_id)
+    return _ok({**updated.to_dict(), "ws_url": f"/ws/terminal/{task_id}"})
+
+
+@api_bp.route("/mini-tasks/<task_id>/stop", methods=["POST"])
+def stop_mini_task(task_id: str):
+    """Stop PTY session, auto-commit, transition to merging."""
+    import subprocess as sp
+
+    tm = current_app.config["TASK_MANAGER"]
+    task = tm.get(task_id)
+
+    if not task:
+        return _err(f"Task {task_id} not found", 404)
+    if task.status != TaskStatus.RUNNING:
+        return _err(f"Task {task_id} is {task.status.value}, cannot stop")
+
+    pty_mgr = current_app.config.get("PTY_MANAGER")
+    if pty_mgr:
+        pty_mgr.remove_session(task_id)
+
+    # Auto-commit changes in worktree
+    root = current_app.config["PROJECT_ROOT"]
+    cfg = current_app.config["CF_CONFIG"]
+    wt_path = root / cfg.worktree_dir / task_id
+
+    if wt_path.exists():
+        sp.run(["git", "add", "-A"], cwd=str(wt_path), capture_output=True)
+        sp.run(
+            ["git", "commit", "-m", f"feat({task_id}): {task.title}", "--no-verify"],
+            cwd=str(wt_path), capture_output=True,
+        )
+
+    tm.update_status(task_id, TaskStatus.MERGING)
+    updated = tm.get(task_id)
+    return _ok(updated.to_dict())
+
+
+@api_bp.route("/mini-tasks/<task_id>/diff", methods=["GET"])
+def mini_task_diff(task_id: str):
+    """Get git diff for merge preview."""
+    import subprocess as sp
+
+    tm = current_app.config["TASK_MANAGER"]
+    task = tm.get(task_id)
+
+    if not task:
+        return _err(f"Task {task_id} not found", 404)
+    if not task.branch:
+        return _err(f"Task {task_id} has no branch")
+
+    root = current_app.config["PROJECT_ROOT"]
+    cfg = current_app.config["CF_CONFIG"]
+
+    result = sp.run(
+        ["git", "diff", f"{cfg.main_branch}...{task.branch}"],
+        cwd=str(root), capture_output=True, text=True,
+    )
+    stat_result = sp.run(
+        ["git", "diff", "--stat", f"{cfg.main_branch}...{task.branch}"],
+        cwd=str(root), capture_output=True, text=True,
+    )
+
+    return _ok({
+        "task_id": task_id,
+        "diff": result.stdout,
+        "stat": stat_result.stdout,
+        "branch": task.branch,
+    })
+
+
+@api_bp.route("/mini-tasks/<task_id>/merge", methods=["POST"])
+def merge_mini_task(task_id: str):
+    """Merge mini task branch, clean up worktree."""
+    tm = current_app.config["TASK_MANAGER"]
+    task = tm.get(task_id)
+
+    if not task:
+        return _err(f"Task {task_id} not found", 404)
+    if task.status != TaskStatus.MERGING:
+        return _err(f"Task {task_id} is {task.status.value}, must be merging")
+
+    root = current_app.config["PROJECT_ROOT"]
+    cfg = current_app.config["CF_CONFIG"]
+    is_git = current_app.config.get("IS_GIT", True)
+    wt = WorktreeManager(root, root / cfg.worktree_dir, is_git=is_git)
+
+    success = wt.merge(
+        task.branch, cfg.main_branch, cfg.merge_strategy,
+        config=cfg, task_title=task.title, task_prompt=task.prompt,
+    )
+
+    if not success:
+        tm.update_status(task_id, TaskStatus.FAILED, "Merge conflict")
+        return _err("Merge failed due to conflicts")
+
+    wt.remove(task_id, task.branch)
+    if cfg.auto_push:
+        wt.push(cfg.main_branch)
+
+    tm.update_status(task_id, TaskStatus.DONE)
+    updated = tm.get(task_id)
+    return _ok(updated.to_dict())
+
+
+@api_bp.route("/mini-tasks/<task_id>/discard", methods=["POST"])
+def discard_mini_task(task_id: str):
+    """Discard mini task -- remove worktree without merging."""
+    tm = current_app.config["TASK_MANAGER"]
+    task = tm.get(task_id)
+
+    if not task:
+        return _err(f"Task {task_id} not found", 404)
+
+    pty_mgr = current_app.config.get("PTY_MANAGER")
+    if pty_mgr:
+        pty_mgr.remove_session(task_id)
+
+    if task.branch:
+        root = current_app.config["PROJECT_ROOT"]
+        cfg = current_app.config["CF_CONFIG"]
+        is_git = current_app.config.get("IS_GIT", True)
+        wt = WorktreeManager(root, root / cfg.worktree_dir, is_git=is_git)
+        wt.remove(task_id, task.branch)
+
+    tm.update_status(task_id, TaskStatus.FAILED, "Discarded by user")
+    updated = tm.get(task_id)
+    return _ok(updated.to_dict())
