@@ -402,3 +402,83 @@ class TestWebApiSubmodule:
             assert resp.status_code == 200
             data = resp.get_json()
             assert data["data"] == []
+
+
+class TestSubmoduleEdgeCases:
+    def test_non_git_task_add_with_submodule_ignored(self, non_git_dir):
+        """In non-git mode, submodules on task should be stored but not acted upon."""
+        tm = TaskManager(non_git_dir)
+        task = tm.add("Test", "prompt", submodules=["libs/core"])
+        assert task.submodules == ["libs/core"]
+
+        # Worker in non-git mode should not crash
+        cfg = Config()
+        wt = WorktreeManager(non_git_dir, non_git_dir / ".claude-flow" / "worktrees",
+                             is_git=False)
+        worker = Worker(0, non_git_dir, tm, wt, cfg, is_git=False)
+        tm.update_status(task.id, TaskStatus.APPROVED)
+        claimed = tm.claim_next(0)
+
+        # auto_commit in non-git mode: submodule dir won't exist, should skip gracefully
+        result = worker._auto_commit(claimed, non_git_dir)
+        # No changes made, should return False
+        assert result is False
+
+    def test_auto_commit_submodule_dir_missing(self, git_repo_with_submodule):
+        """If submodule dir doesn't exist in worktree, skip gracefully."""
+        info = git_repo_with_submodule
+        repo = info["repo"]
+        cf_dir = repo / ".claude-flow"
+        cf_dir.mkdir(exist_ok=True)
+        (cf_dir / "logs").mkdir(exist_ok=True)
+        cfg = Config()
+        tm = TaskManager(repo)
+        wt_dir = cf_dir / "worktrees"
+        wt_dir.mkdir(exist_ok=True)
+        wt = WorktreeManager(repo, wt_dir)
+        worker = Worker(0, repo, tm, wt, cfg)
+
+        # Create task referencing a submodule that won't be initialized
+        task = tm.add("Missing sub", "prompt", submodules=["nonexistent/sub"])
+        tm.update_status(task.id, TaskStatus.APPROVED)
+        claimed = tm.claim_next(0)
+
+        # Create worktree WITHOUT initializing submodule
+        wt_path = wt.create(claimed.id, claimed.branch)
+        (wt_path / "file.txt").write_text("content")
+
+        # Should not crash, should still commit main project changes
+        result = worker._auto_commit(claimed, wt_path)
+        assert result is True
+
+    def test_backward_compat_old_tasks_json(self, tmp_path):
+        """tasks.json without submodules field should load without error."""
+        cf_dir = tmp_path / ".claude-flow"
+        cf_dir.mkdir(parents=True)
+        tasks_file = cf_dir / "tasks.json"
+        # Old format: no submodules key
+        old_task = {
+            "id": "task-old01",
+            "title": "Old Task",
+            "prompt": "old prompt",
+            "status": "pending",
+            "task_type": "normal",
+            "branch": None,
+            "plan_file": None,
+            "worker_id": None,
+            "created_at": "2026-01-01T00:00:00",
+            "started_at": None,
+            "completed_at": None,
+            "error": None,
+            "priority": 0,
+            "progress": None,
+            "retry_count": 0,
+            "plan_mode": None,
+        }
+        tasks_file.write_text(json.dumps([old_task]))
+
+        tm = TaskManager(tmp_path)
+        tasks = tm.list_tasks()
+        assert len(tasks) == 1
+        assert tasks[0].submodules == []
+        assert tasks[0].title == "Old Task"
