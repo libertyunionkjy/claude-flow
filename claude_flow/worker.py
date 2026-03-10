@@ -124,7 +124,8 @@ class Worker:
 
         # 创建 worktree（传入 config 自动设置 symlink 共享文件）
         try:
-            wt_path = self._wt.create(task.id, task.branch, config=self._cfg)
+            wt_path = self._wt.create(task.id, task.branch, config=self._cfg,
+                                      submodules=task.submodules or None)
         except subprocess.CalledProcessError as e:
             self._tm.update_status(task.id, TaskStatus.FAILED, f"Worktree creation failed: {e.stderr}")
             return False
@@ -552,10 +553,54 @@ class Worker:
     def _auto_commit(self, task: Task, wt_path: Path) -> bool:
         """检查 worktree 中是否有未提交的变更，如有则自动提交。
 
+        对于带 submodule 的任务，执行两步提交：
+        1. 先在每个 submodule 中独立提交
+        2. 再在主项目中提交（捕获 submodule 指针更新）
+
         返回 True 表示有变更并已提交，False 表示无变更。
         """
         prefix = self._log_prefix()
-        # 检查是否有未跟踪或已修改的文件
+
+        # 步骤 1: 对每个 submodule 单独提交
+        for sub_path in task.submodules:
+            sub_dir = wt_path / sub_path
+            if not sub_dir.exists():
+                continue
+            status_result = subprocess.run(
+                ["git", "status", "--porcelain"],
+                cwd=str(sub_dir), capture_output=True, text=True,
+            )
+            if status_result.stdout.strip():
+                logger.info(f"{prefix} Auto-committing submodule {sub_path} for {task.id}")
+                subprocess.run(
+                    ["git", "add", "-A"],
+                    cwd=str(sub_dir), capture_output=True, text=True,
+                )
+                # Submodule 的 git config 可能缺少 user.email/user.name，
+                # 从主 worktree 继承这些配置以确保 commit 成功。
+                commit_cmd = ["git"]
+                user_email = subprocess.run(
+                    ["git", "config", "user.email"],
+                    cwd=str(wt_path), capture_output=True, text=True,
+                ).stdout.strip()
+                user_name = subprocess.run(
+                    ["git", "config", "user.name"],
+                    cwd=str(wt_path), capture_output=True, text=True,
+                ).stdout.strip()
+                if user_email:
+                    commit_cmd.extend(["-c", f"user.email={user_email}"])
+                if user_name:
+                    commit_cmd.extend(["-c", f"user.name={user_name}"])
+                commit_cmd.extend([
+                    "commit", "-m", f"feat({task.id}): {task.title}",
+                    "--no-verify",
+                ])
+                subprocess.run(
+                    commit_cmd,
+                    cwd=str(sub_dir), capture_output=True, text=True,
+                )
+
+        # 步骤 2: 主项目提交（包含 submodule 指针更新 + 其他改动）
         status_result = subprocess.run(
             ["git", "status", "--porcelain"],
             cwd=str(wt_path), capture_output=True, text=True,
@@ -563,7 +608,7 @@ class Worker:
         if not status_result.stdout.strip():
             return False
 
-        logger.info(f"{prefix} Auto-committing uncommitted changes for {task.id}")
+        logger.info(f"{prefix} Auto-committing changes for {task.id}")
         subprocess.run(
             ["git", "add", "-A"],
             cwd=str(wt_path), capture_output=True, text=True,

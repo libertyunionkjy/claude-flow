@@ -124,3 +124,87 @@ class TestWorktreeSubmoduleInit:
         mgr = WorktreeManager(non_git_dir, wt_dir, is_git=False)
         result = mgr.create("task-ng", "cf/task-ng", submodules=["libs/core"])
         assert result == non_git_dir
+
+
+from claude_flow.worker import Worker
+from claude_flow.config import Config
+
+
+class TestWorkerSubmoduleCommit:
+    def _setup_worker(self, repo: Path):
+        cf_dir = repo / ".claude-flow"
+        cf_dir.mkdir(exist_ok=True)
+        (cf_dir / "logs").mkdir(exist_ok=True)
+        cfg = Config()
+        tm = TaskManager(repo)
+        wt_dir = cf_dir / "worktrees"
+        wt_dir.mkdir(exist_ok=True)
+        wt = WorktreeManager(repo, wt_dir)
+        worker = Worker(worker_id=0, project_root=repo,
+                        task_manager=tm, worktree_manager=wt, config=cfg)
+        return tm, wt, worker
+
+    def test_auto_commit_submodule_then_main(self, git_repo_with_submodule):
+        """Two-step commit: submodule first, then main project."""
+        info = git_repo_with_submodule
+        repo, sub_path = info["repo"], info["sub_path"]
+        tm, wt, worker = self._setup_worker(repo)
+
+        task = tm.add("Test sub commit", "modify submodule", submodules=[sub_path])
+        tm.update_status(task.id, TaskStatus.APPROVED)
+        claimed = tm.claim_next(0)
+
+        wt_path = wt.create(claimed.id, claimed.branch, submodules=claimed.submodules)
+
+        # Simulate changes in submodule
+        sub_in_wt = wt_path / sub_path
+        (sub_in_wt / "lib.py").write_text("# modified\ndef hello():\n    return 'world'\n")
+
+        result = worker._auto_commit(claimed, wt_path)
+        assert result is True
+
+        # Verify: submodule should have its own commit
+        sub_log = subprocess.run(
+            ["git", "log", "--oneline", "-1"],
+            cwd=str(sub_in_wt), capture_output=True, text=True,
+        )
+        assert claimed.id in sub_log.stdout
+
+        # Verify: main project should have a commit with updated pointer
+        main_log = subprocess.run(
+            ["git", "log", "--oneline", "-1"],
+            cwd=str(wt_path), capture_output=True, text=True,
+        )
+        assert claimed.id in main_log.stdout
+
+    def test_auto_commit_no_submodule_changes(self, git_repo_with_submodule):
+        """If submodule has no changes, skip submodule commit; main commit still works."""
+        info = git_repo_with_submodule
+        repo, sub_path = info["repo"], info["sub_path"]
+        tm, wt, worker = self._setup_worker(repo)
+
+        task = tm.add("No sub change", "only main change", submodules=[sub_path])
+        tm.update_status(task.id, TaskStatus.APPROVED)
+        claimed = tm.claim_next(0)
+
+        wt_path = wt.create(claimed.id, claimed.branch, submodules=claimed.submodules)
+        (wt_path / "main_change.txt").write_text("main only")
+
+        result = worker._auto_commit(claimed, wt_path)
+        assert result is True
+
+    def test_auto_commit_empty_submodules_list(self, git_repo_with_submodule):
+        """Task with empty submodules list should use original commit logic."""
+        info = git_repo_with_submodule
+        repo = info["repo"]
+        tm, wt, worker = self._setup_worker(repo)
+
+        task = tm.add("No submodules", "normal task")
+        tm.update_status(task.id, TaskStatus.APPROVED)
+        claimed = tm.claim_next(0)
+
+        wt_path = wt.create(claimed.id, claimed.branch)
+        (wt_path / "file.txt").write_text("content")
+
+        result = worker._auto_commit(claimed, wt_path)
+        assert result is True
