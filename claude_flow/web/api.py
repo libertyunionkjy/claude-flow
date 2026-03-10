@@ -731,9 +731,11 @@ def run_task(task_id: str):
         planner.approve(task)
         tm.update_status(task_id, TaskStatus.APPROVED)
 
-    # 在后台线程中执行
+    # 在后台线程中执行 — 提前在请求上下文中读取所有配置，
+    # 避免后台线程中访问 current_app 导致 "Working outside of application context" 错误
     project_root = current_app.config["PROJECT_ROOT"]
     cfg = current_app.config["CF_CONFIG"]
+    is_git = current_app.config.get("IS_GIT", True)
 
     def _execute():
         from ..worker import Worker
@@ -741,7 +743,6 @@ def run_task(task_id: str):
         from ..task_manager import TaskManager as TM
 
         # 使用独立的 TaskManager 实例避免线程竞争
-        is_git = current_app.config.get("IS_GIT", True)
         local_tm = TM(project_root)
         wt = WorktreeManager(project_root, project_root / cfg.worktree_dir, is_git=is_git)
         worker = Worker(0, project_root, local_tm, wt, cfg, is_git=is_git)
@@ -775,6 +776,8 @@ def run_all_tasks():
     if not approved and not daemon:
         return _ok({"started": 0, "message": "没有 approved 状态的任务"})
 
+    is_git = current_app.config.get("IS_GIT", True)
+
     def _run_workers():
         import logging
         logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -782,8 +785,6 @@ def run_all_tasks():
         from ..worker import Worker
         from ..worktree import WorktreeManager
         from ..task_manager import TaskManager as TM
-
-        is_git = current_app.config.get("IS_GIT", True)
         for wid in range(num_workers):
             local_tm = TM(project_root)
             wt = WorktreeManager(project_root, project_root / cfg.worktree_dir, is_git=is_git)

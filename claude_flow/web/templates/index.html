@@ -2540,6 +2540,18 @@
         </div>
     </div>
 
+    <!-- Confirm Modal -->
+    <div class="modal-overlay" id="confirmModal">
+        <div class="modal" style="max-width: 420px;">
+            <h2 id="confirmModalTitle" style="color: #ff4757;">Confirm</h2>
+            <p id="confirmModalMessage" style="color: #ccc; font-size: 14px; line-height: 1.6; margin: 0;"></p>
+            <div class="modal-actions">
+                <button class="btn btn-cancel" id="confirmModalCancel">Cancel</button>
+                <button class="btn btn-danger" id="confirmModalOk">Delete</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast -->
     <div class="toast" id="toast"></div>
 
@@ -3146,7 +3158,8 @@
 
         async function deleteTask(event, taskId) {
             event.stopPropagation();
-            if (!confirm(_getDeleteConfirmMessage(taskId))) return;
+            var confirmed = await showConfirm(_getDeleteConfirmMessage(taskId), { title: 'Delete Task' });
+            if (!confirmed) return;
             var data = await api('/tasks/' + taskId, { method: 'DELETE' });
             if (data !== null) {
                 showToast('Task ' + taskId + ' deleted');
@@ -3428,6 +3441,38 @@
             setTimeout(function() { toast.className = 'toast'; }, 3000);
         }
 
+        /* -- Confirm Modal --------------------------------------------------- */
+        function showConfirm(message, options) {
+            options = options || {};
+            var overlay = document.getElementById('confirmModal');
+            var titleEl = document.getElementById('confirmModalTitle');
+            var msgEl = document.getElementById('confirmModalMessage');
+            var okBtn = document.getElementById('confirmModalOk');
+            var cancelBtn = document.getElementById('confirmModalCancel');
+
+            titleEl.textContent = options.title || 'Confirm';
+            msgEl.textContent = message;
+            okBtn.textContent = options.okText || 'Delete';
+            overlay.classList.add('active');
+
+            return new Promise(function(resolve) {
+                function cleanup() {
+                    overlay.classList.remove('active');
+                    okBtn.removeEventListener('click', onOk);
+                    cancelBtn.removeEventListener('click', onCancel);
+                    overlay.removeEventListener('click', onOverlay);
+                }
+                function onOk() { cleanup(); resolve(true); }
+                function onCancel() { cleanup(); resolve(false); }
+                function onOverlay(e) {
+                    if (e.target === overlay) { cleanup(); resolve(false); }
+                }
+                okBtn.addEventListener('click', onOk);
+                cancelBtn.addEventListener('click', onCancel);
+                overlay.addEventListener('click', onOverlay);
+            });
+        }
+
         /* -- Task Detail View ------------------------------------------------ */
         function openTaskDetail(taskId) {
             var task = allTasks.find(function(t) { return t.id === taskId; });
@@ -3621,7 +3666,8 @@
         }
 
         async function deleteTaskDetail(taskId) {
-            if (!confirm(_getDeleteConfirmMessage(taskId))) return;
+            var confirmed = await showConfirm(_getDeleteConfirmMessage(taskId), { title: 'Delete Task' });
+            if (!confirmed) return;
             var data = await api('/tasks/' + taskId, { method: 'DELETE' });
             if (data !== null) {
                 showToast('Task ' + taskId + ' deleted');
@@ -4150,7 +4196,8 @@
         async function batchDeleteTasks() {
             var ids = Array.from(selectedTaskIds);
             if (ids.length === 0) return;
-            if (!confirm('Delete ' + ids.length + ' selected task(s)?')) return;
+            var confirmed = await showConfirm('Delete ' + ids.length + ' selected task(s)?', { title: 'Batch Delete' });
+            if (!confirmed) return;
 
             var data = await api('/tasks/batch-delete', {
                 method: 'POST',
