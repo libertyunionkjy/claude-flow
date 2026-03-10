@@ -103,9 +103,9 @@ class TestTaskManagerBoundary:
         assert tm.get("nonexistent-id-12345") is None
 
     def test_remove_nonexistent_task(self, cf_project: Path):
-        """Removing a non-existent task returns False."""
+        """Removing a non-existent task returns None."""
         tm = TaskManager(cf_project)
-        assert tm.remove("nonexistent-id-12345") is False
+        assert tm.remove("nonexistent-id-12345") is None
 
     def test_update_status_nonexistent(self, cf_project: Path):
         """Updating status of non-existent task returns None."""

@@ -229,13 +229,51 @@ def task_show(ctx, task_id):
 @click.argument("task_id")
 @click.pass_context
 def task_remove(ctx, task_id):
-    """Remove a task."""
+    """Remove a task and clean up associated worktree, branch, plan, log and chat files."""
     root = ctx.obj["root"]
+    is_git = ctx.obj["is_git"]
     tm = TaskManager(root)
-    if tm.remove(task_id):
-        click.echo(f"Removed {task_id}")
-    else:
+    removed = tm.remove(task_id)
+    if not removed:
         click.echo(f"Task {task_id} not found")
+        return
+
+    click.echo(f"Removed {task_id}")
+
+    # Clean up worktree and branch
+    if is_git:
+        branch = removed.branch or f"cf/{task_id}"
+        cfg = Config.load(root)
+        wt = WorktreeManager(root, root / cfg.worktree_dir, is_git=is_git)
+        wt.remove(task_id, branch)
+        click.echo(f"  Cleaned worktree and branch: {branch}")
+
+    # Clean up plan file
+    if removed.plan_file:
+        plan_path = Path(removed.plan_file)
+        if plan_path.exists():
+            plan_path.unlink()
+            click.echo(f"  Cleaned plan: {plan_path.name}")
+    else:
+        # Try default plan path
+        plan_path = root / ".claude-flow" / "plans" / f"{task_id}.md"
+        if plan_path.exists():
+            plan_path.unlink()
+            click.echo(f"  Cleaned plan: {plan_path.name}")
+
+    # Clean up log files
+    logs_dir = root / ".claude-flow" / "logs"
+    for ext in (".log", ".json"):
+        log_file = logs_dir / f"{task_id}{ext}"
+        if log_file.exists():
+            log_file.unlink()
+            click.echo(f"  Cleaned log: {log_file.name}")
+
+    # Clean up chat session
+    chat_file = root / ".claude-flow" / "chats" / f"{task_id}.json"
+    if chat_file.exists():
+        chat_file.unlink()
+        click.echo(f"  Cleaned chat: {chat_file.name}")
 
 
 # -- Plan commands ----------------------------------------------------------

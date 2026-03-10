@@ -138,13 +138,20 @@ class TaskManager:
             return None
         return self._with_shared_lock(_do)
 
-    def remove(self, task_id: str) -> bool:
+    def remove(self, task_id: str) -> Optional[Task]:
+        """Remove a task and return it (or None if not found)."""
         def _do():
             tasks = self._load()
-            before = len(tasks)
+            removed = None
+            for t in tasks:
+                if t.id == task_id:
+                    removed = t
+                    break
+            if removed is None:
+                return None
             tasks = [t for t in tasks if t.id != task_id]
             self._save(tasks)
-            return len(tasks) < before
+            return removed
         return self._with_lock(_do)
 
     def update_status(

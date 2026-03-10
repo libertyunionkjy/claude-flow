@@ -36,8 +36,15 @@ class TestTaskManager:
     def test_remove_task(self, tmp_path):
         mgr = self._make_manager(tmp_path)
         task = mgr.add("Test", "prompt")
-        assert mgr.remove(task.id) is True
+        removed = mgr.remove(task.id)
+        assert removed is not None
+        assert removed.id == task.id
+        assert removed.title == "Test"
         assert mgr.list_tasks() == []
+
+    def test_remove_task_returns_none_for_missing(self, tmp_path):
+        mgr = self._make_manager(tmp_path)
+        assert mgr.remove("nonexistent") is None
 
     def test_update_status(self, tmp_path):
         mgr = self._make_manager(tmp_path)

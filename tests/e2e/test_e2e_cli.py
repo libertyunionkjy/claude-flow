@@ -128,6 +128,75 @@ class TestCLIE2EWorkflowMocked:
         )
         assert task_id not in result.output
 
+    def test_task_remove_cleans_worktree_and_artifacts(self, e2e_project: Path):
+        """Add -> create worktree/plan/log/chat artifacts -> remove -> verify all cleaned."""
+        runner = CliRunner()
+        env = {"CF_PROJECT_ROOT": str(e2e_project)}
+
+        # Add a task
+        result = runner.invoke(
+            main,
+            ["task", "add", "Cleanup Test", "-p", "Test cleanup on remove"],
+            env=env,
+            catch_exceptions=False,
+        )
+        assert result.exit_code == 0
+        match = re.search(r"(task-[a-f0-9]+)", result.output)
+        task_id = match.group(1)
+        branch = f"cf/{task_id}"
+
+        # Create worktree and branch
+        from claude_flow.worktree import WorktreeManager
+        from claude_flow.config import Config
+        cfg = Config.load(e2e_project)
+        wt = WorktreeManager(e2e_project, e2e_project / cfg.worktree_dir)
+        wt_path = wt.create(task_id, branch)
+        assert wt_path.exists()
+
+        # Create plan file
+        plan_file = e2e_project / ".claude-flow" / "plans" / f"{task_id}.md"
+        plan_file.write_text("# Plan\n")
+
+        # Create log files
+        log_file = e2e_project / ".claude-flow" / "logs" / f"{task_id}.log"
+        log_file.write_text("log content\n")
+        json_log = e2e_project / ".claude-flow" / "logs" / f"{task_id}.json"
+        json_log.write_text("{}\n")
+
+        # Create chat session
+        chats_dir = e2e_project / ".claude-flow" / "chats"
+        chats_dir.mkdir(exist_ok=True)
+        chat_file = chats_dir / f"{task_id}.json"
+        chat_file.write_text("{}\n")
+
+        # Remove the task
+        result = runner.invoke(
+            main,
+            ["task", "remove", task_id],
+            env=env,
+            catch_exceptions=False,
+        )
+        assert result.exit_code == 0
+        assert f"Removed {task_id}" in result.output
+        assert "Cleaned worktree and branch" in result.output
+
+        # Verify: task removed from list
+        result = runner.invoke(main, ["task", "list"], env=env, catch_exceptions=False)
+        assert task_id not in result.output
+
+        # Verify: worktree directory removed
+        assert not wt_path.exists()
+
+        # Verify: plan file removed
+        assert not plan_file.exists()
+
+        # Verify: log files removed
+        assert not log_file.exists()
+        assert not json_log.exists()
+
+        # Verify: chat file removed
+        assert not chat_file.exists()
+
     def test_reset_and_retry_workflow(self, e2e_project: Path):
         """Add -> simulate failure -> reset -> verify."""
         runner = CliRunner()

@@ -166,7 +166,7 @@ def delete_task(task_id: str):
 
     _cleanup_task_resources(task_id, task)
 
-    if tm.remove(task_id):
+    if tm.remove(task_id) is not None:
         return _ok({"deleted": task_id})
     else:
         return _err(f"删除任务 {task_id} 失败")
@@ -234,7 +234,7 @@ def batch_delete_tasks():
         task = tm.get(tid)
         if task:
             _cleanup_task_resources(tid, task)
-        if tm.remove(tid):
+        if tm.remove(tid) is not None:
             deleted.append(tid)
         else:
             failed.append(tid)
