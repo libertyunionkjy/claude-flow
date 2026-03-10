@@ -1,100 +1,15 @@
 # Progress Log
 
-## [2026-03-10 11:42:20] task-84272e - 实现mini task
-**Status**: FAILED
-**Commit**: c51dafb
-
-**错误信息**: Merge conflict
-
-**任务 Prompt**: 我写了一个实现文档，位于 docs/plans/2026-03-09-mini-task.md，这个Mini task 目前只在代码中实现了一小部分，请你帮我实现其余的部分
-
----
-
 ## [2026-03-10 11:27:07] task-3a5046 - 优化
 **Status**: SUCCESS
 **Commit**: 30d30d3
 
-以下是任务经验总结：
+**任务：Web 端删除确认框优化**
 
----
-
-**任务总结：Web 端删除确认框优化**
-
-**做了什么：** 将 Web 端删除任务时的浏览器原生 `confirm()` 对话框替换为页面内自定义 Modal 确认框，涉及单个删除、详情页删除和批量删除三处调用点。同时修复了 `api.py` 中后台线程访问 Flask `current_app` 导致的 "Working outside of application context" 错误。
-
-**遇到的问题：** `confirm()` 是同步 API，而自定义 Modal 是异步的，需要用 `Promise` 包装并将调用处改为 `async/await`；此外发现 `is_git` 配置在后台线程中读取 `current_app` 会报错。
-
-**解决方案：** 新增 `showConfirm()` 函数返回 Promise，通过事件监听 resolve true/false，复用已有的 `.modal-overlay` 样式；将 `is_git` 的读取提前到请求上下文中完成。
-
-**经验教训：** 替换浏览器原生 API 时要全局搜索所有调用点，避免遗漏；Flask 后台线程不能访问请求上下文对象，需在主线程预读配置值。
-
----
-
-## [2026-03-10 10:38:43] task-49c125 - BUG
-**Status**: FAILED
-**Commit**: fc92fee
-
-**错误信息**: Merge conflict
-
-**任务 Prompt**: 现在如果我删除一个 task ，但是这个 task 的 worktree 不会自动删除，branch 也不会自动删除
-
----
-
-## [2026-03-10 01:50:37] task-39ab5d - 研究
-**Status**: FAILED
-**Commit**: 91510d2
-
-**错误信息**: Merge conflict
-
-**任务 Prompt**: 帮我看一下Mini task 这个需求有没有正确实现
-
----
-
-## [2026-03-10 00:56:42] task-49a4cd - 研究
-**Status**: FAILED
-**Commit**: d8130b1
-
-**错误信息**: Merge conflict
-
-**任务 Prompt**: 如果claude flow 运行所在的目录并不是一个git目录，该怎么办？
-
----
-
-## [2026-03-10 00:55:02] task-b007dd - 完善测试框架
-**Status**: FAILED
-**Commit**: 0b392ec
-
-**错误信息**: Merge conflict
-
-**任务 Prompt**: 请按照 docs/plans/2026-03-09-test-restructure.md 中的实施计划，从 Task 1 开始逐步执行测试框架重构。每完成一个 Task 后运行测试验证，确认通过后再进入下一个。
-计划完整性确认
-维度	状态
-目录结构	明确（unit/integration/e2e/boundary 四层）
-搬迁映射	14 个文件 → 对应子目录，含 git mv 命令
-Task 1	目录创建 + 文件搬迁 + conftest 扩展
-Task 2	集成测试 conftest（fullproject fixture）
-Task 3	testconcurrency.py — 10 并发（~8 用例）
-Task 4	testboundaryinputs.py — 边界值（~18 用例）
-Task 5	testexceptionrecovery.py — 异常恢复（~16 用例）
-Task 6	testconfigrobustness.py — 配置健壮性（~16 用例）
-Task 7	E2E conftest + teste2ecli.py（5 mock + 1 smoke）
-Task 8	teste2eweb.py（8 mock + 1 smoke）
-Task 9	pyproject.toml pytest 配置更新
-Task 10	清理 + 全量验证 + 覆盖率报告
-Smoke 标记	@pytest.mark.smoke，CI 默认 -m "not smoke"
-每步完整代码	全部内联在 plan 中，可直接复制
-每步验证命令	全部包含 pytest 运行命令和预期结果
-每步 commit msg	全部遵循 conventional commit 格式
-
----
-
-## [2026-03-10 00:41:26] task-0e2e28 - FEATURE
-**Status**: FAILED
-**Commit**: d34afd4
-
-**错误信息**: Merge conflict
-
-**任务 Prompt**: claude flow 中的task 需要经历一个完整的开发周期，但如果我有些很小的需求，我也不希望AI询问我的确认，我也不需要一个很详细的计划，甚至于说就是让AI跑一个脚本之类的，这些都比较像claude code cli原本的用法，我希望这些在claude flow 中被定义为mini task
+- **做了什么：** 将 Web 端删除任务时的浏览器原生 `confirm()` 对话框替换为页面内自定义 Modal 确认框，涉及单个删除、详情页删除和批量删除三处调用点。同时修复了 `api.py` 中后台线程访问 Flask `current_app` 导致的 "Working outside of application context" 错误。
+- **遇到的问题：** `confirm()` 是同步 API，而自定义 Modal 是异步的，需要用 `Promise` 包装并将调用处改为 `async/await`；此外发现 `is_git` 配置在后台线程中读取 `current_app` 会报错。
+- **解决方案：** 新增 `showConfirm()` 函数返回 Promise，通过事件监听 resolve true/false，复用已有的 `.modal-overlay` 样式；将 `is_git` 的读取提前到请求上下文中完成。
+- **经验教训：** 替换浏览器原生 API 时要全局搜索所有调用点，避免遗漏；Flask 后台线程不能访问请求上下文对象，需在主线程预读配置值。
 
 ---
 
@@ -102,15 +17,7 @@ Smoke 标记	@pytest.mark.smoke，CI 默认 -m "not smoke"
 **Status**: SUCCESS
 **Commit**: 864472d
 
-以下是任务经验总结：
-
----
-
-**任务：前端页面 LOGO 更新**
-
-- **做了什么：** 将侧边栏 `.sidebar-brand` 的布局从单行（flex-direction: row）改为双列（flex-direction: column），LOGO 放上方、文字放下方，同时将 LOGO 尺寸从 28px 放大到 52px，并在移动端响应式下回退为行内布局保持紧凑。
-- **遇到的问题：** 原有布局 LOGO 和标题同行排列，受侧边栏宽度限制 LOGO 被压缩得很小，视觉效果差。
-- **解决方案：** 通过 `flex-direction: column` 将 LOGO 和标题纵向排列，释放了水平空间让 LOGO 可以放大显示；同时在媒体查询中为小屏幕恢复 `flex-direction: row` 和小尺寸 LOGO，确保响应式兼容。
+- **做了什么：** 将侧边栏 `.sidebar-brand` 的布局从单行改为双列，LOGO 放上方、文字放下方，LOGO 尺寸从 28px 放大到 52px，移动端响应式下回退为行内布局。
 - **经验教训：** Flex 布局方向的切换是解决侧边栏空间受限问题的有效手段；响应式适配需要同步处理，避免大屏改动破坏小屏体验。
 
 ---
@@ -119,13 +26,6 @@ Smoke 标记	@pytest.mark.smoke，CI 默认 -m "not smoke"
 **Status**: SUCCESS | **Commit**: ca8c189
 
 对现有测试框架全面评审，输出测试重构计划（`docs/plans/2026-03-09-test-restructure.md`）。发现边界/异常测试和端到端测试严重不足。此任务为纯规划性质，实际重构需后续分步实施。
-
----
-
-## [2026-03-09] task-69dde9 - Overview 页面
-**Status**: FAILED (needs_input)
-
-新增 `GET /api/overview` 端点和前端 Overview 页面，但因 needs_input 被标记为失败。
 
 ---
 
