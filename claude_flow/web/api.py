@@ -684,6 +684,9 @@ def get_plan(task_id: str):
         plan_path = plans_dir / f"{task_id}.md"
 
     if not plan_path.exists():
+        # Return a non-error response when plan is being generated
+        if task.status == TaskStatus.PLANNING:
+            return _ok({"task_id": task_id, "content": None, "generating": True})
         return _err(f"任务 {task_id} 的计划文件不存在", 404)
 
     content = plan_path.read_text()

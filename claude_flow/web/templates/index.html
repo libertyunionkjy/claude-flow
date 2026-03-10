@@ -3460,6 +3460,7 @@
 
             // Clear detail timers
             stopDetailChatPolling();
+            stopFinalizePoll();
             clearDetailLogRefresh();
             clearDetailRefresh();
 
@@ -3659,7 +3660,9 @@
             container.innerHTML = '<div class="detail-plan-empty">Loading...</div>';
 
             var data = await api('/tasks/' + detailTaskId + '/plan');
-            if (data !== null && data.content) {
+            if (data !== null && data.generating) {
+                container.innerHTML = '<div class="detail-plan-empty">Plan is being generated, please wait...</div>';
+            } else if (data !== null && data.content) {
                 container.innerHTML = '<div class="plan-content">' + renderMarkdown(data.content) + '</div>';
             } else {
                 container.innerHTML = '<div class="detail-plan-empty">No plan generated yet. Use "Auto Plan" or "Chat Plan" to create one.</div>';
@@ -3802,16 +3805,53 @@
             var data = await api('/tasks/' + detailTaskId + '/chat/finalize', { method: 'POST' });
             if (data !== null) {
                 showToast('Plan generation started from chat...');
-                await fetchTasks();
-                if (currentView === 'detail') {
-                    var task = allTasks.find(function(t) { return t.id === detailTaskId; });
-                    if (task) renderTaskDetail(task);
-                    switchDetailTab('plan');
-                }
+                // Plan is generated asynchronously in a background thread.
+                // Poll task status until it transitions to 'planned' or 'failed',
+                // then switch to the plan tab.
+                startFinalizePoll(detailTaskId);
             } else {
                 btn.disabled = false;
                 btn.textContent = 'Finalize Plan';
             }
+        }
+
+        var finalizePollTimer = null;
+        function startFinalizePoll(taskId) {
+            if (finalizePollTimer) clearInterval(finalizePollTimer);
+            finalizePollTimer = setInterval(async function() {
+                var data = await api('/tasks/' + taskId);
+                if (data === null) {
+                    stopFinalizePoll();
+                    return;
+                }
+                if (data.status === 'planned') {
+                    stopFinalizePoll();
+                    showToast('Plan generated successfully!');
+                    await fetchTasks();
+                    if (currentView === 'detail') {
+                        var task = allTasks.find(function(t) { return t.id === taskId; });
+                        if (task) renderTaskDetail(task);
+                        switchDetailTab('plan');
+                    }
+                } else if (data.status === 'failed') {
+                    stopFinalizePoll();
+                    showToast('Plan generation failed: ' + (data.error || 'unknown error'), true);
+                    await fetchTasks();
+                    if (currentView === 'detail') {
+                        var task = allTasks.find(function(t) { return t.id === taskId; });
+                        if (task) renderTaskDetail(task);
+                    }
+                    var btn = document.getElementById('detailChatFinalizeBtn');
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.textContent = 'Finalize Plan';
+                    }
+                }
+                // Otherwise still 'planning' — keep polling
+            }, 3000);
+        }
+        function stopFinalizePoll() {
+            if (finalizePollTimer) { clearInterval(finalizePollTimer); finalizePollTimer = null; }
         }
 
         /* -- Detail Log Tab -------------------------------------------------- */
