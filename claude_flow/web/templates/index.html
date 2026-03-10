@@ -1869,15 +1869,127 @@
             .guide-step-header { padding: 12px; gap: 8px; }
             .guide-header h2 { font-size: 20px; }
         }
-        /* -- Mini Task ---------------------------------------------------- */
-        .mini-task-nav-item { position: relative; }
-        .mini-status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+        /* -- Mini Task Manager Page ---------------------------------------- */
+        .mini-tasks-page {
+            display: none;
+            flex-direction: column;
+            height: 100%;
+            overflow: hidden;
+        }
+        .mini-tasks-page.active { display: flex; }
+
+        .mini-tasks-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 24px;
+            background: #12122a;
+            border-bottom: 1px solid #2a2a4a;
+            flex-shrink: 0;
+        }
+        .mini-tasks-header h2 { font-size: 20px; color: #a29bfe; margin: 0; }
+        .mini-tasks-header-actions { display: flex; gap: 8px; }
+
+        .mini-tasks-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px 24px;
+        }
+
+        .mini-tasks-empty {
+            text-align: center;
+            color: #4a4a6a;
+            font-size: 14px;
+            padding: 60px 20px;
+        }
+
+        .mini-tasks-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 14px;
+        }
+
+        .mini-task-card {
+            background: #16213e;
+            border: 1px solid #1e2a4a;
+            border-radius: 10px;
+            padding: 16px 18px;
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+        .mini-task-card:hover {
+            border-color: #3a4a7a;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
+        }
+        .mini-task-card-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+        .mini-task-card-header .mini-status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
         .mini-status-dot.pending, .mini-status-dot.approved { background: #a29bfe; }
         .mini-status-dot.running { background: #00b894; animation: pulse 1.5s infinite; }
         .mini-status-dot.merging { background: #fdcb6e; }
         .mini-status-dot.done { background: #00b894; }
         .mini-status-dot.failed { background: #ff7675; }
         .mini-status-dot.interrupted { background: #e17055; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+        .mini-task-card-title {
+            flex: 1;
+            font-size: 14px;
+            font-weight: 600;
+            color: #e0e0e0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .mini-task-card-status {
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            flex-shrink: 0;
+        }
+        .mini-task-card-status.pending { background: rgba(108, 92, 231, 0.2); color: #a29bfe; }
+        .mini-task-card-status.approved { background: rgba(0, 206, 201, 0.2); color: #00cec9; }
+        .mini-task-card-status.running { background: rgba(0, 184, 148, 0.2); color: #55efc4; }
+        .mini-task-card-status.merging { background: rgba(253, 203, 110, 0.2); color: #fdcb6e; }
+        .mini-task-card-status.done { background: rgba(0, 184, 148, 0.2); color: #00b894; }
+        .mini-task-card-status.failed { background: rgba(255, 118, 117, 0.2); color: #ff7675; }
+        .mini-task-card-status.interrupted { background: rgba(225, 112, 85, 0.2); color: #e17055; }
+
+        .mini-task-card-id {
+            font-family: "SF Mono", "Fira Code", monospace;
+            font-size: 11px;
+            color: #5a6a8a;
+        }
+        .mini-task-card-prompt {
+            font-size: 12px;
+            color: #8888aa;
+            margin-top: 6px;
+            line-height: 1.5;
+            max-height: 40px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+        }
+        .mini-task-card-actions {
+            display: flex;
+            gap: 6px;
+            margin-top: 10px;
+            justify-content: flex-end;
+        }
 
         .mini-create-dialog {
             display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
@@ -1897,26 +2009,122 @@
         .mini-create-form textarea { min-height: 80px; resize: vertical; }
         .mini-create-form .form-actions { display: flex; gap: 8px; justify-content: flex-end; }
 
-        .mini-terminal-container {
-            display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-            background: #0a0a0f; z-index: 900; flex-direction: column;
+        /* -- Mini Terminal Tab View ------------------------------------------ */
+        .mini-terminal-page {
+            display: none;
+            flex-direction: column;
+            height: 100%;
+            overflow: hidden;
         }
-        .mini-terminal-container.active { display: flex; }
-        .mini-terminal-header {
-            display: flex; align-items: center; padding: 10px 16px; gap: 12px;
-            background: #0f0f23; border-bottom: 1px solid #2a2a4a;
-        }
-        .mini-terminal-header .title { flex: 1; font-weight: 600; color: #e0e0e0; font-size: 14px; }
-        .mini-terminal-body { flex: 1; padding: 0; overflow: hidden; background: #0a0a0f; }
+        .mini-terminal-page.active { display: flex; }
 
-        .mini-diff-container {
-            display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-            background: #1a1a2e; z-index: 900; flex-direction: column;
+        .mini-terminal-tabs-bar {
+            display: flex;
+            align-items: center;
+            background: #0f0f23;
+            border-bottom: 1px solid #2a2a4a;
+            padding: 0 8px;
+            flex-shrink: 0;
+            gap: 4px;
+            min-height: 40px;
         }
-        .mini-diff-container.active { display: flex; }
+        .mini-terminal-tabs {
+            display: flex;
+            flex: 1;
+            overflow-x: auto;
+            gap: 0;
+        }
+        .mini-terminal-tab {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 14px;
+            background: transparent;
+            border: none;
+            border-bottom: 2px solid transparent;
+            color: #6c7a9a;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            font-family: inherit;
+            transition: all 0.15s ease;
+            white-space: nowrap;
+            max-width: 200px;
+        }
+        .mini-terminal-tab:hover {
+            color: #b0b0cc;
+            background: rgba(255,255,255,0.03);
+        }
+        .mini-terminal-tab.active {
+            color: #00d4ff;
+            border-bottom-color: #00d4ff;
+            background: rgba(0, 212, 255, 0.05);
+        }
+        .mini-terminal-tab .tab-title {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .mini-terminal-tab .tab-status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        .mini-terminal-tab .tab-close {
+            font-size: 14px;
+            color: #5a6a8a;
+            cursor: pointer;
+            padding: 0 2px;
+            flex-shrink: 0;
+        }
+        .mini-terminal-tab .tab-close:hover { color: #ff7675; }
+
+        .mini-terminal-panels {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+            background: #0a0a0f;
+        }
+        .mini-terminal-panel {
+            display: none;
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            flex-direction: column;
+        }
+        .mini-terminal-panel.active {
+            display: flex;
+        }
+        .mini-terminal-panel-header {
+            display: flex;
+            align-items: center;
+            padding: 6px 12px;
+            gap: 8px;
+            background: #0a0a16;
+            border-bottom: 1px solid #1a1a3a;
+            flex-shrink: 0;
+        }
+        .mini-terminal-panel-header .panel-title {
+            flex: 1;
+            font-size: 12px;
+            color: #6c7a9a;
+        }
+        .mini-terminal-panel-body {
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* -- Mini Diff Page -------------------------------------------------- */
+        .mini-diff-page {
+            display: none;
+            flex-direction: column;
+            height: 100%;
+            overflow: hidden;
+        }
+        .mini-diff-page.active { display: flex; }
         .mini-diff-header {
             display: flex; align-items: center; padding: 10px 16px; gap: 12px;
-            background: #0f0f23; border-bottom: 1px solid #2a2a4a;
+            background: #0f0f23; border-bottom: 1px solid #2a2a4a; flex-shrink: 0;
         }
         .mini-diff-header .title { flex: 1; font-weight: 600; color: #e0e0e0; font-size: 14px; }
         .mini-diff-body { flex: 1; overflow: auto; padding: 16px; font-family: 'JetBrains Mono', monospace; font-size: 13px; }
@@ -1924,6 +2132,9 @@
         .diff-del { color: #ff7675; }
         .diff-header { color: #74b9ff; font-weight: bold; }
         .diff-stat { margin-bottom: 16px; padding: 12px; background: #16213e; border-radius: 8px; white-space: pre; }
+
+        /* Sidebar active state for mini_tasks */
+        .nav-item[data-tab="mini_tasks"].active { border-left-color: #a29bfe; color: #c0b8ff; }
     </style>
 </head>
 <body>
@@ -1987,11 +2198,11 @@
                 <span class="nav-count" id="nav-count-failed">0</span>
             </button>
             <div class="sidebar-section-label">Mini Tasks</div>
-            <button class="nav-item" onclick="showMiniCreateDialog()">
+            <button class="nav-item" data-tab="mini_tasks" onclick="switchTab('mini_tasks')">
                 <span class="nav-dot" style="background: #a29bfe;"></span>
-                <span class="nav-label">+ New Mini Task</span>
+                <span class="nav-label">Mini Task Manager</span>
+                <span class="nav-count" id="nav-count-mini_tasks">0</span>
             </button>
-            <div id="miniTaskList"></div>
         </nav>
 
         <div class="sidebar-status" id="statusBar">loading...</div>
@@ -2228,6 +2439,22 @@
             </div>
         </div>
 
+        <!-- Mini Task Manager Page (hidden by default) -->
+        <div class="mini-tasks-page" id="miniTasksPage">
+            <!-- Header toolbar -->
+            <div class="mini-tasks-header">
+                <h2>Mini Task Manager</h2>
+                <div class="mini-tasks-header-actions">
+                    <button class="btn btn-primary" onclick="showMiniCreateDialog()">+ New Mini Task</button>
+                </div>
+            </div>
+            <!-- Task list -->
+            <div class="mini-tasks-list" id="miniTasksListView">
+                <div class="mini-tasks-empty" id="miniTasksEmpty">No mini tasks yet. Create one to get started.</div>
+                <div class="mini-tasks-grid" id="miniTasksGrid"></div>
+            </div>
+        </div>
+
         <!-- Mini Task Create Dialog -->
         <div class="mini-create-dialog" id="miniCreateDialog">
             <div class="mini-create-form">
@@ -2241,24 +2468,22 @@
             </div>
         </div>
 
-        <!-- Mini Task Terminal View -->
-        <div class="mini-terminal-container" id="miniTerminalView">
-            <div class="mini-terminal-header">
-                <span class="title" id="miniTerminalTitle">Terminal</span>
-                <button class="btn btn-outline btn-small" onclick="stopMiniTask()">Stop & Review</button>
-                <button class="btn btn-outline btn-small" style="color:#ff7675;" onclick="discardMiniTask()">Discard</button>
-                <button class="btn btn-outline btn-small" onclick="closeMiniTerminal()">Close</button>
+        <!-- Mini Task Terminal Tab View (replaces fullscreen overlay) -->
+        <div class="mini-terminal-page" id="miniTerminalPage">
+            <div class="mini-terminal-tabs-bar">
+                <div class="mini-terminal-tabs" id="miniTerminalTabs"></div>
+                <button class="btn btn-outline btn-small" onclick="switchTab('mini_tasks')" title="Back to list">Task List</button>
             </div>
-            <div class="mini-terminal-body" id="miniTerminalBody"></div>
+            <div class="mini-terminal-panels" id="miniTerminalPanels"></div>
         </div>
 
         <!-- Mini Task Diff Preview View -->
-        <div class="mini-diff-container" id="miniDiffView">
+        <div class="mini-diff-page" id="miniDiffPage">
             <div class="mini-diff-header">
+                <button class="btn btn-outline btn-small" onclick="switchTab('mini_tasks')">&#8592; Back</button>
                 <span class="title" id="miniDiffTitle">Diff Preview</span>
                 <button class="btn btn-primary btn-small" onclick="mergeMiniTask()">Merge</button>
                 <button class="btn btn-outline btn-small" style="color:#ff7675;" onclick="discardMiniTask()">Discard</button>
-                <button class="btn btn-outline btn-small" onclick="closeMiniDiff()">Close</button>
             </div>
             <div class="mini-diff-body" id="miniDiffBody"></div>
         </div>
@@ -2776,6 +3001,9 @@
             document.getElementById('overviewPage').classList.remove('active');
             document.getElementById('detailView').classList.remove('active');
             document.getElementById('allTasksPanel').classList.remove('active');
+            document.getElementById('miniTasksPage').classList.remove('active');
+            document.getElementById('miniTerminalPage').classList.remove('active');
+            document.getElementById('miniDiffPage').classList.remove('active');
             guideVisible = false;
             usageVisible = false;
             overviewVisible = false;
@@ -2799,6 +3027,22 @@
                 document.getElementById('topBar').style.display = 'none';
                 document.getElementById('allTasksPanel').classList.add('active');
                 renderAllTasksTable();
+            } else if (status === 'mini_tasks') {
+                // Show Mini Task Manager page
+                document.getElementById('contentPanel').style.display = 'none';
+                document.getElementById('topBar').style.display = 'none';
+                document.getElementById('miniTasksPage').classList.add('active');
+                refreshMiniTaskList();
+            } else if (status === 'mini_terminal') {
+                // Show Mini Terminal tabs page
+                document.getElementById('contentPanel').style.display = 'none';
+                document.getElementById('topBar').style.display = 'none';
+                document.getElementById('miniTerminalPage').classList.add('active');
+            } else if (status === 'mini_diff') {
+                // Show Mini Diff page
+                document.getElementById('contentPanel').style.display = 'none';
+                document.getElementById('topBar').style.display = 'none';
+                document.getElementById('miniDiffPage').classList.add('active');
             } else {
                 // Show normal status-filtered task list
                 document.getElementById('contentPanel').style.display = '';
@@ -4877,8 +5121,9 @@
 
         /* -- Mini Task Functions ---------------------------------------------- */
         var currentMiniTaskId = null;
-        var miniTerm = null;
-        var miniWs = null;
+        // Tab-based terminal session management
+        var miniTermSessions = {}; // { taskId: { term, ws, fitAddon, title } }
+        var activeMiniTermTab = null;
 
         function escapeHtml(text) {
             var div = document.createElement('div');
@@ -4889,18 +5134,61 @@
         function refreshMiniTaskList() {
             fetch('/api/mini-tasks').then(r => r.json()).then(data => {
                 if (!data.ok) return;
-                var list = document.getElementById('miniTaskList');
-                if (!list) return;
+                var tasks = data.data;
+                // Update sidebar count
+                var countEl = document.getElementById('nav-count-mini_tasks');
+                if (countEl) countEl.textContent = tasks.length;
+
+                // Render grid cards in main view
+                var grid = document.getElementById('miniTasksGrid');
+                var empty = document.getElementById('miniTasksEmpty');
+                if (!grid) return;
+
+                if (tasks.length === 0) {
+                    grid.innerHTML = '';
+                    if (empty) empty.style.display = '';
+                    return;
+                }
+                if (empty) empty.style.display = 'none';
+
                 var html = '';
-                data.data.forEach(function(t) {
-                    var statusCls = t.status;
-                    html += '<button class="nav-item mini-task-nav-item" onclick="selectMiniTask(\'' + t.id + '\')">' +
-                        '<span class="mini-status-dot ' + statusCls + '"></span>' +
-                        '<span class="nav-label">' + escapeHtml(t.title) + '</span>' +
-                        '</button>';
+                tasks.forEach(function(t) {
+                    html += '<div class="mini-task-card" onclick="selectMiniTask(\'' + t.id + '\')">' +
+                        '<div class="mini-task-card-header">' +
+                            '<span class="mini-status-dot ' + t.status + '"></span>' +
+                            '<span class="mini-task-card-title">' + escapeHtml(t.title) + '</span>' +
+                            '<span class="mini-task-card-status ' + t.status + '">' + t.status + '</span>' +
+                        '</div>' +
+                        '<div style="display:flex;align-items:center;gap:8px;">' +
+                            '<span class="mini-task-card-id">' + t.id + '</span>' +
+                        '</div>' +
+                        (t.prompt ? '<div class="mini-task-card-prompt">' + escapeHtml(t.prompt) + '</div>' : '') +
+                        '<div class="mini-task-card-actions">' +
+                            _miniTaskActionButtons(t) +
+                        '</div>' +
+                    '</div>';
                 });
-                list.innerHTML = html;
+                grid.innerHTML = html;
             }).catch(function(){});
+        }
+
+        function _miniTaskActionButtons(t) {
+            var btns = '';
+            if (t.status === 'pending' || t.status === 'approved' || t.status === 'interrupted') {
+                btns += '<button class="btn btn-primary btn-small" onclick="event.stopPropagation();startAndOpenMiniTask(\'' + t.id + '\')">Start</button>';
+            } else if (t.status === 'running') {
+                btns += '<button class="btn btn-success btn-small" onclick="event.stopPropagation();openTerminalTab(\'' + t.id + '\',\'' + escapeHtml(t.title).replace(/'/g, "\\'") + '\')">Open Terminal</button>';
+                btns += '<button class="btn btn-warning btn-small" onclick="event.stopPropagation();stopMiniTask(\'' + t.id + '\')">Stop</button>';
+            } else if (t.status === 'merging') {
+                btns += '<button class="btn btn-primary btn-small" onclick="event.stopPropagation();showDiffPreview(\'' + t.id + '\',\'' + escapeHtml(t.title).replace(/'/g, "\\'") + '\')">View Diff</button>';
+            } else if (t.status === 'done') {
+                btns += '<span style="color:#00b894;font-size:11px;">Completed</span>';
+            } else if (t.status === 'failed') {
+                btns += '<button class="btn btn-outline btn-small" onclick="event.stopPropagation();resetMiniTask(\'' + t.id + '\')">Reset</button>';
+            }
+            // Delete button for all states
+            btns += '<button class="btn btn-outline btn-small" style="color:#ff7675;" onclick="event.stopPropagation();deleteMiniTask(\'' + t.id + '\')">&times;</button>';
+            return btns;
         }
 
         function showMiniCreateDialog() {
@@ -4939,18 +5227,9 @@
                 if (!data.ok) return;
                 var task = data.data;
                 if (task.status === 'pending' || task.status === 'approved' || task.status === 'interrupted') {
-                    // Start the task
-                    fetch('/api/mini-tasks/' + taskId + '/start', {method: 'POST'})
-                        .then(r => r.json()).then(res => {
-                            if (res.ok) {
-                                openTerminal(taskId, task.title);
-                                refreshMiniTaskList();
-                            } else {
-                                showToast(res.error || 'Failed to start', true);
-                            }
-                        });
+                    startAndOpenMiniTask(taskId);
                 } else if (task.status === 'running') {
-                    openTerminal(taskId, task.title);
+                    openTerminalTab(taskId, task.title);
                 } else if (task.status === 'merging') {
                     showDiffPreview(taskId, task.title);
                 } else if (task.status === 'done') {
@@ -4958,6 +5237,22 @@
                 } else if (task.status === 'failed') {
                     showToast('Task failed: ' + (task.error || 'unknown'));
                 }
+            });
+        }
+
+        function startAndOpenMiniTask(taskId) {
+            fetch('/api/tasks/' + taskId).then(r => r.json()).then(data => {
+                if (!data.ok) return;
+                var task = data.data;
+                fetch('/api/mini-tasks/' + taskId + '/start', {method: 'POST'})
+                    .then(r => r.json()).then(res => {
+                        if (res.ok) {
+                            openTerminalTab(taskId, task.title);
+                            refreshMiniTaskList();
+                        } else {
+                            showToast(res.error || 'Failed to start', true);
+                        }
+                    });
             });
         }
 
@@ -4974,71 +5269,184 @@
             document.head.appendChild(s1);
         }
 
-        function openTerminal(taskId, title) {
+        // Open or focus a terminal tab for a given task
+        function openTerminalTab(taskId, title) {
             currentMiniTaskId = taskId;
-            document.getElementById('miniTerminalTitle').textContent = 'Terminal: ' + title;
-            document.getElementById('miniTerminalView').classList.add('active');
-            var body = document.getElementById('miniTerminalBody');
-            body.innerHTML = '';
 
+            // Switch to terminal page
+            activeTab = 'mini_terminal';
+            document.querySelectorAll('.nav-item[data-tab]').forEach(function(item) {
+                item.classList.toggle('active', item.dataset.tab === 'mini_tasks');
+            });
+            document.getElementById('contentPanel').style.display = 'none';
+            document.getElementById('topBar').style.display = 'none';
+            document.getElementById('miniTasksPage').classList.remove('active');
+            document.getElementById('miniDiffPage').classList.remove('active');
+            document.getElementById('guidePage').classList.remove('active');
+            document.getElementById('usagePage').classList.remove('active');
+            document.getElementById('overviewPage').classList.remove('active');
+            document.getElementById('allTasksPanel').classList.remove('active');
+            document.getElementById('detailView').classList.remove('active');
+            document.getElementById('miniTerminalPage').classList.add('active');
+
+            // If tab already exists, just activate it
+            if (miniTermSessions[taskId]) {
+                switchMiniTermTab(taskId);
+                return;
+            }
+
+            // Create new tab & panel
+            _createTerminalSession(taskId, title);
+        }
+
+        function _createTerminalSession(taskId, title) {
+            // Add tab button
+            var tabsContainer = document.getElementById('miniTerminalTabs');
+            var tab = document.createElement('button');
+            tab.className = 'mini-terminal-tab';
+            tab.id = 'mini-term-tab-' + taskId;
+            tab.innerHTML = '<span class="tab-status-dot" style="background:#00b894;"></span>' +
+                '<span class="tab-title">' + escapeHtml(title) + '</span>' +
+                '<span class="tab-close" onclick="event.stopPropagation();closeMiniTermTab(\'' + taskId + '\')">&times;</span>';
+            tab.onclick = function() { switchMiniTermTab(taskId); };
+            tabsContainer.appendChild(tab);
+
+            // Add panel
+            var panelsContainer = document.getElementById('miniTerminalPanels');
+            var panel = document.createElement('div');
+            panel.className = 'mini-terminal-panel';
+            panel.id = 'mini-term-panel-' + taskId;
+            panel.innerHTML = '<div class="mini-terminal-panel-header">' +
+                '<span class="panel-title">' + escapeHtml(title) + ' (' + taskId + ')</span>' +
+                '<button class="btn btn-outline btn-small" onclick="stopMiniTask(\'' + taskId + '\')">Stop & Review</button>' +
+                '<button class="btn btn-outline btn-small" style="color:#ff7675;" onclick="discardMiniTask(\'' + taskId + '\')">Discard</button>' +
+            '</div>' +
+            '<div class="mini-terminal-panel-body" id="mini-term-body-' + taskId + '"></div>';
+            panelsContainer.appendChild(panel);
+
+            // Initialize xterm in the panel
             loadXtermScript(function() {
-                miniTerm = new Terminal({
+                var body = document.getElementById('mini-term-body-' + taskId);
+                var term = new Terminal({
                     cursorBlink: true, fontSize: 14,
                     theme: { background: '#0a0a0f', foreground: '#e0e0e0', cursor: '#a29bfe' }
                 });
                 var fitAddon = new FitAddon.FitAddon();
-                miniTerm.loadAddon(fitAddon);
-                miniTerm.open(body);
-                fitAddon.fit();
+                term.loadAddon(fitAddon);
+                term.open(body);
+                // Need to delay fit slightly until panel is visible
+                setTimeout(function() { fitAddon.fit(); }, 50);
 
                 var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-                miniWs = new WebSocket(proto + '//' + location.host + '/ws/terminal/' + taskId);
+                var ws = new WebSocket(proto + '//' + location.host + '/ws/terminal/' + taskId);
 
-                miniWs.onopen = function() {
-                    var msg = JSON.stringify({type: 'resize', rows: miniTerm.rows, cols: miniTerm.cols});
-                    miniWs.send(msg);
+                ws.onopen = function() {
+                    var msg = JSON.stringify({type: 'resize', rows: term.rows, cols: term.cols});
+                    ws.send(msg);
                 };
 
-                miniWs.onmessage = function(e) {
+                ws.onmessage = function(e) {
                     try {
                         var ctrl = JSON.parse(e.data);
                         if (ctrl.type === 'status' && !ctrl.alive) {
-                            miniTerm.write('\r\n[Session ended]\r\n');
+                            term.write('\r\n[Session ended]\r\n');
+                            // Update tab dot to grey
+                            var tabEl = document.getElementById('mini-term-tab-' + taskId);
+                            if (tabEl) {
+                                var dot = tabEl.querySelector('.tab-status-dot');
+                                if (dot) dot.style.background = '#5a6a8a';
+                            }
                             return;
                         }
                         if (ctrl.type === 'error') {
-                            miniTerm.write('\r\n[Error: ' + ctrl.message + ']\r\n');
+                            term.write('\r\n[Error: ' + ctrl.message + ']\r\n');
                             return;
                         }
                     } catch(ex) {}
-                    miniTerm.write(e.data);
+                    term.write(e.data);
                 };
 
-                miniWs.onclose = function() {
-                    miniTerm.write('\r\n[Connection closed]\r\n');
+                ws.onclose = function() {
+                    term.write('\r\n[Connection closed]\r\n');
+                    var tabEl = document.getElementById('mini-term-tab-' + taskId);
+                    if (tabEl) {
+                        var dot = tabEl.querySelector('.tab-status-dot');
+                        if (dot) dot.style.background = '#5a6a8a';
+                    }
                 };
 
-                miniTerm.onData(function(data) {
-                    if (miniWs && miniWs.readyState === 1) miniWs.send(data);
+                term.onData(function(data) {
+                    if (ws && ws.readyState === 1) ws.send(data);
                 });
 
-                window.addEventListener('resize', function() { fitAddon.fit(); });
+                miniTermSessions[taskId] = { term: term, ws: ws, fitAddon: fitAddon, title: title };
+
+                // Handle window resize for the active terminal
+                window.addEventListener('resize', function() {
+                    if (activeMiniTermTab === taskId && miniTermSessions[taskId]) {
+                        miniTermSessions[taskId].fitAddon.fit();
+                    }
+                });
+
+                switchMiniTermTab(taskId);
             });
         }
 
-        function closeMiniTerminal() {
-            if (miniWs) { miniWs.close(); miniWs = null; }
-            if (miniTerm) { miniTerm.dispose(); miniTerm = null; }
-            document.getElementById('miniTerminalView').classList.remove('active');
+        function switchMiniTermTab(taskId) {
+            activeMiniTermTab = taskId;
+            currentMiniTaskId = taskId;
+
+            // Update tab active states
+            document.querySelectorAll('.mini-terminal-tab').forEach(function(tab) {
+                tab.classList.toggle('active', tab.id === 'mini-term-tab-' + taskId);
+            });
+
+            // Show/hide panels
+            document.querySelectorAll('.mini-terminal-panel').forEach(function(panel) {
+                panel.classList.toggle('active', panel.id === 'mini-term-panel-' + taskId);
+            });
+
+            // Refit the terminal
+            if (miniTermSessions[taskId]) {
+                setTimeout(function() { miniTermSessions[taskId].fitAddon.fit(); }, 50);
+            }
         }
 
-        function stopMiniTask() {
-            if (!currentMiniTaskId) return;
-            fetch('/api/mini-tasks/' + currentMiniTaskId + '/stop', {method: 'POST'})
+        function closeMiniTermTab(taskId) {
+            var session = miniTermSessions[taskId];
+            if (session) {
+                if (session.ws) { session.ws.close(); }
+                if (session.term) { session.term.dispose(); }
+                delete miniTermSessions[taskId];
+            }
+
+            // Remove tab and panel DOM
+            var tab = document.getElementById('mini-term-tab-' + taskId);
+            if (tab) tab.remove();
+            var panel = document.getElementById('mini-term-panel-' + taskId);
+            if (panel) panel.remove();
+
+            // If this was the active tab, switch to another or go back to list
+            if (activeMiniTermTab === taskId) {
+                var remaining = Object.keys(miniTermSessions);
+                if (remaining.length > 0) {
+                    switchMiniTermTab(remaining[remaining.length - 1]);
+                } else {
+                    activeMiniTermTab = null;
+                    switchTab('mini_tasks');
+                }
+            }
+        }
+
+        function stopMiniTask(taskId) {
+            taskId = taskId || currentMiniTaskId;
+            if (!taskId) return;
+            fetch('/api/mini-tasks/' + taskId + '/stop', {method: 'POST'})
                 .then(r => r.json()).then(data => {
-                    closeMiniTerminal();
+                    // Close the terminal tab
+                    closeMiniTermTab(taskId);
                     if (data.ok) {
-                        showDiffPreview(currentMiniTaskId, data.data.title);
+                        showDiffPreview(taskId, data.data.title);
                         refreshMiniTaskList();
                     } else {
                         showToast(data.error || 'Failed to stop', true);
@@ -5049,7 +5457,19 @@
         function showDiffPreview(taskId, title) {
             currentMiniTaskId = taskId;
             document.getElementById('miniDiffTitle').textContent = 'Diff: ' + title;
-            document.getElementById('miniDiffView').classList.add('active');
+
+            // Switch to diff page
+            document.getElementById('contentPanel').style.display = 'none';
+            document.getElementById('topBar').style.display = 'none';
+            document.getElementById('miniTasksPage').classList.remove('active');
+            document.getElementById('miniTerminalPage').classList.remove('active');
+            document.getElementById('guidePage').classList.remove('active');
+            document.getElementById('usagePage').classList.remove('active');
+            document.getElementById('overviewPage').classList.remove('active');
+            document.getElementById('allTasksPanel').classList.remove('active');
+            document.getElementById('detailView').classList.remove('active');
+            document.getElementById('miniDiffPage').classList.add('active');
+
             var body = document.getElementById('miniDiffBody');
             body.innerHTML = '<p style="color:#8888aa">Loading diff...</p>';
 
@@ -5074,17 +5494,13 @@
             });
         }
 
-        function closeMiniDiff() {
-            document.getElementById('miniDiffView').classList.remove('active');
-        }
-
         function mergeMiniTask() {
             if (!currentMiniTaskId) return;
             fetch('/api/mini-tasks/' + currentMiniTaskId + '/merge', {method: 'POST'})
                 .then(r => r.json()).then(data => {
-                    closeMiniDiff();
                     if (data.ok) {
                         showToast('Merged successfully');
+                        switchTab('mini_tasks');
                         refreshMiniTaskList();
                         fetchTasks();
                     } else {
@@ -5093,19 +5509,48 @@
                 });
         }
 
-        function discardMiniTask() {
-            if (!currentMiniTaskId) return;
+        function discardMiniTask(taskId) {
+            taskId = taskId || currentMiniTaskId;
+            if (!taskId) return;
             if (!confirm('Discard this mini task? Changes will be lost.')) return;
-            fetch('/api/mini-tasks/' + currentMiniTaskId + '/discard', {method: 'POST'})
+            fetch('/api/mini-tasks/' + taskId + '/discard', {method: 'POST'})
                 .then(r => r.json()).then(data => {
-                    closeMiniTerminal();
-                    closeMiniDiff();
+                    closeMiniTermTab(taskId);
                     if (data.ok) {
                         showToast('Task discarded');
+                        switchTab('mini_tasks');
                         refreshMiniTaskList();
                         fetchTasks();
                     } else {
                         showToast(data.error || 'Failed', true);
+                    }
+                });
+        }
+
+        function resetMiniTask(taskId) {
+            fetch('/api/tasks/' + taskId + '/reset', {method: 'POST'})
+                .then(r => r.json()).then(data => {
+                    if (data.ok) {
+                        showToast('Task reset');
+                        refreshMiniTaskList();
+                    } else {
+                        showToast(data.error || 'Reset failed', true);
+                    }
+                });
+        }
+
+        function deleteMiniTask(taskId) {
+            if (!confirm('Delete this mini task?')) return;
+            // Close terminal tab if open
+            closeMiniTermTab(taskId);
+            fetch('/api/tasks/' + taskId, {method: 'DELETE'})
+                .then(r => r.json()).then(data => {
+                    if (data.ok) {
+                        showToast('Task deleted');
+                        refreshMiniTaskList();
+                        fetchTasks();
+                    } else {
+                        showToast(data.error || 'Delete failed', true);
                     }
                 });
         }
@@ -5115,9 +5560,11 @@
             if (e.target === this) closeMiniCreateDialog();
         });
 
-        // Mini task list auto-refresh
+        // Mini task list auto-refresh (only refresh counts and list when on mini page)
         refreshMiniTaskList();
-        setInterval(refreshMiniTaskList, 5000);
+        setInterval(function() {
+            refreshMiniTaskList();
+        }, 5000);
 
         /* -- Init ------------------------------------------------------------ */
         switchTab(activeTab);
