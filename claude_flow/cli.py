@@ -119,8 +119,9 @@ def task():
 @click.option("-p", "--prompt", default=None, help="Task prompt for Claude Code")
 @click.option("-f", "--file", "filepath", default=None, type=click.Path(exists=True), help="Import tasks from file")
 @click.option("-P", "--priority", default=0, type=int, help="Task priority (higher = more important)")
+@click.option("-s", "--submodule", "submodules", multiple=True, help="Target submodule path (repeatable)")
 @click.pass_context
-def task_add(ctx, title, prompt, filepath, priority):
+def task_add(ctx, title, prompt, filepath, priority, submodules):
     """Add a new task."""
     root = ctx.obj["root"]
     tm = TaskManager(root)
@@ -133,7 +134,7 @@ def task_add(ctx, title, prompt, filepath, priority):
         if not prompt:
             click.echo("Aborted: no prompt provided")
             return
-    t = tm.add(title, prompt, priority=priority)
+    t = tm.add(title, prompt, priority=priority, submodules=list(submodules))
     click.echo(f"Added: {t.id} - {t.title} (priority: {priority})")
 
 
@@ -141,9 +142,10 @@ def task_add(ctx, title, prompt, filepath, priority):
 @click.argument("prompt")
 @click.option("-t", "--title", default=None, help="Task title (defaults to truncated prompt)")
 @click.option("-P", "--priority", default=0, type=int, help="Task priority (higher = more important)")
+@click.option("-s", "--submodule", "submodules", multiple=True, help="Target submodule path (repeatable)")
 @click.option("--run", "auto_run", is_flag=True, help="Immediately start a worker to execute")
 @click.pass_context
-def task_mini(ctx, prompt, title, priority, auto_run):
+def task_mini(ctx, prompt, title, priority, submodules, auto_run):
     """Add a mini task (skips planning/approval, executes directly).
 
     Mini tasks are lightweight tasks that bypass the full planning cycle.
@@ -159,7 +161,7 @@ def task_mini(ctx, prompt, title, priority, auto_run):
     tm = TaskManager(root)
     if title is None:
         title = prompt[:60] + ("..." if len(prompt) > 60 else "")
-    t = tm.add_mini(title, prompt, priority=priority)
+    t = tm.add_mini(title, prompt, priority=priority, submodules=list(submodules))
     click.echo(f"Mini task added: {t.id} - {t.title} [approved]")
 
     if auto_run:
@@ -217,6 +219,8 @@ def task_show(ctx, task_id):
     click.echo(f"Priority: {t.priority}")
     click.echo(f"Branch:   {t.branch or '-'}")
     click.echo(f"Worker:   {t.worker_id or '-'}")
+    if t.submodules:
+        click.echo(f"Submodules: {', '.join(t.submodules)}")
     click.echo(f"Created:  {t.created_at}")
     if t.progress:
         click.echo(f"Progress: {t.progress}")

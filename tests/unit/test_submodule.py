@@ -208,3 +208,197 @@ class TestWorkerSubmoduleCommit:
 
         result = worker._auto_commit(claimed, wt_path)
         assert result is True
+
+
+from unittest.mock import patch
+from click.testing import CliRunner
+from claude_flow.cli import main
+from claude_flow.config import Config
+
+
+class TestCliSubmodule:
+    def test_task_add_with_submodule(self, git_repo_with_submodule):
+        info = git_repo_with_submodule
+        repo = info["repo"]
+        cf_dir = repo / ".claude-flow"
+        cf_dir.mkdir(exist_ok=True)
+        Config().save(repo)
+
+        runner = CliRunner()
+        with patch("claude_flow.cli._get_root", return_value=repo), \
+             patch("claude_flow.cli.is_git_repo", return_value=True):
+            result = runner.invoke(main, [
+                "task", "add", "Test Task", "-p", "do something", "-s", "libs/mylib",
+            ])
+            assert result.exit_code == 0
+            assert "Added" in result.output
+
+        tm = TaskManager(repo)
+        tasks = tm.list_tasks()
+        assert len(tasks) == 1
+        assert tasks[0].submodules == ["libs/mylib"]
+
+    def test_task_add_multiple_submodules(self, git_repo_with_submodule):
+        info = git_repo_with_submodule
+        repo = info["repo"]
+        cf_dir = repo / ".claude-flow"
+        cf_dir.mkdir(exist_ok=True)
+        Config().save(repo)
+
+        runner = CliRunner()
+        with patch("claude_flow.cli._get_root", return_value=repo), \
+             patch("claude_flow.cli.is_git_repo", return_value=True):
+            result = runner.invoke(main, [
+                "task", "add", "Multi Sub", "-p", "prompt",
+                "-s", "libs/a", "-s", "libs/b",
+            ])
+            assert result.exit_code == 0
+
+        tm = TaskManager(repo)
+        tasks = tm.list_tasks()
+        assert set(tasks[0].submodules) == {"libs/a", "libs/b"}
+
+    def test_task_add_without_submodule(self, git_repo_with_submodule):
+        info = git_repo_with_submodule
+        repo = info["repo"]
+        cf_dir = repo / ".claude-flow"
+        cf_dir.mkdir(exist_ok=True)
+        Config().save(repo)
+
+        runner = CliRunner()
+        with patch("claude_flow.cli._get_root", return_value=repo), \
+             patch("claude_flow.cli.is_git_repo", return_value=True):
+            result = runner.invoke(main, [
+                "task", "add", "Normal Task", "-p", "prompt",
+            ])
+            assert result.exit_code == 0
+
+        tm = TaskManager(repo)
+        tasks = tm.list_tasks()
+        assert tasks[0].submodules == []
+
+    def test_task_mini_with_submodule(self, git_repo_with_submodule):
+        info = git_repo_with_submodule
+        repo = info["repo"]
+        cf_dir = repo / ".claude-flow"
+        cf_dir.mkdir(exist_ok=True)
+        Config().save(repo)
+
+        runner = CliRunner()
+        with patch("claude_flow.cli._get_root", return_value=repo), \
+             patch("claude_flow.cli.is_git_repo", return_value=True):
+            result = runner.invoke(main, [
+                "task", "mini", "fix bug", "-s", "libs/mylib",
+            ])
+            assert result.exit_code == 0
+
+        tm = TaskManager(repo)
+        tasks = tm.list_tasks()
+        assert tasks[0].submodules == ["libs/mylib"]
+
+    def test_task_show_displays_submodules(self, git_repo_with_submodule):
+        info = git_repo_with_submodule
+        repo = info["repo"]
+        cf_dir = repo / ".claude-flow"
+        cf_dir.mkdir(exist_ok=True)
+        Config().save(repo)
+
+        tm = TaskManager(repo)
+        task = tm.add("Test", "prompt", submodules=["libs/mylib"])
+
+        runner = CliRunner()
+        with patch("claude_flow.cli._get_root", return_value=repo), \
+             patch("claude_flow.cli.is_git_repo", return_value=True):
+            result = runner.invoke(main, ["task", "show", task.id])
+            assert result.exit_code == 0
+            assert "libs/mylib" in result.output
+
+
+import json
+
+
+class TestWebApiSubmodule:
+    def _create_app(self, repo):
+        from flask import Flask
+        from claude_flow.web.api import api_bp
+        from claude_flow.chat import ChatManager
+
+        cfg = Config()
+        cfg.save(repo)
+        tm = TaskManager(repo)
+        app = Flask(__name__)
+        app.register_blueprint(api_bp)
+        app.config["TASK_MANAGER"] = tm
+        app.config["CF_CONFIG"] = cfg
+        app.config["PROJECT_ROOT"] = repo
+        app.config["IS_GIT"] = True
+        app.config["CHAT_MANAGER"] = ChatManager(repo, cfg)
+        return app, tm
+
+    def test_create_task_with_submodules(self, git_repo_with_submodule):
+        info = git_repo_with_submodule
+        repo = info["repo"]
+        (repo / ".claude-flow").mkdir(exist_ok=True)
+        app, tm = self._create_app(repo)
+
+        with app.test_client() as client:
+            resp = client.post("/api/tasks", json={
+                "title": "Test", "prompt": "do it",
+                "submodules": ["libs/mylib"],
+            })
+            assert resp.status_code == 201
+            data = resp.get_json()
+            assert data["ok"] is True
+            assert data["data"]["submodules"] == ["libs/mylib"]
+
+    def test_create_task_without_submodules(self, git_repo_with_submodule):
+        info = git_repo_with_submodule
+        repo = info["repo"]
+        (repo / ".claude-flow").mkdir(exist_ok=True)
+        app, tm = self._create_app(repo)
+
+        with app.test_client() as client:
+            resp = client.post("/api/tasks", json={
+                "title": "Test", "prompt": "do it",
+            })
+            assert resp.status_code == 201
+            data = resp.get_json()
+            assert data["data"]["submodules"] == []
+
+    def test_create_mini_task_with_submodules(self, git_repo_with_submodule):
+        info = git_repo_with_submodule
+        repo = info["repo"]
+        (repo / ".claude-flow").mkdir(exist_ok=True)
+        app, tm = self._create_app(repo)
+
+        with app.test_client() as client:
+            resp = client.post("/api/mini-tasks", json={
+                "title": "Mini Test", "prompt": "fix it",
+                "submodules": ["libs/mylib"],
+            })
+            assert resp.status_code == 201
+            data = resp.get_json()
+            assert data["data"]["submodules"] == ["libs/mylib"]
+
+    def test_get_submodules_list(self, git_repo_with_submodule):
+        info = git_repo_with_submodule
+        repo = info["repo"]
+        (repo / ".claude-flow").mkdir(exist_ok=True)
+        app, tm = self._create_app(repo)
+
+        with app.test_client() as client:
+            resp = client.get("/api/submodules")
+            assert resp.status_code == 200
+            data = resp.get_json()
+            assert data["ok"] is True
+            assert "libs/mylib" in data["data"]
+
+    def test_get_submodules_non_git(self, non_git_dir):
+        app, tm = self._create_app(non_git_dir)
+        app.config["IS_GIT"] = False
+
+        with app.test_client() as client:
+            resp = client.get("/api/submodules")
+            assert resp.status_code == 200
+            data = resp.get_json()
+            assert data["data"] == []
