@@ -185,3 +185,75 @@ class TestWorktreeManager:
         # 完整 2000 字应全部在 prompt 中
         assert long_prompt in prompt
 
+    def test_merge_succeeds_with_dirty_working_tree(self, git_repo):
+        """主仓库有未提交改动时，merge 仍应成功（自动 stash/pop）。"""
+        wt_dir = git_repo / ".claude-flow" / "worktrees"
+        mgr = WorktreeManager(git_repo, wt_dir)
+        wt_path = mgr.create("task-dirty1", "cf/task-dirty1")
+
+        # 在 worktree 中提交修改
+        (wt_path / "feature.txt").write_text("feature")
+        subprocess.run(["git", "-C", str(wt_path), "add", "."], check=True, capture_output=True)
+        subprocess.run(["git", "-C", str(wt_path), "commit", "-m", "feat"], check=True, capture_output=True)
+
+        # 在主仓库制造脏文件（未提交的修改）
+        (git_repo / "dirty.txt").write_text("uncommitted work")
+
+        # merge 应成功，不因 dirty tree 失败
+        success = mgr.merge("cf/task-dirty1", "main")
+        assert success is True
+
+        # 脏文件应仍然存在（stash pop 恢复）
+        assert (git_repo / "dirty.txt").exists()
+        assert (git_repo / "dirty.txt").read_text() == "uncommitted work"
+
+        mgr.remove("task-dirty1", "cf/task-dirty1")
+
+    def test_ff_merge_succeeds_with_dirty_working_tree(self, git_repo):
+        """主仓库有未提交改动时，_ff_merge 仍应成功。"""
+        wt_dir = git_repo / ".claude-flow" / "worktrees"
+        mgr = WorktreeManager(git_repo, wt_dir)
+        wt_path = mgr.create("task-dirty2", "cf/task-dirty2")
+
+        # 在 worktree 中提交修改
+        (wt_path / "ff_feature.txt").write_text("ff feature")
+        subprocess.run(["git", "-C", str(wt_path), "add", "."], check=True, capture_output=True)
+        subprocess.run(["git", "-C", str(wt_path), "commit", "-m", "ff feat"], check=True, capture_output=True)
+
+        # 在主仓库制造脏文件
+        (git_repo / "dirty_ff.txt").write_text("dirty ff content")
+
+        # _ff_merge 应成功
+        success = mgr._ff_merge("cf/task-dirty2", "main", wt_path=wt_path)
+        assert success is True
+
+        # 脏文件应恢复
+        assert (git_repo / "dirty_ff.txt").exists()
+        assert (git_repo / "dirty_ff.txt").read_text() == "dirty ff content"
+
+        mgr.remove("task-dirty2", "cf/task-dirty2")
+
+    def test_rebase_and_merge_succeeds_with_dirty_working_tree(self, git_repo):
+        """主仓库有未提交改动时，rebase_and_merge 仍应成功。"""
+        wt_dir = git_repo / ".claude-flow" / "worktrees"
+        mgr = WorktreeManager(git_repo, wt_dir)
+        wt_path = mgr.create("task-dirty3", "cf/task-dirty3")
+
+        # 在 worktree 中提交修改
+        (wt_path / "rebase_feature.txt").write_text("rebase feature")
+        subprocess.run(["git", "-C", str(wt_path), "add", "."], check=True, capture_output=True)
+        subprocess.run(["git", "-C", str(wt_path), "commit", "-m", "rebase feat"], check=True, capture_output=True)
+
+        # 在主仓库制造脏文件
+        (git_repo / "dirty_rebase.txt").write_text("dirty rebase content")
+
+        # rebase_and_merge 应成功
+        success = mgr.rebase_and_merge("cf/task-dirty3", "main")
+        assert success is True
+
+        # 脏文件应恢复
+        assert (git_repo / "dirty_rebase.txt").exists()
+        assert (git_repo / "dirty_rebase.txt").read_text() == "dirty rebase content"
+
+        mgr.remove("task-dirty3", "cf/task-dirty3")
+

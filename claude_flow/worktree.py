@@ -5,8 +5,9 @@ import logging
 import os
 import subprocess
 import time
+from contextlib import contextmanager
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable, List, Optional, TypeVar
+from typing import TYPE_CHECKING, Callable, Iterator, List, Optional, TypeVar
 
 from .utils import can_skip_permissions
 
@@ -67,6 +68,47 @@ class WorktreeManager:
                 return fn()
             finally:
                 fcntl.flock(lock, fcntl.LOCK_UN)
+
+    # ------------------------------------------------------------------
+    # Dirty worktree 保护
+    # ------------------------------------------------------------------
+
+    @contextmanager
+    def _safe_checkout(self, branch: str) -> Iterator[None]:
+        """保护主仓库中未提交的改动，防止 git checkout 失败。
+
+        在 checkout 前 stash 脏文件，操作完成后自动 pop 恢复。
+        解决多 Worker 并行时主仓库有未暂存修改导致 merge 失败的问题。
+        """
+        # 检测主仓库是否有脏文件（staged + unstaged + untracked）
+        status = self._run(["git", "status", "--porcelain"], check=False)
+        dirty = bool(status.stdout.strip())
+
+        if dirty:
+            stash_result = self._run(
+                ["git", "stash", "push", "-m", f"cf-auto-stash-{branch}"],
+                check=False,
+            )
+            stashed = (
+                stash_result.returncode == 0
+                and "No local changes" not in stash_result.stdout
+            )
+            if stashed:
+                logger.debug(f"Stashed dirty working tree before checkout {branch}")
+        else:
+            stashed = False
+
+        try:
+            yield
+        finally:
+            if stashed:
+                pop_result = self._run(["git", "stash", "pop"], check=False)
+                if pop_result.returncode != 0:
+                    logger.warning(
+                        f"git stash pop failed after merge, "
+                        f"stash preserved (run 'git stash pop' manually): "
+                        f"{pop_result.stderr.strip()}"
+                    )
 
     # ------------------------------------------------------------------
     # Symlink 共享文件
@@ -155,55 +197,56 @@ class WorktreeManager:
             return True  # Non-git mode: skip merge
 
         def _do() -> bool:
-            try:
-                self._run(["git", "checkout", main_branch])
-                self._run(["git", "merge", strategy, branch, "-m", f"merge {branch}"])
-                return True
-            except subprocess.CalledProcessError:
-                # 尝试自动解决冲突
-                skip_ok = config is not None and can_skip_permissions(
-                    getattr(config, "skip_permissions", False)
-                )
-                max_retries = getattr(config, "max_merge_retries", 3) if config else 3
+            with self._safe_checkout(branch):
+                try:
+                    self._run(["git", "checkout", main_branch])
+                    self._run(["git", "merge", strategy, branch, "-m", f"merge {branch}"])
+                    return True
+                except subprocess.CalledProcessError:
+                    # 尝试自动解决冲突
+                    skip_ok = config is not None and can_skip_permissions(
+                        getattr(config, "skip_permissions", False)
+                    )
+                    max_retries = getattr(config, "max_merge_retries", 3) if config else 3
 
-                if skip_ok:
-                    for attempt in range(max_retries):
-                        conflict_files = self._get_conflict_files(self._repo)
-                        if not conflict_files:
-                            break
+                    if skip_ok:
+                        for attempt in range(max_retries):
+                            conflict_files = self._get_conflict_files(self._repo)
+                            if not conflict_files:
+                                break
 
-                        logger.info(f"Merge conflict (attempt {attempt + 1}/{max_retries}), "
-                                    f"files: {conflict_files}")
+                            logger.info(f"Merge conflict (attempt {attempt + 1}/{max_retries}), "
+                                        f"files: {conflict_files}")
 
-                        prompt = self._build_conflict_prompt(
-                            conflict_files,
-                            task_title=task_title,
-                            task_prompt=task_prompt,
-                            cwd=self._repo,
-                        )
-                        claude_cmd = ["claude", "-p", prompt, "--dangerously-skip-permissions"]
-                        claude_result = self._run(claude_cmd, check=False)
+                            prompt = self._build_conflict_prompt(
+                                conflict_files,
+                                task_title=task_title,
+                                task_prompt=task_prompt,
+                                cwd=self._repo,
+                            )
+                            claude_cmd = ["claude", "-p", prompt, "--dangerously-skip-permissions"]
+                            claude_result = self._run(claude_cmd, check=False)
 
-                        if claude_result.returncode != 0:
-                            break
+                            if claude_result.returncode != 0:
+                                break
 
-                        if self._has_conflict_markers(self._repo):
-                            continue  # 重试
+                            if self._has_conflict_markers(self._repo):
+                                continue  # 重试
 
-                        self._run(["git", "add", "-A"], check=False)
+                            self._run(["git", "add", "-A"], check=False)
 
-                        # 尝试完成 merge commit
-                        commit_result = self._run(
-                            ["git", "commit", "--no-edit"],
-                            check=False,
-                        )
-                        if commit_result.returncode == 0:
-                            return True
+                            # 尝试完成 merge commit
+                            commit_result = self._run(
+                                ["git", "commit", "--no-edit"],
+                                check=False,
+                            )
+                            if commit_result.returncode == 0:
+                                return True
 
-                # 解决失败，abort
-                self._run(["git", "merge", "--abort"], check=False)
-                self._run(["git", "checkout", main_branch], check=False)
-                return False
+                    # 解决失败，abort
+                    self._run(["git", "merge", "--abort"], check=False)
+                    self._run(["git", "checkout", main_branch], check=False)
+                    return False
         return self._with_merge_lock(_do)
 
     # ------------------------------------------------------------------
@@ -432,46 +475,49 @@ class WorktreeManager:
 
         如果 ff-only 失败（main 已有新提交），尝试在 worktree 中重新 rebase
         后再次 ff-only。若仍失败，降级到 --no-ff merge 保证不丢代码。
+
+        使用 _safe_checkout 保护主仓库中未提交的脏文件，防止 checkout 失败。
         """
-        try:
-            self._run(["git", "checkout", main_branch])
-            self._run(["git", "merge", "--ff-only", branch])
-            return True
-        except subprocess.CalledProcessError:
-            pass
+        with self._safe_checkout(branch):
+            try:
+                self._run(["git", "checkout", main_branch])
+                self._run(["git", "merge", "--ff-only", branch])
+                return True
+            except subprocess.CalledProcessError:
+                pass
 
-        # ff-only 失败：main 在 rebase 期间被其他 worker 修改
-        if wt_path is not None:
-            logger.info(f"ff-only merge failed for {branch}, attempting re-rebase")
-            # 重新 fetch + rebase
-            has_remote = self._has_remote()
-            rebase_target = f"origin/{main_branch}" if has_remote else main_branch
-            if has_remote:
-                self._run(["git", "fetch", "origin"], check=False, timeout=NETWORK_TIMEOUT)
-            re_rebase = self._run(
-                ["git", "rebase", rebase_target], cwd=wt_path, check=False,
-            )
-            if re_rebase.returncode == 0:
-                try:
-                    self._run(["git", "checkout", main_branch])
-                    self._run(["git", "merge", "--ff-only", branch])
-                    return True
-                except subprocess.CalledProcessError:
-                    pass
-            else:
-                # re-rebase 也冲突，abort
-                self._run(["git", "rebase", "--abort"], cwd=wt_path, check=False)
+            # ff-only 失败：main 在 rebase 期间被其他 worker 修改
+            if wt_path is not None:
+                logger.info(f"ff-only merge failed for {branch}, attempting re-rebase")
+                # 重新 fetch + rebase
+                has_remote = self._has_remote()
+                rebase_target = f"origin/{main_branch}" if has_remote else main_branch
+                if has_remote:
+                    self._run(["git", "fetch", "origin"], check=False, timeout=NETWORK_TIMEOUT)
+                re_rebase = self._run(
+                    ["git", "rebase", rebase_target], cwd=wt_path, check=False,
+                )
+                if re_rebase.returncode == 0:
+                    try:
+                        self._run(["git", "checkout", main_branch])
+                        self._run(["git", "merge", "--ff-only", branch])
+                        return True
+                    except subprocess.CalledProcessError:
+                        pass
+                else:
+                    # re-rebase 也冲突，abort
+                    self._run(["git", "rebase", "--abort"], cwd=wt_path, check=False)
 
-        # 最终降级：--no-ff merge（生成 merge commit，但保证不丢代码）
-        logger.warning(f"ff-only merge failed for {branch}, falling back to --no-ff")
-        try:
-            self._run(["git", "checkout", main_branch])
-            self._run(["git", "merge", "--no-ff", branch, "-m", f"merge {branch}"])
-            return True
-        except subprocess.CalledProcessError:
-            self._run(["git", "merge", "--abort"], check=False)
-            self._run(["git", "checkout", main_branch], check=False)
-            return False
+            # 最终降级：--no-ff merge（生成 merge commit，但保证不丢代码）
+            logger.warning(f"ff-only merge failed for {branch}, falling back to --no-ff")
+            try:
+                self._run(["git", "checkout", main_branch])
+                self._run(["git", "merge", "--no-ff", branch, "-m", f"merge {branch}"])
+                return True
+            except subprocess.CalledProcessError:
+                self._run(["git", "merge", "--abort"], check=False)
+                self._run(["git", "checkout", main_branch], check=False)
+                return False
 
     # ------------------------------------------------------------------
     # 远程推送支持
