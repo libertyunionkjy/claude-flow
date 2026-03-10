@@ -1885,45 +1885,45 @@
         }
         .mini-create-dialog.active { display: flex; }
         .mini-create-form {
-            background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px;
+            background: #16213e; border: 1px solid #2a3a6e; border-radius: 12px;
             padding: 24px; width: 400px; max-width: 90vw;
         }
-        .mini-create-form h3 { margin: 0 0 16px; color: var(--text-primary); }
+        .mini-create-form h3 { margin: 0 0 16px; color: #e0e0e0; }
         .mini-create-form input, .mini-create-form textarea {
             width: 100%; box-sizing: border-box; padding: 8px 12px; margin-bottom: 12px;
-            background: var(--bg-primary); border: 1px solid var(--border); border-radius: 6px;
-            color: var(--text-primary); font-size: 14px; font-family: inherit;
+            background: #0f0f23; border: 1px solid #2a2a4a; border-radius: 6px;
+            color: #e0e0e0; font-size: 14px; font-family: inherit;
         }
         .mini-create-form textarea { min-height: 80px; resize: vertical; }
         .mini-create-form .form-actions { display: flex; gap: 8px; justify-content: flex-end; }
 
         .mini-terminal-container {
             display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-            background: var(--bg-primary); z-index: 900; flex-direction: column;
+            background: #0a0a0f; z-index: 900; flex-direction: column;
         }
         .mini-terminal-container.active { display: flex; }
         .mini-terminal-header {
-            display: flex; align-items: center; padding: 8px 16px; gap: 12px;
-            background: var(--bg-card); border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; padding: 10px 16px; gap: 12px;
+            background: #0f0f23; border-bottom: 1px solid #2a2a4a;
         }
-        .mini-terminal-header .title { flex: 1; font-weight: 600; color: var(--text-primary); }
-        .mini-terminal-body { flex: 1; padding: 4px; overflow: hidden; }
+        .mini-terminal-header .title { flex: 1; font-weight: 600; color: #e0e0e0; font-size: 14px; }
+        .mini-terminal-body { flex: 1; padding: 0; overflow: hidden; background: #0a0a0f; }
 
         .mini-diff-container {
             display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-            background: var(--bg-primary); z-index: 900; flex-direction: column;
+            background: #1a1a2e; z-index: 900; flex-direction: column;
         }
         .mini-diff-container.active { display: flex; }
         .mini-diff-header {
-            display: flex; align-items: center; padding: 8px 16px; gap: 12px;
-            background: var(--bg-card); border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; padding: 10px 16px; gap: 12px;
+            background: #0f0f23; border-bottom: 1px solid #2a2a4a;
         }
-        .mini-diff-header .title { flex: 1; font-weight: 600; color: var(--text-primary); }
+        .mini-diff-header .title { flex: 1; font-weight: 600; color: #e0e0e0; font-size: 14px; }
         .mini-diff-body { flex: 1; overflow: auto; padding: 16px; font-family: 'JetBrains Mono', monospace; font-size: 13px; }
         .diff-add { color: #00b894; }
         .diff-del { color: #ff7675; }
         .diff-header { color: #74b9ff; font-weight: bold; }
-        .diff-stat { margin-bottom: 16px; padding: 12px; background: var(--bg-card); border-radius: 8px; white-space: pre; }
+        .diff-stat { margin-bottom: 16px; padding: 12px; background: #16213e; border-radius: 8px; white-space: pre; }
     </style>
 </head>
 <body>
@@ -5051,7 +5051,7 @@
             document.getElementById('miniDiffTitle').textContent = 'Diff: ' + title;
             document.getElementById('miniDiffView').classList.add('active');
             var body = document.getElementById('miniDiffBody');
-            body.innerHTML = '<p style="color:var(--text-secondary)">Loading diff...</p>';
+            body.innerHTML = '<p style="color:#8888aa">Loading diff...</p>';
 
             fetch('/api/mini-tasks/' + taskId + '/diff').then(r => r.json()).then(data => {
                 if (!data.ok) { body.innerHTML = '<p style="color:#ff7675">Failed to load diff</p>'; return; }
@@ -5068,7 +5068,7 @@
                     });
                     html += '</pre>';
                 } else {
-                    html += '<p style="color:var(--text-secondary)">No changes</p>';
+                    html += '<p style="color:#8888aa">No changes</p>';
                 }
                 body.innerHTML = html;
             });
