@@ -71,3 +71,27 @@ class TestTask:
         task = Task(title="Test", prompt="P")
         task.branch = f"cf/{task.id}"
         assert task.branch.startswith("cf/task-")
+
+    def test_use_subagent_default_none(self):
+        task = Task(title="Test", prompt="P")
+        assert task.use_subagent is None
+
+    def test_use_subagent_explicit(self):
+        task = Task(title="Test", prompt="P", use_subagent=True)
+        assert task.use_subagent is True
+
+    def test_use_subagent_roundtrip(self):
+        task = Task(title="Test", prompt="P", use_subagent=True)
+        d = task.to_dict()
+        assert d["use_subagent"] is True
+        restored = Task.from_dict(d)
+        assert restored.use_subagent is True
+
+    def test_use_subagent_missing_in_dict(self):
+        """Backward compat: old tasks without use_subagent field."""
+        d = {
+            "id": "task-old", "title": "Old", "prompt": "P",
+            "status": "pending", "created_at": "2026-01-01T00:00:00",
+        }
+        task = Task.from_dict(d)
+        assert task.use_subagent is None

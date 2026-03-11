@@ -40,3 +40,15 @@ class TestConfig:
         cfg = Config()
         d = cfg.claude_flow_dir(tmp_path)
         assert d == tmp_path / ".claude-flow"
+
+    def test_use_subagent_default_false(self):
+        cfg = Config()
+        assert cfg.use_subagent is False
+
+    def test_use_subagent_from_file(self, tmp_path):
+        cf_dir = tmp_path / ".claude-flow"
+        cf_dir.mkdir()
+        config_file = cf_dir / "config.json"
+        config_file.write_text('{"use_subagent": true}')
+        cfg = Config.load(tmp_path)
+        assert cfg.use_subagent is True

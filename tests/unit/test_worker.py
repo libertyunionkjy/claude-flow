@@ -5,7 +5,7 @@ from claude_flow.worker import Worker
 from claude_flow.task_manager import TaskManager
 from claude_flow.worktree import WorktreeManager
 from claude_flow.config import Config
-from claude_flow.models import TaskStatus
+from claude_flow.models import Task, TaskStatus
 
 
 class TestWorker:
@@ -146,3 +146,39 @@ class TestWorker:
         worker._strip_worktree_constraint_from_claude_md(wt_path)
 
         assert claude_md.read_text(encoding="utf-8") == original
+
+    def test_build_prompt_without_subagent(self, git_repo):
+        """subagent 关闭时，prompt 中不含 subagent 指令。"""
+        _, tm, _, worker = self._setup(git_repo)
+        task = Task(title="T", prompt="do something")
+        result = worker._build_prompt(task)
+        assert "do something" in result
+        assert "subagent" not in result.lower()
+        assert "Task tool" not in result
+
+    def test_build_prompt_with_subagent_from_config(self, git_repo):
+        """全局 subagent 开启时，prompt 中包含 subagent 指令。"""
+        repo, tm, wt, _ = self._setup(git_repo)
+        cfg = Config(use_subagent=True)
+        worker = Worker(worker_id=0, project_root=repo, task_manager=tm,
+                        worktree_manager=wt, config=cfg)
+        task = Task(title="T", prompt="do something")
+        result = worker._build_prompt(task)
+        assert "Task tool" in result
+
+    def test_build_prompt_task_overrides_config(self, git_repo):
+        """任务级 use_subagent=False 覆盖全局 True。"""
+        repo, tm, wt, _ = self._setup(git_repo)
+        cfg = Config(use_subagent=True)
+        worker = Worker(worker_id=0, project_root=repo, task_manager=tm,
+                        worktree_manager=wt, config=cfg)
+        task = Task(title="T", prompt="do something", use_subagent=False)
+        result = worker._build_prompt(task)
+        assert "Task tool" not in result
+
+    def test_build_prompt_task_enables_subagent(self, git_repo):
+        """任务级 use_subagent=True 覆盖全局 False。"""
+        _, tm, _, worker = self._setup(git_repo)
+        task = Task(title="T", prompt="do something", use_subagent=True)
+        result = worker._build_prompt(task)
+        assert "Task tool" in result
