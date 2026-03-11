@@ -49,6 +49,7 @@ class Task:
     retry_count: int = 0
     plan_mode: Optional[str] = None  # "auto" | "interactive"
     submodules: list[str] = field(default_factory=list)
+    use_subagent: Optional[bool] = None  # None = inherit from config
 
     @property
     def is_mini(self) -> bool:
@@ -74,6 +75,7 @@ class Task:
             "retry_count": self.retry_count,
             "plan_mode": self.plan_mode,
             "submodules": self.submodules,
+            "use_subagent": self.use_subagent,
         }
 
     @classmethod
@@ -96,4 +98,5 @@ class Task:
             retry_count=d.get("retry_count", 0),
             plan_mode=d.get("plan_mode"),
             submodules=d.get("submodules", []),
+            use_subagent=d.get("use_subagent"),
         )

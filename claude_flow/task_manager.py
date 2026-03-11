@@ -97,10 +97,12 @@ class TaskManager:
             finally:
                 fcntl.flock(lock, fcntl.LOCK_UN)
 
-    def add(self, title: str, prompt: str, priority: int = 0, submodules: list[str] | None = None) -> Task:
+    def add(self, title: str, prompt: str, priority: int = 0, submodules: list[str] | None = None,
+            use_subagent: bool | None = None) -> Task:
         def _do():
             tasks = self._load()
-            task = Task(title=title, prompt=prompt, priority=priority, submodules=submodules or [])
+            task = Task(title=title, prompt=prompt, priority=priority, submodules=submodules or [],
+                        use_subagent=use_subagent)
             tasks.append(task)
             self._save(tasks)
             return task

@@ -18,6 +18,15 @@ from .worktree import WorktreeManager
 
 logger = logging.getLogger(__name__)
 
+SUBAGENT_PROMPT = (
+    "当你面对此任务时，请考虑将其拆分为多个独立子任务并行处理。\n"
+    "使用 Task tool 启动 subagent 来并行执行这些子任务。\n"
+    "每个 subagent 应该有明确的职责边界，独立完成后汇总结果。\n"
+    "优先使用 general-purpose 类型的 subagent。\n"
+    "如果子任务之间有依赖关系，按依赖顺序串行执行。\n"
+    "如果任务足够简单不需要拆分，直接执行即可。"
+)
+
 
 class Worker:
     def __init__(
@@ -49,6 +58,20 @@ class Worker:
     def _log_prefix(self) -> str:
         return f"[Worker-{self.worker_id}]"
 
+    def _build_prompt(self, task: Task) -> str:
+        """Build the full prompt for a task, optionally injecting subagent instructions."""
+        parts = [self._cfg.task_prompt_prefix, task.prompt]
+
+        use_subagent = (
+            task.use_subagent
+            if task.use_subagent is not None
+            else self._cfg.use_subagent
+        )
+        if use_subagent:
+            parts.append(SUBAGENT_PROMPT)
+
+        return "\n\n".join(parts)
+
     def execute_task(self, task: Task) -> bool:
         prefix = self._log_prefix()
         logger.info(f"{prefix} Executing: {task.title} ({task.id})")
@@ -77,7 +100,7 @@ class Worker:
         prefix = self._log_prefix()
         wt_path = self._root
 
-        prompt = f"{self._cfg.task_prompt_prefix}\n\n{task.prompt}"
+        prompt = self._build_prompt(task)
         cmd = ["claude", "-p", prompt, "--output-format", "stream-json", "--verbose"]
         if can_skip_permissions(self._cfg.skip_permissions):
             cmd.append("--dangerously-skip-permissions")
@@ -136,7 +159,8 @@ class Worker:
             f"所有文件操作（读取、编辑、创建）必须在此目录下进行，"
             f"禁止操作 {self._root} 路径下的文件。"
         )
-        prompt = f"{self._cfg.task_prompt_prefix}\n\n{worktree_constraint}\n\n{task.prompt}"
+        base_prompt = self._build_prompt(task)
+        prompt = f"{base_prompt}\n\n{worktree_constraint}"
         cmd = ["claude", "-p", prompt, "--output-format", "stream-json", "--verbose"]
         if can_skip_permissions(self._cfg.skip_permissions):
             cmd.append("--dangerously-skip-permissions")

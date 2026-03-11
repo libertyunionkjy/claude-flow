@@ -120,8 +120,9 @@ def task():
 @click.option("-f", "--file", "filepath", default=None, type=click.Path(exists=True), help="Import tasks from file")
 @click.option("-P", "--priority", default=0, type=int, help="Task priority (higher = more important)")
 @click.option("-s", "--submodule", "submodules", multiple=True, help="Target submodule path (repeatable)")
+@click.option("--subagent/--no-subagent", default=None, help="Enable subagent mode for this task")
 @click.pass_context
-def task_add(ctx, title, prompt, filepath, priority, submodules):
+def task_add(ctx, title, prompt, filepath, priority, submodules, subagent):
     """Add a new task."""
     root = ctx.obj["root"]
     tm = TaskManager(root)
@@ -134,7 +135,7 @@ def task_add(ctx, title, prompt, filepath, priority, submodules):
         if not prompt:
             click.echo("Aborted: no prompt provided")
             return
-    t = tm.add(title, prompt, priority=priority, submodules=list(submodules))
+    t = tm.add(title, prompt, priority=priority, submodules=list(submodules), use_subagent=subagent)
     click.echo(f"Added: {t.id} - {t.title} (priority: {priority})")
 
 
@@ -199,6 +200,8 @@ def task_list(ctx):
         icon = status_icon.get(t.status.value, "?")
         pri = f"P{t.priority}" if t.priority > 0 else ""
         tag = "[mini] " if t.is_mini else ""
+        if t.use_subagent:
+            tag += "[S] "
         click.echo(f"  {icon} {t.id}  {t.status.value:<10}  {pri:>3}  {tag}{t.title}")
 
 

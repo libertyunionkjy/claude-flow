@@ -41,6 +41,8 @@ DEFAULT_CONFIG = {
     "daemon_poll_interval": 10,
     # Web manager
     "web_port": 8080,
+    # Subagent mode
+    "use_subagent": False,
 }
 
 
@@ -80,6 +82,8 @@ class Config:
     daemon_poll_interval: int = 10
     # Web manager
     web_port: int = 8080
+    # Subagent mode
+    use_subagent: bool = False
 
     @classmethod
     def load(cls, project_root: Path) -> Config:
