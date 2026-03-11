@@ -308,6 +308,7 @@
         .badge-worker { background: #1e3a5e; color: #74b9ff; }
         .badge-retry { background: #4a3a1e; color: #ffa502; }
         .badge-progress { background: #1e4a3e; color: #00cec9; font-size: 10px; }
+        .badge-subagent { background: #1e2e4a; color: #74b9ff; }
 
         /* Card expanded details */
         .card-details {
@@ -1234,6 +1235,16 @@
             color: #d0d0e0;
             word-break: break-word;
         }
+        .inline-select {
+            background: #1a1a2e;
+            color: #d0d0e0;
+            border: 1px solid #333;
+            border-radius: 4px;
+            padding: 2px 6px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        .inline-select:hover { border-color: #74b9ff; }
 
         .detail-prompt-box {
             margin-top: 12px;
@@ -2792,6 +2803,14 @@
                     <option value="3">High (3)</option>
                 </select>
             </div>
+            <div class="form-group">
+                <label for="taskSubagent">Subagent</label>
+                <select id="taskSubagent">
+                    <option value="">Inherit Global</option>
+                    <option value="true">Enabled</option>
+                    <option value="false">Disabled</option>
+                </select>
+            </div>
             <div class="modal-actions">
                 <button class="btn btn-cancel" onclick="closeNewTaskModal()">Cancel</button>
                 <button class="btn btn-primary" onclick="createTask()">Create</button>
@@ -3111,6 +3130,9 @@
             }
             if (task.progress) {
                 metaHtml += '<span class="badge badge-progress">' + escapeHtml(task.progress) + '</span>';
+            }
+            if (task.use_subagent) {
+                metaHtml += '<span class="badge badge-subagent">S</span>';
             }
 
             // Status indicators
@@ -3483,6 +3505,19 @@
             }
         }
 
+        /* -- Task Actions: Subagent ------------------------------------------ */
+        async function updateTaskSubagent(taskId, value) {
+            var useSubagent = value === '' ? null : value === 'true';
+            var data = await api('/tasks/' + taskId, {
+                method: 'PATCH',
+                body: JSON.stringify({ use_subagent: useSubagent }),
+            });
+            if (data !== null) {
+                showToast('Subagent updated');
+                fetchTasks();
+            }
+        }
+
         /* -- Task Actions: Delete -------------------------------------------- */
         function _getDeleteConfirmMessage(taskId) {
             var task = allTasks.find(function(t) { return t.id === taskId; });
@@ -3735,6 +3770,7 @@
             document.getElementById('taskTitle').value = '';
             document.getElementById('taskPrompt').value = '';
             document.getElementById('taskPriority').value = '0';
+            document.getElementById('taskSubagent').value = '';
             document.getElementById('newTaskModal').classList.add('active');
             document.getElementById('taskTitle').focus();
         }
@@ -3747,11 +3783,15 @@
             var title = document.getElementById('taskTitle').value.trim();
             var prompt = document.getElementById('taskPrompt').value.trim();
             var priority = parseInt(document.getElementById('taskPriority').value, 10);
+            var subagentVal = document.getElementById('taskSubagent').value;
+            var useSubagent = subagentVal === '' ? null : subagentVal === 'true';
             if (!title) { showToast('Please enter a title', true); return; }
             if (!prompt) { showToast('Please enter a prompt', true); return; }
+            var body = { title: title, prompt: prompt, priority: priority };
+            if (useSubagent !== null) { body.use_subagent = useSubagent; }
             var data = await api('/tasks', {
                 method: 'POST',
-                body: JSON.stringify({ title: title, prompt: prompt, priority: priority }),
+                body: JSON.stringify(body),
             });
             if (data !== null) {
                 showToast('Task ' + data.id + ' created');
@@ -3907,10 +3947,27 @@
             if (task.progress) infoItems.push({ label: 'Progress', value: task.progress });
             if (task.plan_mode) infoItems.push({ label: 'Plan Mode', value: task.plan_mode });
 
+            // Subagent: editable inline select
+            var subagentLabel = task.use_subagent === true ? 'Enabled'
+                : task.use_subagent === false ? 'Disabled' : 'Inherit Global';
+            infoItems.push({ label: 'Subagent', value: subagentLabel, editable: 'subagent' });
+
             var gridHtml = infoItems.map(function(item) {
+                var valueHtml;
+                if (item.editable === 'subagent') {
+                    var curVal = task.use_subagent === true ? 'true'
+                        : task.use_subagent === false ? 'false' : '';
+                    valueHtml = '<select class="inline-select" onchange="updateTaskSubagent(\'' + task.id + '\', this.value)">'
+                        + '<option value=""' + (curVal === '' ? ' selected' : '') + '>Inherit Global</option>'
+                        + '<option value="true"' + (curVal === 'true' ? ' selected' : '') + '>Enabled</option>'
+                        + '<option value="false"' + (curVal === 'false' ? ' selected' : '') + '>Disabled</option>'
+                        + '</select>';
+                } else {
+                    valueHtml = escapeHtml(String(item.value));
+                }
                 return '<div class="detail-info-item">'
                     + '<div class="info-label">' + item.label + '</div>'
-                    + '<div class="info-value">' + escapeHtml(String(item.value)) + '</div>'
+                    + '<div class="info-value">' + valueHtml + '</div>'
                     + '</div>';
             }).join('');
             document.getElementById('detailInfoGrid').innerHTML = gridHtml;
@@ -4456,7 +4513,8 @@
                     + ' onchange="toggleTaskSelection(\'' + task.id + '\', this.checked)"></td>'
                     + '<td class="table-task-id">' + escapeHtml(task.id) + '</td>'
                     + '<td class="table-task-title" onclick="openTaskDetail(\'' + task.id + '\')">'
-                    + escapeHtml(task.title) + '</td>'
+                    + escapeHtml(task.title)
+                    + (task.use_subagent ? ' <span class="badge badge-subagent">S</span>' : '') + '</td>'
                     + '<td><span class="table-status-badge" style="background:' + color + '18; color:' + color + ';">'
                     + '<span class="status-dot" style="background:' + color + ';"></span>'
                     + (STATUS_LABELS[task.status] || task.status) + '</span></td>'

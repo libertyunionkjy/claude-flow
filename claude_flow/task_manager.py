@@ -214,6 +214,18 @@ class TaskManager:
             return None
         return self._with_lock(_do)
 
+    def update_use_subagent(self, task_id: str, use_subagent: bool | None) -> Optional[Task]:
+        """更新任务的 subagent 设置（线程安全）。"""
+        def _do():
+            tasks = self._load()
+            for t in tasks:
+                if t.id == task_id:
+                    t.use_subagent = use_subagent
+                    self._save(tasks)
+                    return t
+            return None
+        return self._with_lock(_do)
+
     def update_progress(self, task_id: str, progress: str) -> Optional[Task]:
         """更新任务进度描述（线程安全）。"""
         def _do():

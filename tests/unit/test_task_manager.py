@@ -77,6 +77,24 @@ class TestTaskManager:
         assert added[0].title == "Login"
         assert added[1].prompt == "Implement signup"
 
+    def test_update_use_subagent(self, tmp_path):
+        mgr = self._make_manager(tmp_path)
+        task = mgr.add("Test", "prompt")
+        assert task.use_subagent is None
+
+        updated = mgr.update_use_subagent(task.id, True)
+        assert updated.use_subagent is True
+
+        updated = mgr.update_use_subagent(task.id, False)
+        assert updated.use_subagent is False
+
+        updated = mgr.update_use_subagent(task.id, None)
+        assert updated.use_subagent is None
+
+    def test_update_use_subagent_not_found(self, tmp_path):
+        mgr = self._make_manager(tmp_path)
+        assert mgr.update_use_subagent("nonexistent", True) is None
+
     def test_persistence(self, tmp_path):
         mgr = self._make_manager(tmp_path)
         mgr.add("Persist", "test persistence")

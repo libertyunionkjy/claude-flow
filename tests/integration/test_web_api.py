@@ -102,6 +102,68 @@ class TestTaskCRUD:
         assert data["ok"] is True
         assert data["data"]["priority"] == 5
 
+    def test_create_task_with_subagent(self, client):
+        resp = client.post(
+            "/api/tasks",
+            json={"title": "SA", "prompt": "test", "use_subagent": True},
+        )
+        data = resp.get_json()
+        assert resp.status_code == 201
+        assert data["data"]["use_subagent"] is True
+
+    def test_create_task_with_subagent_false(self, client):
+        resp = client.post(
+            "/api/tasks",
+            json={"title": "NoSA", "prompt": "test", "use_subagent": False},
+        )
+        data = resp.get_json()
+        assert resp.status_code == 201
+        assert data["data"]["use_subagent"] is False
+
+    def test_create_task_without_subagent(self, client):
+        resp = client.post(
+            "/api/tasks",
+            json={"title": "Default", "prompt": "test"},
+        )
+        data = resp.get_json()
+        assert resp.status_code == 201
+        assert data["data"]["use_subagent"] is None
+
+    def test_create_task_subagent_invalid(self, client):
+        resp = client.post(
+            "/api/tasks",
+            json={"title": "Bad", "prompt": "test", "use_subagent": "yes"},
+        )
+        assert resp.status_code == 400
+
+    def test_update_task_subagent(self, client, tm):
+        task = tm.add("T1", "P1")
+        resp = client.patch(
+            f"/api/tasks/{task.id}",
+            json={"use_subagent": True},
+        )
+        data = resp.get_json()
+        assert data["ok"] is True
+        assert data["data"]["use_subagent"] is True
+
+    def test_update_task_subagent_to_null(self, client, tm):
+        task = tm.add("T1", "P1", use_subagent=True)
+        resp = client.patch(
+            f"/api/tasks/{task.id}",
+            json={"use_subagent": None},
+        )
+        data = resp.get_json()
+        assert data["ok"] is True
+        assert data["data"]["use_subagent"] is None
+
+    def test_update_task_subagent_invalid(self, client, tm):
+        task = tm.add("T1", "P1")
+        resp = client.patch(
+            f"/api/tasks/{task.id}",
+            json={"use_subagent": "invalid"},
+        )
+        assert resp.status_code == 400
+
 
 # -- Approve / Chat ----------------------------------------------------------
 

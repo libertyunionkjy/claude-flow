@@ -98,11 +98,21 @@ def create_task():
     if not isinstance(submodules, list):
         return _err("submodules 必须是数组")
 
+    # use_subagent: true/false/null (三态)
+    raw_subagent = data.get("use_subagent")
+    if raw_subagent is None:
+        use_subagent = None
+    elif isinstance(raw_subagent, bool):
+        use_subagent = raw_subagent
+    else:
+        return _err("use_subagent 必须是布尔值或 null")
+
     task_type = data.get("task_type", "normal")
     if task_type == "mini":
         task = tm.add_mini(title, prompt, priority=priority, submodules=submodules)
     else:
-        task = tm.add(title, prompt, priority=priority, submodules=submodules)
+        task = tm.add(title, prompt, priority=priority, submodules=submodules,
+                      use_subagent=use_subagent)
     return _ok(task.to_dict()), 201
 
 
@@ -153,6 +163,13 @@ def update_task(task_id: str):
         except (ValueError, TypeError):
             return _err("priority 必须是整数")
         tm.update_priority(task_id, new_priority)
+
+    # 更新 subagent 设置
+    if "use_subagent" in data:
+        raw_subagent = data["use_subagent"]
+        if raw_subagent is not None and not isinstance(raw_subagent, bool):
+            return _err("use_subagent 必须是布尔值或 null")
+        tm.update_use_subagent(task_id, raw_subagent)
 
     # 重新获取更新后的任务
     updated = tm.get(task_id)
