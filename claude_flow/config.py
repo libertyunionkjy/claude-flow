@@ -43,6 +43,9 @@ DEFAULT_CONFIG = {
     "web_port": 8080,
     # Subagent mode
     "use_subagent": False,
+    # Submodule branch management
+    "default_sub_branches": {},
+    "auto_push_submodules": False,
 }
 
 
@@ -84,6 +87,9 @@ class Config:
     web_port: int = 8080
     # Subagent mode
     use_subagent: bool = False
+    # Submodule branch management
+    default_sub_branches: dict[str, str] = field(default_factory=dict)
+    auto_push_submodules: bool = False
 
     @classmethod
     def load(cls, project_root: Path) -> Config:

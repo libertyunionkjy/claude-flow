@@ -145,10 +145,11 @@ class Worker:
         """Git mode: full worktree isolation, commit, merge flow."""
         prefix = self._log_prefix()
 
-        # 创建 worktree（传入 config 自动设置 symlink 共享文件）
+        # Create worktree (pass config for symlink setup, sub_branches for submodule branch init)
         try:
             wt_path = self._wt.create(task.id, task.branch, config=self._cfg,
-                                      submodules=task.submodules or None)
+                                      submodules=task.submodules or None,
+                                      sub_branches=task.sub_branches or None)
         except subprocess.CalledProcessError as e:
             self._tm.update_status(task.id, TaskStatus.FAILED, f"Worktree creation failed: {e.stderr}")
             return False
@@ -201,6 +202,20 @@ class Worker:
 
         # 自动提交 worktree 中的未提交变更
         has_changes = self._auto_commit(task, wt_path)
+
+        # Merge submodule branches back to their target branches and update pointers
+        if task.submodules and task.sub_branches:
+            sub_merge_ok = self._wt.merge_submodules(wt_path, task)
+            if not sub_merge_ok:
+                self._tm.update_status(task.id, TaskStatus.FAILED, "Submodule merge failed")
+                self._log_progress(task, False, "Submodule merge failed", wt_path)
+                self._wt.remove(task.id, task.branch)
+                return False
+            # Re-commit to update submodule pointers in the main repo
+            self._auto_commit(task, wt_path)
+            # Optionally push submodule changes
+            if self._cfg.auto_push_submodules:
+                self._wt.push_submodules(wt_path, task)
 
         # 检查分支上是否有新 commit（相对于 main）
         has_new_commits = has_changes or self._has_new_commits(task.branch, wt_path)

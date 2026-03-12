@@ -82,12 +82,171 @@ def main(ctx):
     ctx.obj["is_git"] = is_git_repo(root)
 
 
+_SKIP_DIRS = frozenset({
+    "node_modules", "__pycache__", ".venv", "venv",
+    ".tox", ".mypy_cache", ".pytest_cache", "dist", "build",
+})
+
+
+def _parse_gitmodules(root: Path) -> set[str]:
+    """Parse .gitmodules and return set of existing submodule paths."""
+    gitmodules = root / ".gitmodules"
+    if not gitmodules.exists():
+        return set()
+    paths: set[str] = set()
+    for line in gitmodules.read_text().splitlines():
+        line = line.strip()
+        if line.startswith("path"):
+            _, _, value = line.partition("=")
+            value = value.strip()
+            if value:
+                paths.add(value)
+    return paths
+
+
+def _git_current_branch(repo: Path) -> str:
+    """Return the current branch name of a git repo."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=str(repo), capture_output=True, text=True, check=True,
+        )
+        return result.stdout.strip()
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return "unknown"
+
+
+def _git_commit_count(repo: Path) -> int:
+    """Return the total number of commits in a git repo."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-list", "--count", "HEAD"],
+            cwd=str(repo), capture_output=True, text=True, check=True,
+        )
+        return int(result.stdout.strip())
+    except (subprocess.CalledProcessError, FileNotFoundError, ValueError):
+        return 0
+
+
+def _discover_git_repos(root: Path) -> list[dict]:
+    """Recursively scan subdirectories and return info about all git repos found.
+
+    Stops recursion when a ``.git`` directory is encountered (one repo per tree).
+    Skips hidden directories and common non-code directories.
+    Excludes directories that are already registered as submodules.
+    """
+    repos: list[dict] = []
+    existing_submodules = _parse_gitmodules(root)
+
+    def _walk(directory: Path, rel_prefix: str = ""):
+        try:
+            children = sorted(directory.iterdir())
+        except PermissionError:
+            return
+        for child in children:
+            if not child.is_dir():
+                continue
+            name = child.name
+            if name.startswith(".") or name in _SKIP_DIRS:
+                continue
+            rel_path = name if not rel_prefix else f"{rel_prefix}/{name}"
+            if (child / ".git").exists():
+                # Found a git repo -- do not recurse into it
+                if rel_path not in existing_submodules:
+                    branch = _git_current_branch(child)
+                    commit_count = _git_commit_count(child)
+                    repos.append({
+                        "path": rel_path,
+                        "branch": branch,
+                        "commits": commit_count,
+                    })
+            else:
+                # Not a git repo -- continue recursion
+                _walk(child, rel_path)
+
+    _walk(root)
+    return repos
+
+
+def _interactive_select(repos: list[dict]) -> list[str]:
+    """Display an interactive list and return selected relative paths."""
+    click.echo(f"\nFound {len(repos)} git repositories:\n")
+    max_path_len = max(len(r["path"]) for r in repos) + 2
+    for i, r in enumerate(repos, 1):
+        path_col = f"{r['path']}/".ljust(max_path_len)
+        click.echo(f"  [{i}] {path_col} ({r['branch']}, "
+                   f"{r['commits']} commits)")
+    click.echo()
+    raw = click.prompt(
+        "Select repos to adopt as submodules (comma-separated, or 'all')",
+        default="all",
+    )
+    if raw.strip().lower() == "all":
+        return [r["path"] for r in repos]
+    try:
+        indices = [int(x.strip()) for x in raw.split(",")]
+    except ValueError:
+        click.echo("Invalid input, no repos selected.")
+        return []
+    return [repos[i - 1]["path"] for i in indices if 1 <= i <= len(repos)]
+
+
 @main.command()
+@click.option("--adopt", is_flag=True, default=False,
+              help="Adopt existing git repos as submodules")
+@click.option("--all", "adopt_all", is_flag=True, default=False,
+              help="With --adopt: add all detected repos without prompting")
+@click.argument("repos", nargs=-1)
 @click.pass_context
-def init(ctx):
-    """Initialize .claude-flow/ in the current project."""
+def init(ctx, adopt, adopt_all, repos):
+    """Initialize .claude-flow/ in the current project.
+
+    With --adopt: scan for git repos in subdirectories and add them
+    as submodules. Without arguments, shows an interactive picker.
+    With explicit repo names, adds only those. With --all, adds
+    everything found.
+    """
     root = ctx.obj["root"]
     is_git = ctx.obj["is_git"]
+
+    # Handle --adopt mode: set up git repo and add submodules
+    if adopt:
+        if not is_git:
+            subprocess.run(["git", "init"], cwd=str(root), capture_output=True,
+                           text=True, check=True)
+            is_git = True
+            ctx.obj["is_git"] = True
+
+        if repos:
+            selected = list(repos)
+        elif adopt_all:
+            discovered = _discover_git_repos(root)
+            if not discovered:
+                click.echo("No git repositories found in subdirectories.")
+            selected = [r["path"] for r in discovered]
+        else:
+            discovered = _discover_git_repos(root)
+            if not discovered:
+                click.echo("No git repositories found in subdirectories.")
+                selected = []
+            else:
+                selected = _interactive_select(discovered)
+
+        if selected:
+            click.echo(f"\nAdopting {len(selected)} repositories as submodules...")
+            for rel_path in selected:
+                result = subprocess.run(
+                    ["git", "-c", "protocol.file.allow=always",
+                     "submodule", "add", f"./{rel_path}", rel_path],
+                    cwd=str(root), capture_output=True, text=True,
+                )
+                if result.returncode == 0:
+                    click.echo(f"  + {rel_path}/ added as submodule")
+                else:
+                    stderr = result.stderr.strip()
+                    click.echo(f"  ! {rel_path}/ failed: {stderr}")
+
+    # Initialize .claude-flow/ directory structure
     cf_dir = root / ".claude-flow"
     for sub in ["logs", "plans", "worktrees", "chats"]:
         (cf_dir / sub).mkdir(parents=True, exist_ok=True)
@@ -114,15 +273,35 @@ def task():
     pass
 
 
+def _parse_sub_branches(raw: tuple[str, ...], cfg: Config) -> dict[str, str]:
+    """Parse --sub-branch values and merge with config defaults.
+
+    Each raw value has the format ``submodule_path:branch``.  Explicitly
+    provided values take priority over ``config.default_sub_branches``.
+    """
+    merged: dict[str, str] = dict(cfg.default_sub_branches)
+    for item in raw:
+        if ":" not in item:
+            raise click.BadParameter(
+                f"Invalid format '{item}', expected 'submodule_path:branch'",
+                param_hint="'--sub-branch'",
+            )
+        path, branch = item.split(":", 1)
+        merged[path.strip()] = branch.strip()
+    return merged
+
+
 @task.command("add")
 @click.argument("title")
 @click.option("-p", "--prompt", default=None, help="Task prompt for Claude Code")
 @click.option("-f", "--file", "filepath", default=None, type=click.Path(exists=True), help="Import tasks from file")
 @click.option("-P", "--priority", default=0, type=int, help="Task priority (higher = more important)")
 @click.option("-s", "--submodule", "submodules", multiple=True, help="Target submodule path (repeatable)")
+@click.option("--sub-branch", "-sb", "sub_branches_raw", multiple=True,
+              help="submodule_path:branch (e.g. libs/core:feature-auth)")
 @click.option("--subagent/--no-subagent", default=None, help="Enable subagent mode for this task")
 @click.pass_context
-def task_add(ctx, title, prompt, filepath, priority, submodules, subagent):
+def task_add(ctx, title, prompt, filepath, priority, submodules, sub_branches_raw, subagent):
     """Add a new task."""
     root = ctx.obj["root"]
     tm = TaskManager(root)
@@ -135,7 +314,10 @@ def task_add(ctx, title, prompt, filepath, priority, submodules, subagent):
         if not prompt:
             click.echo("Aborted: no prompt provided")
             return
-    t = tm.add(title, prompt, priority=priority, submodules=list(submodules), use_subagent=subagent)
+    cfg = Config.load(root)
+    sub_branches = _parse_sub_branches(sub_branches_raw, cfg) if sub_branches_raw else dict(cfg.default_sub_branches)
+    t = tm.add(title, prompt, priority=priority, submodules=list(submodules),
+               use_subagent=subagent, sub_branches=sub_branches)
     click.echo(f"Added: {t.id} - {t.title} (priority: {priority})")
 
 
@@ -144,9 +326,11 @@ def task_add(ctx, title, prompt, filepath, priority, submodules, subagent):
 @click.option("-t", "--title", default=None, help="Task title (defaults to truncated prompt)")
 @click.option("-P", "--priority", default=0, type=int, help="Task priority (higher = more important)")
 @click.option("-s", "--submodule", "submodules", multiple=True, help="Target submodule path (repeatable)")
+@click.option("--sub-branch", "-sb", "sub_branches_raw", multiple=True,
+              help="submodule_path:branch (e.g. libs/core:feature-auth)")
 @click.option("--run", "auto_run", is_flag=True, help="Immediately start a worker to execute")
 @click.pass_context
-def task_mini(ctx, prompt, title, priority, submodules, auto_run):
+def task_mini(ctx, prompt, title, priority, submodules, sub_branches_raw, auto_run):
     """Add a mini task (skips planning/approval, executes directly).
 
     Mini tasks are lightweight tasks that bypass the full planning cycle.
@@ -159,14 +343,16 @@ def task_mini(ctx, prompt, title, priority, submodules, auto_run):
         cf task mini -t "Fix typo" "fix the typo in README.md line 42"
     """
     root = ctx.obj["root"]
+    cfg = Config.load(root)
     tm = TaskManager(root)
     if title is None:
         title = prompt[:60] + ("..." if len(prompt) > 60 else "")
-    t = tm.add_mini(title, prompt, priority=priority, submodules=list(submodules))
+    sub_branches = _parse_sub_branches(sub_branches_raw, cfg) if sub_branches_raw else dict(cfg.default_sub_branches)
+    t = tm.add_mini(title, prompt, priority=priority, submodules=list(submodules),
+                    sub_branches=sub_branches)
     click.echo(f"Mini task added: {t.id} - {t.title} [approved]")
 
     if auto_run:
-        cfg = Config.load(root)
         wt = WorktreeManager(root, root / cfg.worktree_dir)
         logging.basicConfig(level=logging.INFO, format="%(message)s")
         worker = Worker(0, root, tm, wt, cfg)
@@ -224,6 +410,9 @@ def task_show(ctx, task_id):
     click.echo(f"Worker:   {t.worker_id or '-'}")
     if t.submodules:
         click.echo(f"Submodules: {', '.join(t.submodules)}")
+    if t.sub_branches:
+        for sp, br in t.sub_branches.items():
+            click.echo(f"  {sp} -> {br}")
     click.echo(f"Created:  {t.created_at}")
     if t.progress:
         click.echo(f"Progress: {t.progress}")

@@ -43,6 +43,13 @@ class WorktreeManager:
         # regardless of user's ~/.gitconfig core.editor setting.
         env["GIT_EDITOR"] = "true"
         env["GIT_SEQUENCE_EDITOR"] = "true"
+        # Provide fallback author identity for submodule commits where
+        # user.email/user.name may not be configured (e.g. worktree-internal
+        # submodule git dirs that don't inherit the parent repo's config).
+        env.setdefault("GIT_AUTHOR_NAME", "claude-flow")
+        env.setdefault("GIT_AUTHOR_EMAIL", "claude-flow@localhost")
+        env.setdefault("GIT_COMMITTER_NAME", "claude-flow")
+        env.setdefault("GIT_COMMITTER_EMAIL", "claude-flow@localhost")
         try:
             return subprocess.run(
                 args, cwd=cwd or self._repo,
@@ -152,16 +159,22 @@ class WorktreeManager:
     # Submodule 初始化
     # ------------------------------------------------------------------
 
-    def _init_submodules(self, wt_path: Path, submodules: list[str]) -> None:
-        """在 worktree 中选择性初始化指定的 submodule。
+    def _init_submodules(self, wt_path: Path, submodules: list[str],
+                         task_id: str = "", sub_branches: dict[str, str] | None = None) -> None:
+        """Initialize specified submodules in worktree and create named branches.
 
-        只初始化任务指定的 submodule，不触碰其他 submodule。
-        利用主仓库 .git/modules/ 共享对象存储，update 本质是 checkout。
-        初始化失败时抛出 CalledProcessError，由调用方处理。
+        Only initializes submodules listed in *submodules*, leaving others untouched.
+        Leverages the main repo's .git/modules/ shared object store.
 
-        使用 -c protocol.file.allow=always 允许本地 file:// 协议 clone
-        （Git 2.38+ 默认禁用了 local file:// clone）。
+        After ``submodule update``, a named branch ``cf/{task_id}`` is created inside
+        each submodule to avoid a detached HEAD.  If *sub_branches* maps a submodule
+        path to a base ref, ``git fetch --all`` is run first and the new branch is
+        based on that ref; otherwise the branch is based on the current HEAD.
+
+        Uses ``-c protocol.file.allow=always`` to allow local file:// protocol clone
+        (Git 2.38+ disables local file:// clone by default).
         """
+        sub_branches = sub_branches or {}
         for sub_path in submodules:
             self._run(["git", "submodule", "init", sub_path], cwd=wt_path)
             self._run(
@@ -169,16 +182,44 @@ class WorktreeManager:
                  "submodule", "update", sub_path],
                 cwd=wt_path,
             )
+            # Create a named branch inside the submodule to avoid detached HEAD
+            if task_id:
+                sub_dir = wt_path / sub_path
+                branch_name = f"cf/{task_id}"
+                base = sub_branches.get(sub_path)
+                if base:
+                    # Fetch all remotes so the target branch ref is available
+                    self._run(["git", "fetch", "--all"], cwd=sub_dir,
+                              check=False, timeout=NETWORK_TIMEOUT)
+                    self._run(
+                        ["git", "checkout", "-b", branch_name, base],
+                        cwd=sub_dir,
+                    )
+                else:
+                    # Create branch based on current HEAD
+                    self._run(
+                        ["git", "checkout", "-b", branch_name],
+                        cwd=sub_dir,
+                    )
 
     # ------------------------------------------------------------------
     # 创建 worktree
     # ------------------------------------------------------------------
 
     def create(self, task_id: str, branch: str, config: Config = None,
-               submodules: list[str] | None = None) -> Path:
-        """创建 worktree 并设置 symlink 共享文件。
+               submodules: list[str] | None = None,
+               sub_branches: dict[str, str] | None = None) -> Path:
+        """Create a worktree and set up symlink-shared files.
 
         Non-git mode: returns the project root directly (no isolation).
+
+        Args:
+            task_id: Task identifier used for worktree directory and branch naming.
+            branch: Git branch name to create (usually ``cf/{task_id}``).
+            config: Optional config for symlink setup.
+            submodules: List of submodule paths to initialize inside the worktree.
+            sub_branches: Mapping of submodule path to base ref for the
+                          ``cf/{task_id}`` branch created inside each submodule.
         """
         if not self._is_git:
             # Non-git mode: run directly in project root, no isolation
@@ -188,7 +229,7 @@ class WorktreeManager:
         wt_path.parent.mkdir(parents=True, exist_ok=True)
         self._run(["git", "worktree", "add", "-b", branch, str(wt_path)])
 
-        # 如果提供了 config，设置 symlink
+        # Set up symlinks if config is provided
         if config is not None:
             self._setup_symlinks(
                 wt_path,
@@ -196,11 +237,102 @@ class WorktreeManager:
                 forbidden=config.forbidden_symlinks,
             )
 
-        # 初始化指定的 submodule
+        # Initialize specified submodules with named branches
         if submodules:
-            self._init_submodules(wt_path, submodules)
+            self._init_submodules(wt_path, submodules, task_id=task_id,
+                                  sub_branches=sub_branches)
 
         return wt_path
+
+    # ------------------------------------------------------------------
+    # Submodule merge and push
+    # ------------------------------------------------------------------
+
+    def merge_submodules(self, wt_path: Path, task: object) -> bool:
+        """Merge the cf/{task.id} branch back to the target branch in each submodule.
+
+        For submodules that have an entry in ``task.sub_branches``, the temporary
+        branch is merged into the target via ``--no-ff`` and then deleted.
+        Submodules without a ``sub_branches`` entry are skipped.
+
+        Args:
+            wt_path: Path to the worktree directory.
+            task: Task object with ``id``, ``title``, ``submodules``, and
+                  ``sub_branches`` attributes.
+
+        Returns:
+            True if all merges succeeded, False if any merge failed.
+        """
+        # Inherit user.email/user.name from the main worktree so merge commits
+        # succeed even if the submodule has no local git config.
+        user_email = self._run(
+            ["git", "config", "user.email"], cwd=wt_path, check=False,
+        ).stdout.strip()
+        user_name = self._run(
+            ["git", "config", "user.name"], cwd=wt_path, check=False,
+        ).stdout.strip()
+
+        for sub_path in task.submodules:
+            sub_dir = wt_path / sub_path
+            if not sub_dir.exists():
+                continue
+            target = task.sub_branches.get(sub_path)
+            if not target:
+                # No target branch specified -- skip internal merge
+                continue
+            branch_name = f"cf/{task.id}"
+            try:
+                self._run(["git", "checkout", target], cwd=sub_dir)
+                # Build merge command with inherited user identity
+                merge_cmd = ["git"]
+                if user_email:
+                    merge_cmd.extend(["-c", f"user.email={user_email}"])
+                if user_name:
+                    merge_cmd.extend(["-c", f"user.name={user_name}"])
+                merge_cmd.extend([
+                    "merge", "--no-ff", branch_name,
+                    "-m", f"feat({task.id}): {task.title}",
+                ])
+                self._run(merge_cmd, cwd=sub_dir)
+                # Clean up temporary branch
+                self._run(["git", "branch", "-d", branch_name], cwd=sub_dir, check=False)
+            except subprocess.CalledProcessError as e:
+                logger.error(f"Submodule merge failed for {sub_path}: {e.stderr}")
+                # Abort any in-progress merge
+                self._run(["git", "merge", "--abort"], cwd=sub_dir, check=False)
+                return False
+        return True
+
+    def push_submodules(self, wt_path: Path, task: object) -> None:
+        """Push submodule changes to their respective remotes.
+
+        Iterates over ``task.submodules`` and pushes the current branch of each
+        submodule that has a configured remote.  Failures are logged but do not
+        cause the overall operation to fail.
+
+        Args:
+            wt_path: Path to the worktree directory.
+            task: Task object with ``submodules`` attribute.
+        """
+        for sub_path in task.submodules:
+            sub_dir = wt_path / sub_path
+            if not sub_dir.exists():
+                continue
+            if not self._has_remote(cwd=sub_dir):
+                continue
+            # Determine current branch
+            result = self._run(
+                ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+                cwd=sub_dir, check=False,
+            )
+            branch = result.stdout.strip()
+            if branch:
+                push_result = self._run(
+                    ["git", "push", "origin", branch],
+                    cwd=sub_dir, check=False, timeout=NETWORK_TIMEOUT,
+                )
+                if push_result.returncode != 0:
+                    logger.warning(f"Failed to push submodule {sub_path}: {push_result.stderr}")
 
     # ------------------------------------------------------------------
     # 移除 worktree
@@ -280,9 +412,13 @@ class WorktreeManager:
     # Rebase 合并策略
     # ------------------------------------------------------------------
 
-    def _has_remote(self) -> bool:
-        """检查是否配置了 remote origin。"""
-        result = self._run(["git", "remote"], check=False)
+    def _has_remote(self, cwd: Path | None = None) -> bool:
+        """Check whether a remote named 'origin' is configured.
+
+        Args:
+            cwd: Working directory for the git command.  Defaults to the repo root.
+        """
+        result = self._run(["git", "remote"], cwd=cwd, check=False)
         return "origin" in result.stdout.split()
 
     def _get_conflict_files(self, cwd: Path) -> List[str]:

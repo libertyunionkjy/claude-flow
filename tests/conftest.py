@@ -259,3 +259,169 @@ def git_repo_with_submodule(tmp_path: Path) -> dict:
                    check=True, capture_output=True)
 
     return {"repo": repo, "sub_remote": sub_remote, "sub_path": sub_path}
+
+
+# ---------------------------------------------------------------------------
+# Submodule worktree integration helpers
+# ---------------------------------------------------------------------------
+
+def _create_sub_remote(tmp_path: Path, name: str, files: dict) -> Path:
+    """Create a git repo to serve as a submodule 'remote'.
+
+    Args:
+        tmp_path: pytest tmp_path
+        name: directory name for the remote repo
+        files: dict of {relative_path: content} to create
+
+    Returns:
+        Path to the created repo
+    """
+    remote = tmp_path / name
+    subprocess.run(["git", "init", "-b", "main", str(remote)],
+                   check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(remote), "config", "user.email", "test@test.com"],
+                   check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(remote), "config", "user.name", "Test"],
+                   check=True, capture_output=True)
+    for rel_path, content in files.items():
+        fpath = remote / rel_path
+        fpath.parent.mkdir(parents=True, exist_ok=True)
+        fpath.write_text(content)
+    subprocess.run(["git", "-C", str(remote), "add", "."],
+                   check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(remote), "commit", "-m", f"init {name}"],
+                   check=True, capture_output=True)
+    return remote
+
+
+def _create_branch(repo: Path, branch_name: str, files: dict):
+    """Create a branch with an extra commit in the given repo.
+
+    Args:
+        repo: path to git repo
+        branch_name: name of the new branch
+        files: dict of {relative_path: content} to create/modify
+    """
+    current = subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "--abbrev-ref", "HEAD"],
+        check=True, capture_output=True, text=True,
+    ).stdout.strip()
+
+    subprocess.run(["git", "-C", str(repo), "checkout", "-b", branch_name],
+                   check=True, capture_output=True)
+    for rel_path, content in files.items():
+        fpath = repo / rel_path
+        fpath.parent.mkdir(parents=True, exist_ok=True)
+        fpath.write_text(content)
+    subprocess.run(["git", "-C", str(repo), "add", "."],
+                   check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(repo), "commit", "-m", f"add {branch_name} changes"],
+                   check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(repo), "checkout", current],
+                   check=True, capture_output=True)
+
+
+def _add_submodule(repo: Path, sub_remote: Path, sub_path: str):
+    """Add a local repo as submodule using protocol.file.allow=always.
+
+    Args:
+        repo: main repo path
+        sub_remote: submodule remote repo path
+        sub_path: submodule path within main repo (e.g. 'libs/core')
+    """
+    (repo / sub_path).parent.mkdir(parents=True, exist_ok=True)
+    subprocess.run(
+        ["git", "-C", str(repo), "-c", "protocol.file.allow=always",
+         "submodule", "add", str(sub_remote), sub_path],
+        check=True, capture_output=True,
+    )
+
+
+@pytest.fixture
+def git_repo_with_multi_submodules(tmp_path: Path) -> dict:
+    """Create a test repo with 3 submodules, each having multiple branches.
+
+    Structure:
+        repo/
+        +-- libs/
+        |   +-- core/           (submodule)
+        |   +-- ui/             (submodule)
+        +-- apps/
+        |   +-- server/         (submodule)
+        +-- .claude-flow/
+            +-- worktrees/
+
+    Each submodule remote has:
+        - main branch (initial commit with source files)
+        - feature-a branch (1 extra commit)
+
+    Returns:
+        dict with keys:
+        - repo: Path to main repo
+        - sub_remotes: dict mapping submodule path to remote repo path
+        - submodule_paths: list of submodule paths
+    """
+    # 1. Create 3 "remote" submodule repos with different source files
+    libs_core_remote = _create_sub_remote(tmp_path, "libs_core_remote", {
+        "core.py": "# core module\ndef core_func():\n    return 'core'\n",
+        "utils.py": "# core utils\ndef helper():\n    pass\n",
+    })
+    libs_ui_remote = _create_sub_remote(tmp_path, "libs_ui_remote", {
+        "ui.py": "# ui module\ndef render():\n    return '<div>hello</div>'\n",
+        "styles.css": "body { margin: 0; }\n",
+    })
+    apps_server_remote = _create_sub_remote(tmp_path, "apps_server_remote", {
+        "server.py": "# server app\ndef start():\n    print('starting server')\n",
+        "config.yaml": "port: 8080\n",
+    })
+
+    # 2. Create feature-a branch in each remote (with an extra commit)
+    _create_branch(libs_core_remote, "feature-a", {
+        "feature_a.py": "# feature-a addition for core\ndef feature_a():\n    return 'a'\n",
+    })
+    _create_branch(libs_ui_remote, "feature-a", {
+        "feature_a_ui.py": "# feature-a UI component\ndef widget():\n    return '<widget/>'\n",
+    })
+    _create_branch(apps_server_remote, "feature-a", {
+        "feature_a_endpoint.py": "# feature-a endpoint\ndef handler():\n    return 200\n",
+    })
+
+    # 3. Create main repo
+    repo = tmp_path / "main_project"
+    subprocess.run(["git", "init", "-b", "main", str(repo)],
+                   check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(repo), "config", "user.email", "test@test.com"],
+                   check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(repo), "config", "user.name", "Test"],
+                   check=True, capture_output=True)
+    (repo / "README.md").write_text("# Multi-submodule Project\n")
+    subprocess.run(["git", "-C", str(repo), "add", "."],
+                   check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(repo), "commit", "-m", "init main project"],
+                   check=True, capture_output=True)
+
+    # 4. Add 3 submodules
+    _add_submodule(repo, libs_core_remote, "libs/core")
+    _add_submodule(repo, libs_ui_remote, "libs/ui")
+    _add_submodule(repo, apps_server_remote, "apps/server")
+
+    # 5. Initialize .claude-flow/ directory
+    cf_dir = repo / ".claude-flow"
+    for sub in ["logs", "plans", "worktrees"]:
+        (cf_dir / sub).mkdir(parents=True, exist_ok=True)
+
+    # 6. Commit everything
+    subprocess.run(["git", "-C", str(repo), "add", "."],
+                   check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(repo), "commit", "-m", "add submodules and .claude-flow"],
+                   check=True, capture_output=True)
+
+    return {
+        "repo": repo,
+        "sub_remotes": {
+            "libs/core": libs_core_remote,
+            "libs/ui": libs_ui_remote,
+            "apps/server": apps_server_remote,
+        },
+        "submodule_paths": ["libs/core", "libs/ui", "apps/server"],
+    }

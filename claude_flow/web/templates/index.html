@@ -2020,6 +2020,144 @@
         .mini-create-form textarea { min-height: 80px; resize: vertical; }
         .mini-create-form .form-actions { display: flex; gap: 8px; justify-content: flex-end; }
 
+        /* -- Submodule Selector --------------------------------------------- */
+        .submodule-selector {
+            max-height: 260px;
+            overflow-y: auto;
+            border: 1px solid #2a2a4a;
+            border-radius: 8px;
+            background: #0d0d1f;
+        }
+        .submodule-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            border-bottom: 1px solid #1a1a35;
+            transition: background 0.15s;
+        }
+        .submodule-row:last-child { border-bottom: none; }
+        .submodule-row:hover { background: rgba(0, 212, 255, 0.04); }
+        .submodule-row.checked { background: rgba(0, 212, 255, 0.07); }
+        .submodule-row input[type="checkbox"] {
+            width: 16px; height: 16px;
+            margin: 0; padding: 0;
+            flex-shrink: 0;
+            accent-color: #00d4ff;
+            cursor: pointer;
+        }
+        .submodule-row .sub-path {
+            flex: 1;
+            font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+            font-size: 13px;
+            color: #d0d0e0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            letter-spacing: 0.2px;
+        }
+        .submodule-row .sub-path::before {
+            content: '';
+            display: inline-block;
+            width: 6px; height: 6px;
+            border-radius: 50%;
+            background: #4a5568;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+        .submodule-row.checked .sub-path::before { background: #00d4ff; }
+        .submodule-row .sub-branch-count {
+            font-size: 11px;
+            color: #6b7280;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        /* -- Branch Picker (searchable dropdown) ------------------------------ */
+        .branch-picker {
+            position: relative;
+            min-width: 220px;
+            flex: 1.5;
+            flex-shrink: 0;
+        }
+        .branch-picker .bp-input-wrap {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+        .branch-picker .bp-icon {
+            position: absolute;
+            left: 8px;
+            color: #4a5568;
+            font-size: 12px;
+            pointer-events: none;
+        }
+        .branch-picker input[type="text"] {
+            width: 100%;
+            background: #111128;
+            border: 1px solid #2a2a4a;
+            color: #e0e0e0;
+            border-radius: 6px;
+            padding: 6px 10px 6px 28px;
+            font-size: 13px;
+            font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+            box-sizing: border-box;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .branch-picker input[type="text"]:focus {
+            border-color: #00d4ff;
+            box-shadow: 0 0 0 2px rgba(0, 212, 255, 0.15);
+            outline: none;
+        }
+        .branch-picker input[type="text"]:disabled { opacity: 0.3; cursor: not-allowed; }
+        .branch-picker input[type="text"]::placeholder { color: #4a5568; font-family: inherit; }
+        .branch-picker .bp-dropdown {
+            display: none;
+            position: fixed;
+            max-height: 300px;
+            min-width: 360px;
+            overflow-y: auto;
+            background: #111128;
+            border: 1px solid #2a2a4a;
+            border-radius: 8px;
+            z-index: 9999;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+            padding: 4px 0;
+            margin-top: 4px;
+        }
+        .branch-picker .bp-dropdown.open { display: block; }
+        .branch-picker .bp-dropdown::-webkit-scrollbar { width: 6px; }
+        .branch-picker .bp-dropdown::-webkit-scrollbar-track { background: transparent; }
+        .branch-picker .bp-dropdown::-webkit-scrollbar-thumb { background: #2a2a4a; border-radius: 3px; }
+        .branch-picker .bp-item {
+            padding: 7px 12px;
+            font-size: 13px;
+            font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+            color: #b0b0c8;
+            cursor: pointer;
+            border-radius: 4px;
+            margin: 1px 4px;
+            transition: background 0.1s, color 0.1s;
+        }
+        .branch-picker .bp-item:hover { background: #1e1e3a; color: #e8e8f0; }
+        .branch-picker .bp-item.active {
+            background: rgba(0, 212, 255, 0.12);
+            color: #00d4ff;
+        }
+        .branch-picker .bp-item .bp-match {
+            color: #00d4ff;
+            font-weight: 700;
+            text-decoration: underline;
+            text-underline-offset: 2px;
+        }
+        .branch-picker .bp-empty {
+            padding: 10px 12px;
+            font-size: 12px;
+            color: #4a5568;
+            font-style: italic;
+            text-align: center;
+        }
+
         /* -- Mini Terminal Tab View ------------------------------------------ */
         .mini-terminal-page {
             display: none;
@@ -2472,6 +2610,13 @@
                 <h3>New Mini Task</h3>
                 <input type="text" id="miniTitle" placeholder="Task title (required)" />
                 <textarea id="miniPrompt" placeholder="Prompt for Claude (optional)"></textarea>
+                <div id="miniSubmodulesGroup" style="display:none;margin-bottom:12px;">
+                    <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#8888aa;margin:8px 0 4px;">
+                        <span>Submodules</span>
+                        <span style="font-size:11px;color:#4a5568;font-weight:400;">(select repos to include)</span>
+                    </label>
+                    <div id="miniSubmodulesList" class="submodule-selector"></div>
+                </div>
                 <div class="form-actions">
                     <button class="btn btn-outline" onclick="closeMiniCreateDialog()">Cancel</button>
                     <button class="btn btn-primary" onclick="createMiniTask()">Create</button>
@@ -2802,6 +2947,14 @@
                     <option value="2">Medium (2)</option>
                     <option value="3">High (3)</option>
                 </select>
+            </div>
+            <div class="form-group" id="taskSubmodulesGroup" style="display:none;">
+                <label style="display:flex;align-items:center;gap:6px;">
+                    <span>Submodules</span>
+                    <span style="font-size:11px;color:#4a5568;font-weight:400;">(select repos to include)</span>
+                    <button class="btn btn-outline btn-small" onclick="loadSubmodules('task')" style="margin-left:auto;font-size:10px;padding:2px 8px;opacity:0.6;">&#x21bb;</button>
+                </label>
+                <div id="taskSubmodulesList" class="submodule-selector"></div>
             </div>
             <div class="form-group">
                 <label for="taskSubagent">Subagent</label>
@@ -3158,6 +3311,13 @@
             detailHtml += '<p><span class="label">Prompt:</span></p><div class="prompt-text">' + escapeHtml(task.prompt || '') + '</div>';
             if (task.branch) {
                 detailHtml += '<p style="margin-top:6px;"><span class="label">Branch: </span>' + escapeHtml(task.branch) + '</p>';
+            }
+            if (task.sub_branches && Object.keys(task.sub_branches).length > 0) {
+                var sbHtml = Object.entries(task.sub_branches).map(function(e) {
+                    return '<span style="display:inline-block;background:#2d3748;padding:2px 8px;border-radius:4px;margin:2px 4px 2px 0;font-size:0.85em;">'
+                        + escapeHtml(e[0]) + ' &rarr; ' + escapeHtml(e[1]) + '</span>';
+                }).join('');
+                detailHtml += '<p style="margin-top:6px;"><span class="label">Sub-branches: </span>' + sbHtml + '</p>';
             }
             if (task.error) {
                 detailHtml += '<p><span class="label">Error: </span><span class="error-text">' + escapeHtml(task.error) + '</span></p>';
@@ -3766,6 +3926,203 @@
         }
 
         /* -- New Task -------------------------------------------------------- */
+        /* -- Submodule Selector ------------------------------------------------ */
+        var _submoduleCache = null;
+
+        async function loadSubmodules(target) {
+            // target: 'task' or 'mini'
+            var groupEl = document.getElementById(target === 'task' ? 'taskSubmodulesGroup' : 'miniSubmodulesGroup');
+            var listEl = document.getElementById(target === 'task' ? 'taskSubmodulesList' : 'miniSubmodulesList');
+            try {
+                var data = await api('/submodules?branches=true');
+                if (!data || !Array.isArray(data) || data.length === 0) {
+                    groupEl.style.display = 'none';
+                    _submoduleCache = [];
+                    return;
+                }
+                _submoduleCache = data;
+                groupEl.style.display = '';
+                renderSubmoduleSelector(listEl, data);
+            } catch (e) {
+                groupEl.style.display = 'none';
+            }
+        }
+
+        function renderSubmoduleSelector(container, submodules) {
+            container.innerHTML = '';
+            submodules.forEach(function(sub) {
+                var row = document.createElement('div');
+                row.className = 'submodule-row';
+                row.dataset.path = sub.path;
+
+                var cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.dataset.path = sub.path;
+                cb.onchange = function() {
+                    var inp = row.querySelector('.branch-picker input[type="text"]');
+                    if (inp) inp.disabled = !cb.checked;
+                    row.classList.toggle('checked', cb.checked);
+                };
+
+                var pathSpan = document.createElement('span');
+                pathSpan.className = 'sub-path';
+                var dirName = sub.path.indexOf('/') !== -1 ? sub.path.substring(sub.path.lastIndexOf('/') + 1) : sub.path;
+                pathSpan.textContent = dirName;
+                pathSpan.title = sub.path;
+
+                var brCount = document.createElement('span');
+                brCount.className = 'sub-branch-count';
+                var n = (sub.branches || []).length;
+                brCount.textContent = n + ' branch' + (n !== 1 ? 'es' : '');
+
+                var picker = createBranchPicker(sub.branches || [], sub.current_branch || '');
+
+                row.appendChild(cb);
+                row.appendChild(pathSpan);
+                row.appendChild(brCount);
+                row.appendChild(picker);
+                container.appendChild(row);
+            });
+        }
+
+        function createBranchPicker(branches, currentBranch) {
+            var wrap = document.createElement('div');
+            wrap.className = 'branch-picker';
+
+            var inputWrap = document.createElement('div');
+            inputWrap.className = 'bp-input-wrap';
+
+            var icon = document.createElement('span');
+            icon.className = 'bp-icon';
+            icon.innerHTML = '&#9741;'; // branch unicode
+
+            var inp = document.createElement('input');
+            inp.type = 'text';
+            inp.disabled = true;
+            inp.placeholder = branches.length > 0 ? 'Search ' + branches.length + ' branches...' : '(no branches)';
+            inp.value = currentBranch;
+            inp.dataset.selectedBranch = currentBranch;
+
+            inputWrap.appendChild(icon);
+            inputWrap.appendChild(inp);
+
+            var dd = document.createElement('div');
+            dd.className = 'bp-dropdown';
+
+            function renderItems(filter) {
+                dd.innerHTML = '';
+                var keyword = (filter || '').toLowerCase();
+                var matched = branches.filter(function(br) {
+                    return !keyword || br.toLowerCase().indexOf(keyword) !== -1;
+                });
+                if (matched.length === 0) {
+                    dd.innerHTML = '<div class="bp-empty">No matching branches</div>';
+                    return;
+                }
+                // Show count header when filtered
+                if (keyword && matched.length !== branches.length) {
+                    var header = document.createElement('div');
+                    header.className = 'bp-empty';
+                    header.style.borderBottom = '1px solid #1a1a35';
+                    header.style.fontStyle = 'normal';
+                    header.textContent = matched.length + ' of ' + branches.length + ' branches';
+                    dd.appendChild(header);
+                }
+                var limit = Math.min(matched.length, 80);
+                for (var i = 0; i < limit; i++) {
+                    var item = document.createElement('div');
+                    item.className = 'bp-item';
+                    item.dataset.branch = matched[i];
+                    if (keyword) {
+                        var idx = matched[i].toLowerCase().indexOf(keyword);
+                        item.innerHTML = escapeHtml(matched[i].substring(0, idx))
+                            + '<span class="bp-match">' + escapeHtml(matched[i].substring(idx, idx + keyword.length)) + '</span>'
+                            + escapeHtml(matched[i].substring(idx + keyword.length));
+                    } else {
+                        item.textContent = matched[i];
+                    }
+                    if (matched[i] === inp.dataset.selectedBranch) item.classList.add('active');
+                    item.onmousedown = function(e) {
+                        e.preventDefault();
+                        inp.value = this.dataset.branch;
+                        inp.dataset.selectedBranch = this.dataset.branch;
+                        dd.classList.remove('open');
+                    };
+                    dd.appendChild(item);
+                }
+                if (matched.length > limit) {
+                    var more = document.createElement('div');
+                    more.className = 'bp-empty';
+                    more.textContent = '... ' + (matched.length - limit) + ' more, type to narrow down';
+                    dd.appendChild(more);
+                }
+            }
+
+            function positionDropdown() {
+                var rect = inp.getBoundingClientRect();
+                var spaceBelow = window.innerHeight - rect.bottom;
+                var ddHeight = Math.min(300, dd.scrollHeight || 300);
+                // Open upward if not enough space below
+                if (spaceBelow < ddHeight && rect.top > spaceBelow) {
+                    dd.style.bottom = (window.innerHeight - rect.top) + 'px';
+                    dd.style.top = 'auto';
+                    dd.style.borderRadius = '8px 8px 0 0';
+                } else {
+                    dd.style.top = (rect.bottom + 4) + 'px';
+                    dd.style.bottom = 'auto';
+                    dd.style.borderRadius = '8px';
+                }
+                dd.style.left = rect.left + 'px';
+                dd.style.width = Math.max(rect.width, 360) + 'px';
+            }
+
+            inp.addEventListener('focus', function() {
+                inp.select();
+                renderItems(inp.value);
+                positionDropdown();
+                dd.classList.add('open');
+            });
+            inp.addEventListener('input', function() {
+                renderItems(inp.value);
+                positionDropdown();
+                dd.classList.add('open');
+            });
+            inp.addEventListener('blur', function() {
+                dd.classList.remove('open');
+                if (inp.value !== inp.dataset.selectedBranch) {
+                    var exact = branches.find(function(b) { return b === inp.value; });
+                    if (exact) {
+                        inp.dataset.selectedBranch = exact;
+                    } else {
+                        inp.value = inp.dataset.selectedBranch;
+                    }
+                }
+            });
+
+            wrap.appendChild(inputWrap);
+            wrap.appendChild(dd);
+            return wrap;
+        }
+
+        function collectSubmoduleSelection(containerId) {
+            var container = document.getElementById(containerId);
+            if (!container) return { submodules: [], sub_branches: {} };
+            var submodules = [];
+            var sub_branches = {};
+            container.querySelectorAll('.submodule-row').forEach(function(row) {
+                var cb = row.querySelector('input[type="checkbox"]');
+                if (cb && cb.checked) {
+                    var path = cb.dataset.path;
+                    submodules.push(path);
+                    var inp = row.querySelector('.branch-picker input[type="text"]');
+                    if (inp && inp.dataset.selectedBranch) {
+                        sub_branches[path] = inp.dataset.selectedBranch;
+                    }
+                }
+            });
+            return { submodules: submodules, sub_branches: sub_branches };
+        }
+
         function openNewTaskModal() {
             document.getElementById('taskTitle').value = '';
             document.getElementById('taskPrompt').value = '';
@@ -3773,6 +4130,7 @@
             document.getElementById('taskSubagent').value = '';
             document.getElementById('newTaskModal').classList.add('active');
             document.getElementById('taskTitle').focus();
+            loadSubmodules('task');
         }
 
         function closeNewTaskModal() {
@@ -3789,6 +4147,12 @@
             if (!prompt) { showToast('Please enter a prompt', true); return; }
             var body = { title: title, prompt: prompt, priority: priority };
             if (useSubagent !== null) { body.use_subagent = useSubagent; }
+            // Collect submodule selections
+            var subSel = collectSubmoduleSelection('taskSubmodulesList');
+            if (subSel.submodules.length > 0) {
+                body.submodules = subSel.submodules;
+                body.sub_branches = subSel.sub_branches;
+            }
             var data = await api('/tasks', {
                 method: 'POST',
                 body: JSON.stringify(body),
@@ -3940,6 +4304,10 @@
             infoItems.push({ label: 'Started', value: task.started_at ? formatTime(task.started_at) : '--' });
             infoItems.push({ label: 'Completed', value: task.completed_at ? formatTime(task.completed_at) : '--' });
             if (task.branch) infoItems.push({ label: 'Branch', value: task.branch });
+            if (task.sub_branches && Object.keys(task.sub_branches).length > 0) {
+                var sbText = Object.entries(task.sub_branches).map(function(e) { return e[0] + ':' + e[1]; }).join(', ');
+                infoItems.push({ label: 'Sub-branches', value: sbText });
+            }
             if (task.worker_id !== null && task.worker_id !== undefined) {
                 infoItems.push({ label: 'Worker', value: 'W' + task.worker_id });
             }
@@ -5254,6 +5622,7 @@
             document.getElementById('miniTitle').value = '';
             document.getElementById('miniPrompt').value = '';
             document.getElementById('miniTitle').focus();
+            loadSubmodules('mini');
         }
 
         function closeMiniCreateDialog() {
@@ -5264,10 +5633,17 @@
             var title = document.getElementById('miniTitle').value.trim();
             var prompt = document.getElementById('miniPrompt').value.trim();
             if (!title) { showToast('Title is required', true); return; }
+            var body = {title: title, prompt: prompt};
+            // Collect submodule selections
+            var subSel = collectSubmoduleSelection('miniSubmodulesList');
+            if (subSel.submodules.length > 0) {
+                body.submodules = subSel.submodules;
+                body.sub_branches = subSel.sub_branches;
+            }
             fetch('/api/mini-tasks', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({title: title, prompt: prompt})
+                body: JSON.stringify(body)
             }).then(r => r.json()).then(data => {
                 if (data.ok) {
                     closeMiniCreateDialog();

@@ -49,6 +49,7 @@ class Task:
     retry_count: int = 0
     plan_mode: Optional[str] = None  # "auto" | "interactive"
     submodules: list[str] = field(default_factory=list)
+    sub_branches: dict[str, str] = field(default_factory=dict)
     use_subagent: Optional[bool] = None  # None = inherit from config
 
     @property
@@ -75,6 +76,7 @@ class Task:
             "retry_count": self.retry_count,
             "plan_mode": self.plan_mode,
             "submodules": self.submodules,
+            "sub_branches": self.sub_branches,
             "use_subagent": self.use_subagent,
         }
 
@@ -98,5 +100,6 @@ class Task:
             retry_count=d.get("retry_count", 0),
             plan_mode=d.get("plan_mode"),
             submodules=d.get("submodules", []),
+            sub_branches=d.get("sub_branches", {}),
             use_subagent=d.get("use_subagent"),
         )

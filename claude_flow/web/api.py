@@ -98,6 +98,10 @@ def create_task():
     if not isinstance(submodules, list):
         return _err("submodules 必须是数组")
 
+    sub_branches = data.get("sub_branches", {})
+    if not isinstance(sub_branches, dict):
+        return _err("sub_branches 必须是对象 {path: branch}")
+
     # use_subagent: true/false/null (三态)
     raw_subagent = data.get("use_subagent")
     if raw_subagent is None:
@@ -109,10 +113,11 @@ def create_task():
 
     task_type = data.get("task_type", "normal")
     if task_type == "mini":
-        task = tm.add_mini(title, prompt, priority=priority, submodules=submodules)
+        task = tm.add_mini(title, prompt, priority=priority, submodules=submodules,
+                           sub_branches=sub_branches)
     else:
         task = tm.add(title, prompt, priority=priority, submodules=submodules,
-                      use_subagent=use_subagent)
+                      use_subagent=use_subagent, sub_branches=sub_branches)
     return _ok(task.to_dict()), 201
 
 
@@ -994,8 +999,19 @@ def _update_plan_mode(tm, task_id: str, mode: str):
 
 @api_bp.route("/submodules", methods=["GET"])
 def list_submodules():
-    """返回项目中所有 submodule 的路径列表（从 .gitmodules 解析）。"""
+    """Return submodule info.
+
+    Without query params, returns a list of submodule paths (backward-compat).
+    With ``?branches=true``, returns an enriched list with available branches
+    for each submodule::
+
+        [
+          {"path": "libs/core", "branches": ["main", "develop"], "current_branch": "main"},
+          ...
+        ]
+    """
     import configparser
+    import subprocess as sp
 
     is_git = current_app.config.get("IS_GIT", True)
     if not is_git:
@@ -1014,7 +1030,44 @@ def list_submodules():
         if parser.has_option(section, "path"):
             paths.append(parser.get(section, "path"))
 
-    return _ok(paths)
+    include_branches = request.args.get("branches", "").lower() in ("true", "1", "yes")
+    if not include_branches:
+        return _ok(paths)
+
+    # Enriched response with branch information
+    result = []
+    for sub_path in paths:
+        sub_dir = root / sub_path
+        entry: dict = {"path": sub_path, "branches": [], "current_branch": ""}
+        if not sub_dir.exists() or not (sub_dir / ".git").exists():
+            # Submodule not initialized -- just return path
+            result.append(entry)
+            continue
+        # Get current branch
+        cur = sp.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=str(sub_dir), capture_output=True, text=True, check=False,
+        )
+        entry["current_branch"] = cur.stdout.strip() if cur.returncode == 0 else ""
+        # Get all branches (local + remote short names)
+        br = sp.run(
+            ["git", "branch", "-a", "--format=%(refname:short)"],
+            cwd=str(sub_dir), capture_output=True, text=True, check=False,
+        )
+        if br.returncode == 0:
+            seen: set[str] = set()
+            for line in br.stdout.strip().splitlines():
+                name = line.strip()
+                # Normalize remote refs: origin/main -> main
+                if name.startswith("origin/"):
+                    name = name[7:]
+                if name and name != "HEAD" and name not in seen:
+                    seen.add(name)
+                    entry["branches"].append(name)
+            entry["branches"].sort()
+        result.append(entry)
+
+    return _ok(result)
 
 
 # -- Mini Task endpoints ----------------------------------------------------
@@ -1046,7 +1099,12 @@ def create_mini_task():
     if not isinstance(submodules, list):
         return _err("submodules must be an array")
 
-    task = tm.add_mini(title, prompt, submodules=submodules)
+    sub_branches = data.get("sub_branches", {})
+    if not isinstance(sub_branches, dict):
+        return _err("sub_branches must be an object {path: branch}")
+
+    task = tm.add_mini(title, prompt, submodules=submodules,
+                       sub_branches=sub_branches)
     return _ok(task.to_dict()), 201
 
 
@@ -1079,7 +1137,8 @@ def start_mini_task(task_id: str):
     wt = WorktreeManager(root, root / cfg.worktree_dir, is_git=is_git)
     try:
         wt_path = wt.create(task_id, branch, config=cfg,
-                            submodules=task.submodules or None)
+                            submodules=task.submodules or None,
+                            sub_branches=task.sub_branches or None)
     except subprocess.CalledProcessError as e:
         return _err(f"Worktree creation failed: {e.stderr}", 500)
 
