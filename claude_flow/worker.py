@@ -203,62 +203,60 @@ class Worker:
         has_changes = self._auto_commit(task, wt_path)
 
         # 检查分支上是否有新 commit（相对于 main）
-        stdout_content = log_file.read_text() if log_file.exists() else ""
-        if not has_changes and not self._has_new_commits(task.branch, wt_path):
-            claude_reply = self._extract_claude_result(stdout_content)
-            error_msg = claude_reply or "No code changes produced"
-            logger.warning(f"{prefix} No changes detected, marking as needs_input")
-            self._tm.update_status(task.id, TaskStatus.NEEDS_INPUT, error_msg)
-            self._log_progress(task, False, "needs_input: " + error_msg, wt_path)
-            self._wt.remove(task.id, task.branch)
-            return False
+        has_new_commits = has_changes or self._has_new_commits(task.branch, wt_path)
 
-        # 合并前测试验证
-        if self._cfg.pre_merge_commands:
-            test_passed = self._run_pre_merge_tests(task, wt_path)
-            if not test_passed:
-                self._tm.update_status(task.id, TaskStatus.FAILED, "Pre-merge tests failed")
-                self._log_progress(task, False, "Pre-merge tests failed", wt_path)
-                self._wt.remove(task.id, task.branch)
-                return False
+        if not has_new_commits:
+            # Claude 成功执行但没有产生代码变更，跳过合并，直接标记完成
+            logger.info(f"{prefix} No code changes detected, skipping merge for {task.id}")
+        else:
+            # 有代码变更，走正常合并流程
 
-        # 合并
-        if self._cfg.auto_merge:
-            self._tm.update_status(task.id, TaskStatus.MERGING)
-            if self._cfg.merge_mode == "rebase":
-                success = self._wt.rebase_and_merge(
-                    task.branch, self._cfg.main_branch,
-                    max_retries=self._cfg.max_merge_retries,
-                    config=self._cfg,
-                    task_title=task.title,
-                    task_prompt=task.prompt,
-                    timeout=self._cfg.task_timeout,
-                )
-            else:
-                success = self._wt.merge(
-                    task.branch, self._cfg.main_branch, self._cfg.merge_strategy,
-                    config=self._cfg,
-                    task_title=task.title,
-                    task_prompt=task.prompt,
-                )
-
-            if not success:
-                self._tm.update_status(task.id, TaskStatus.FAILED, "CONFLICT")
-                self._log_progress(task, False, "Merge conflict", wt_path)
-                return False
-
-            # 合并后测试验证（在 worktree 中验证合并结果的正确性）
+            # 合并前测试验证
             if self._cfg.pre_merge_commands:
-                post_merge_ok = self._run_pre_merge_tests(task, wt_path)
-                if not post_merge_ok:
-                    logger.warning(f"{prefix} Post-merge tests failed for {task.id}, "
-                                   "task still marked as done (merge already completed)")
+                test_passed = self._run_pre_merge_tests(task, wt_path)
+                if not test_passed:
+                    self._tm.update_status(task.id, TaskStatus.FAILED, "Pre-merge tests failed")
+                    self._log_progress(task, False, "Pre-merge tests failed", wt_path)
+                    self._wt.remove(task.id, task.branch)
+                    return False
 
-            # 远程推送
-            if self._cfg.auto_push:
-                push_ok = self._wt.push(self._cfg.main_branch)
-                if not push_ok:
-                    logger.warning(f"{prefix} Push failed for {task.id}, task still marked as done")
+            # 合并
+            if self._cfg.auto_merge:
+                self._tm.update_status(task.id, TaskStatus.MERGING)
+                if self._cfg.merge_mode == "rebase":
+                    success = self._wt.rebase_and_merge(
+                        task.branch, self._cfg.main_branch,
+                        max_retries=self._cfg.max_merge_retries,
+                        config=self._cfg,
+                        task_title=task.title,
+                        task_prompt=task.prompt,
+                        timeout=self._cfg.task_timeout,
+                    )
+                else:
+                    success = self._wt.merge(
+                        task.branch, self._cfg.main_branch, self._cfg.merge_strategy,
+                        config=self._cfg,
+                        task_title=task.title,
+                        task_prompt=task.prompt,
+                    )
+
+                if not success:
+                    self._tm.update_status(task.id, TaskStatus.FAILED, "CONFLICT")
+                    self._log_progress(task, False, "Merge conflict", wt_path)
+                    return False
+
+                # 合并后测试验证（在 worktree 中验证合并结果的正确性）
+                if self._cfg.pre_merge_commands:
+                    post_merge_ok = self._run_pre_merge_tests(task, wt_path)
+                    if not post_merge_ok:
+                        logger.warning(f"{prefix} Post-merge tests failed for {task.id}, "
+                                       "task still marked as done (merge already completed)")
+
+                # 远程推送
+                if self._cfg.auto_push:
+                    push_ok = self._wt.push(self._cfg.main_branch)
+                    if not push_ok:
+                        logger.warning(f"{prefix} Push failed for {task.id}, task still marked as done")
 
         # 记录成功经验
         self._log_progress(task, True, None, wt_path)

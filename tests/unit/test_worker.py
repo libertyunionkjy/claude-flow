@@ -147,6 +147,39 @@ class TestWorker:
 
         assert claude_md.read_text(encoding="utf-8") == original
 
+    def test_execute_task_no_changes_skips_merge(self, git_repo):
+        """Claude 成功执行但没有代码变更时，应跳过合并直接标记为 DONE。"""
+        repo, tm, wt, worker = self._setup(git_repo)
+        task = tm.add("Test no changes", "analyze code")
+        tm.update_status(task.id, TaskStatus.APPROVED)
+        claimed = tm.claim_next(worker_id=0)
+
+        call_count = {"merge": 0}
+
+        def mock_subprocess_run(cmd, **kwargs):
+            cmd_str = " ".join(cmd) if isinstance(cmd, list) else cmd
+            mock_result = MagicMock(returncode=0, stdout="", stderr="")
+            # git status --porcelain returns empty (no uncommitted changes)
+            if "status" in cmd and "--porcelain" in cmd:
+                mock_result.stdout = ""
+            # git rev-list --count returns 0 (no new commits)
+            elif "rev-list" in cmd and "--count" in cmd:
+                mock_result.stdout = "0"
+            # Track merge calls
+            elif "merge" in cmd:
+                call_count["merge"] += 1
+            return mock_result
+
+        with patch.object(worker, "_run_streaming", return_value=0), \
+             patch("claude_flow.worker.subprocess.run", side_effect=mock_subprocess_run):
+            result = worker.execute_task(claimed)
+
+        assert result is True
+        t = tm.get(claimed.id)
+        assert t.status == TaskStatus.DONE
+        # Merge should NOT have been called
+        assert call_count["merge"] == 0
+
     def test_build_prompt_without_subagent(self, git_repo):
         """subagent 关闭时，prompt 中不含 subagent 指令。"""
         _, tm, _, worker = self._setup(git_repo)
