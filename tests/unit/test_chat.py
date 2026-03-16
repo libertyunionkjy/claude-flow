@@ -451,19 +451,21 @@ class TestChatManager:
         assert "NotebookEdit" in disallowed
 
     @patch("claude_flow.chat.can_skip_permissions", return_value=False)
-    def test_build_cmd_uses_permission_mode_plan_when_no_skip(
+    def test_build_cmd_uses_bypass_permissions_when_no_skip(
         self, mock_can_skip, chat_dir
     ):
         """When --dangerously-skip-permissions is unavailable (e.g. root),
-        falls back to --permission-mode plan."""
+        falls back to --permission-mode bypassPermissions.
+        Write tools remain blocked by --disallowedTools."""
         cfg = Config(skip_permissions=True, plan_allowed_tools=["Read", "Glob", "Grep"])
         mgr = ChatManager(chat_dir, cfg)
         cmd = mgr._build_cmd("test prompt")
         assert "--dangerously-skip-permissions" not in cmd
         assert "--permission-mode" in cmd
         pm_idx = cmd.index("--permission-mode")
-        assert cmd[pm_idx + 1] == "plan"
+        assert cmd[pm_idx + 1] == "bypassPermissions"
         assert "--allowedTools" in cmd
+        assert "--disallowedTools" in cmd
 
     @patch("claude_flow.chat.can_skip_permissions", return_value=True)
     def test_build_cmd_no_permission_mode_when_skip_available(

@@ -102,11 +102,12 @@ class Planner:
         )
         cmd.extend(["--allowedTools"] + allowed)
 
-        if not skip:
+        if not skip and self._config.skip_permissions:
             # Cannot use --dangerously-skip-permissions (e.g. root).
-            # Use --permission-mode plan so read-only tools are
-            # auto-authorized without interactive confirmation.
-            cmd.extend(["--permission-mode", "plan"])
+            # Use --permission-mode bypassPermissions so read-only tools
+            # are auto-authorized without interactive confirmation.
+            # Write tools remain blocked by --disallowedTools above.
+            cmd.extend(["--permission-mode", "bypassPermissions"])
 
         cmd.extend(["--disallowedTools"] + self._PLANNING_DISALLOWED_TOOLS)
         return cmd

@@ -117,11 +117,12 @@ class TestPlanner:
 
     @patch("claude_flow.planner.can_skip_permissions", return_value=False)
     @patch("claude_flow.planner.subprocess.Popen")
-    def test_generate_uses_permission_mode_plan_when_no_skip(
+    def test_generate_uses_bypass_permissions_when_no_skip(
         self, mock_popen, mock_can_skip, tmp_path
     ):
         """When --dangerously-skip-permissions is unavailable (e.g. root),
-        falls back to --permission-mode plan for auto-authorizing read tools."""
+        falls back to --permission-mode bypassPermissions.
+        Write tools remain blocked by --disallowedTools."""
         mock_proc = MagicMock()
         mock_proc.communicate.return_value = ("# Plan", "")
         mock_proc.returncode = 0
@@ -139,9 +140,10 @@ class TestPlanner:
         assert "--dangerously-skip-permissions" not in cmd
         assert "--permission-mode" in cmd
         pm_idx = cmd.index("--permission-mode")
-        assert cmd[pm_idx + 1] == "plan"
-        # --allowedTools should still be present
+        assert cmd[pm_idx + 1] == "bypassPermissions"
+        # --allowedTools and --disallowedTools should both be present
         assert "--allowedTools" in cmd
+        assert "--disallowedTools" in cmd
 
     @patch("claude_flow.planner.can_skip_permissions", return_value=True)
     @patch("claude_flow.planner.subprocess.Popen")
