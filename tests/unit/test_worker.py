@@ -215,3 +215,38 @@ class TestWorker:
         task = Task(title="T", prompt="do something", use_subagent=True)
         result = worker._build_prompt(task)
         assert "Task tool" in result
+
+    @patch("claude_flow.worker.can_skip_permissions", return_value=True)
+    def test_append_permission_flags_skip(self, mock_can_skip, git_repo):
+        """skip_permissions 可用时，追加 --dangerously-skip-permissions。"""
+        _, _, _, worker = self._setup(git_repo)
+        cmd = ["claude", "-p", "test"]
+        worker._append_permission_flags(cmd)
+        assert "--dangerously-skip-permissions" in cmd
+        assert "--permission-mode" not in cmd
+
+    @patch("claude_flow.worker.can_skip_permissions", return_value=False)
+    def test_append_permission_flags_root_fallback(self, mock_can_skip, git_repo):
+        """skip_permissions 被拒（如 root）时，fallback 到 --permission-mode bypassPermissions。"""
+        repo, tm, wt, _ = self._setup(git_repo)
+        cfg = Config(skip_permissions=True)
+        worker = Worker(worker_id=0, project_root=repo, task_manager=tm,
+                        worktree_manager=wt, config=cfg)
+        cmd = ["claude", "-p", "test"]
+        worker._append_permission_flags(cmd)
+        assert "--dangerously-skip-permissions" not in cmd
+        assert "--permission-mode" in cmd
+        pm_idx = cmd.index("--permission-mode")
+        assert cmd[pm_idx + 1] == "bypassPermissions"
+
+    @patch("claude_flow.worker.can_skip_permissions", return_value=False)
+    def test_append_permission_flags_skip_disabled(self, mock_can_skip, git_repo):
+        """skip_permissions=False 时，不追加任何权限标志。"""
+        repo, tm, wt, _ = self._setup(git_repo)
+        cfg = Config(skip_permissions=False)
+        worker = Worker(worker_id=0, project_root=repo, task_manager=tm,
+                        worktree_manager=wt, config=cfg)
+        cmd = ["claude", "-p", "test"]
+        worker._append_permission_flags(cmd)
+        assert "--dangerously-skip-permissions" not in cmd
+        assert "--permission-mode" not in cmd

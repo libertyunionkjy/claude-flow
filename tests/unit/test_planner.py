@@ -57,8 +57,9 @@ class TestPlanner:
         planner = self._make_planner(tmp_path)
         assert not hasattr(planner, 'reject')
 
+    @patch("claude_flow.planner.can_skip_permissions", return_value=True)
     @patch("claude_flow.planner.subprocess.Popen")
-    def test_generate_includes_allowed_tools(self, mock_popen, tmp_path):
+    def test_generate_includes_allowed_tools(self, mock_popen, mock_can_skip, tmp_path):
         """generate() passes --allowedTools when plan_allowed_tools is set."""
         mock_proc = MagicMock()
         mock_proc.communicate.return_value = ("# Plan", "")
@@ -83,10 +84,15 @@ class TestPlanner:
         assert "Write" in disallowed
         assert "Edit" in disallowed
         assert "Bash" in disallowed
+        # --permission-mode should NOT be present when skip_permissions works
+        assert "--permission-mode" not in cmd
 
+    @patch("claude_flow.planner.can_skip_permissions", return_value=True)
     @patch("claude_flow.planner.subprocess.Popen")
-    def test_generate_no_restriction_when_empty(self, mock_popen, tmp_path):
-        """generate() omits --allowedTools when plan_allowed_tools is empty."""
+    def test_generate_falls_back_to_default_tools_when_empty(
+        self, mock_popen, mock_can_skip, tmp_path
+    ):
+        """generate() uses default read-only tools when plan_allowed_tools is empty."""
         mock_proc = MagicMock()
         mock_proc.communicate.return_value = ("# Plan", "")
         mock_proc.returncode = 0
@@ -101,6 +107,62 @@ class TestPlanner:
         planner.generate(task)
 
         cmd = mock_popen.call_args[0][0]
-        assert "--allowedTools" not in cmd
+        # Fallback: always includes --allowedTools with defaults
+        assert "--allowedTools" in cmd
+        idx = cmd.index("--allowedTools")
+        disallow_idx = cmd.index("--disallowedTools")
+        assert cmd[idx + 1 : disallow_idx] == ["Read", "Glob", "Grep"]
         # --disallowedTools should still be present
         assert "--disallowedTools" in cmd
+
+    @patch("claude_flow.planner.can_skip_permissions", return_value=False)
+    @patch("claude_flow.planner.subprocess.Popen")
+    def test_generate_uses_permission_mode_plan_when_no_skip(
+        self, mock_popen, mock_can_skip, tmp_path
+    ):
+        """When --dangerously-skip-permissions is unavailable (e.g. root),
+        falls back to --permission-mode plan for auto-authorizing read tools."""
+        mock_proc = MagicMock()
+        mock_proc.communicate.return_value = ("# Plan", "")
+        mock_proc.returncode = 0
+        mock_popen.return_value = mock_proc
+
+        plans_dir = tmp_path / ".claude-flow" / "plans"
+        plans_dir.mkdir(parents=True)
+        cfg = Config(skip_permissions=True, plan_allowed_tools=["Read", "Glob", "Grep"])
+        planner = Planner(tmp_path, plans_dir, cfg)
+
+        task = Task(title="Test", prompt="Analyze X")
+        planner.generate(task)
+
+        cmd = mock_popen.call_args[0][0]
+        assert "--dangerously-skip-permissions" not in cmd
+        assert "--permission-mode" in cmd
+        pm_idx = cmd.index("--permission-mode")
+        assert cmd[pm_idx + 1] == "plan"
+        # --allowedTools should still be present
+        assert "--allowedTools" in cmd
+
+    @patch("claude_flow.planner.can_skip_permissions", return_value=True)
+    @patch("claude_flow.planner.subprocess.Popen")
+    def test_generate_no_permission_mode_when_skip_available(
+        self, mock_popen, mock_can_skip, tmp_path
+    ):
+        """When --dangerously-skip-permissions is available,
+        --permission-mode should NOT be added."""
+        mock_proc = MagicMock()
+        mock_proc.communicate.return_value = ("# Plan", "")
+        mock_proc.returncode = 0
+        mock_popen.return_value = mock_proc
+
+        plans_dir = tmp_path / ".claude-flow" / "plans"
+        plans_dir.mkdir(parents=True)
+        cfg = Config(skip_permissions=True)
+        planner = Planner(tmp_path, plans_dir, cfg)
+
+        task = Task(title="Test", prompt="Analyze X")
+        planner.generate(task)
+
+        cmd = mock_popen.call_args[0][0]
+        assert "--dangerously-skip-permissions" in cmd
+        assert "--permission-mode" not in cmd

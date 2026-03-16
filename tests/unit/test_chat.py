@@ -412,7 +412,8 @@ class TestChatManager:
         assert "Hi there" in prompt
         assert "Plan this" in prompt
 
-    def test_build_cmd_includes_allowed_tools(self, chat_dir):
+    @patch("claude_flow.chat.can_skip_permissions", return_value=True)
+    def test_build_cmd_includes_allowed_tools(self, mock_can_skip, chat_dir):
         """_build_cmd appends --allowedTools when plan_allowed_tools is set."""
         cfg = Config(plan_allowed_tools=["Read", "Glob", "Grep"])
         mgr = ChatManager(chat_dir, cfg)
@@ -421,15 +422,22 @@ class TestChatManager:
         idx = cmd.index("--allowedTools")
         disallow_idx = cmd.index("--disallowedTools")
         assert cmd[idx + 1 : disallow_idx] == ["Read", "Glob", "Grep"]
+        assert "--permission-mode" not in cmd
 
-    def test_build_cmd_no_restriction_when_empty(self, chat_dir):
-        """_build_cmd omits --allowedTools when plan_allowed_tools is empty."""
+    @patch("claude_flow.chat.can_skip_permissions", return_value=True)
+    def test_build_cmd_falls_back_to_defaults_when_empty(self, mock_can_skip, chat_dir):
+        """_build_cmd uses default read-only tools when plan_allowed_tools is empty."""
         cfg = Config(plan_allowed_tools=[])
         mgr = ChatManager(chat_dir, cfg)
         cmd = mgr._build_cmd("test prompt")
-        assert "--allowedTools" not in cmd
+        # Fallback: always includes --allowedTools with defaults
+        assert "--allowedTools" in cmd
+        idx = cmd.index("--allowedTools")
+        disallow_idx = cmd.index("--disallowedTools")
+        assert cmd[idx + 1 : disallow_idx] == ["Read", "Glob", "Grep"]
 
-    def test_build_cmd_always_includes_disallowed_tools(self, chat_dir):
+    @patch("claude_flow.chat.can_skip_permissions", return_value=True)
+    def test_build_cmd_always_includes_disallowed_tools(self, mock_can_skip, chat_dir):
         """_build_cmd always appends --disallowedTools to block writes."""
         cfg = Config(plan_allowed_tools=[])
         mgr = ChatManager(chat_dir, cfg)
@@ -441,6 +449,33 @@ class TestChatManager:
         assert "Edit" in disallowed
         assert "Bash" in disallowed
         assert "NotebookEdit" in disallowed
+
+    @patch("claude_flow.chat.can_skip_permissions", return_value=False)
+    def test_build_cmd_uses_permission_mode_plan_when_no_skip(
+        self, mock_can_skip, chat_dir
+    ):
+        """When --dangerously-skip-permissions is unavailable (e.g. root),
+        falls back to --permission-mode plan."""
+        cfg = Config(skip_permissions=True, plan_allowed_tools=["Read", "Glob", "Grep"])
+        mgr = ChatManager(chat_dir, cfg)
+        cmd = mgr._build_cmd("test prompt")
+        assert "--dangerously-skip-permissions" not in cmd
+        assert "--permission-mode" in cmd
+        pm_idx = cmd.index("--permission-mode")
+        assert cmd[pm_idx + 1] == "plan"
+        assert "--allowedTools" in cmd
+
+    @patch("claude_flow.chat.can_skip_permissions", return_value=True)
+    def test_build_cmd_no_permission_mode_when_skip_available(
+        self, mock_can_skip, chat_dir
+    ):
+        """When --dangerously-skip-permissions is available,
+        --permission-mode should NOT be added."""
+        cfg = Config(skip_permissions=True)
+        mgr = ChatManager(chat_dir, cfg)
+        cmd = mgr._build_cmd("test prompt")
+        assert "--dangerously-skip-permissions" in cmd
+        assert "--permission-mode" not in cmd
 
     def test_build_cmd_custom_tools(self, chat_dir):
         """_build_cmd supports project-specific tool configuration."""

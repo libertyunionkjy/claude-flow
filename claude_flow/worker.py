@@ -58,6 +58,20 @@ class Worker:
     def _log_prefix(self) -> str:
         return f"[Worker-{self.worker_id}]"
 
+    def _append_permission_flags(self, cmd: list[str]) -> None:
+        """Append permission flags to a claude CLI command.
+
+        Uses --dangerously-skip-permissions when available (non-root).
+        Falls back to --permission-mode bypassPermissions for root
+        environments where the flag is rejected, ensuring the worker
+        can still execute read/write tools in non-interactive mode.
+        """
+        if can_skip_permissions(self._cfg.skip_permissions):
+            cmd.append("--dangerously-skip-permissions")
+        elif self._cfg.skip_permissions:
+            # skip_permissions requested but blocked (e.g. root).
+            cmd.extend(["--permission-mode", "bypassPermissions"])
+
     def _build_prompt(self, task: Task) -> str:
         """Build the full prompt for a task, optionally injecting subagent instructions."""
         parts = [self._cfg.task_prompt_prefix, task.prompt]
@@ -102,8 +116,7 @@ class Worker:
 
         prompt = self._build_prompt(task)
         cmd = ["claude", "-p", prompt, "--output-format", "stream-json", "--verbose"]
-        if can_skip_permissions(self._cfg.skip_permissions):
-            cmd.append("--dangerously-skip-permissions")
+        self._append_permission_flags(cmd)
         cmd.extend(self._cfg.claude_args)
 
         log_file = self._logs_dir / f"{task.id}.log"
@@ -159,8 +172,7 @@ class Worker:
         base_prompt = self._build_prompt(task)
         prompt = f"{base_prompt}\n\n{worktree_constraint}"
         cmd = ["claude", "-p", prompt, "--output-format", "stream-json", "--verbose"]
-        if can_skip_permissions(self._cfg.skip_permissions):
-            cmd.append("--dangerously-skip-permissions")
+        self._append_permission_flags(cmd)
         cmd.extend(self._cfg.claude_args)
 
         log_file = self._logs_dir / f"{task.id}.log"
@@ -389,8 +401,7 @@ class Worker:
                         f"请修复代码使测试通过。"
                     )
                     fix_cmd = ["claude", "-p", fix_prompt, "--output-format", "stream-json", "--verbose"]
-                    if can_skip_permissions(self._cfg.skip_permissions):
-                        fix_cmd.append("--dangerously-skip-permissions")
+                    self._append_permission_flags(fix_cmd)
                     subprocess.run(
                         fix_cmd, cwd=str(wt_path),
                         stdin=subprocess.DEVNULL,

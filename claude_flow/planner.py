@@ -72,6 +72,10 @@ class Planner:
     # Tools that must never be used during the planning phase
     _PLANNING_DISALLOWED_TOOLS = ["Write", "Edit", "Bash", "NotebookEdit"]
 
+    # Default read-only tools allowed during the planning phase.
+    # Used as fallback when plan_allowed_tools is not explicitly configured.
+    _PLANNING_DEFAULT_ALLOWED_TOOLS = ["Read", "Glob", "Grep"]
+
     def _build_plan_cmd(self, prompt: str) -> list[str]:
         """Build claude CLI command for plan-phase invocations.
 
@@ -79,12 +83,31 @@ class Planner:
         Additionally, always appends --disallowedTools to explicitly
         block write/execute tools, preventing AI from writing files
         even when --dangerously-skip-permissions is active.
+
+        When --dangerously-skip-permissions cannot be used (e.g. running
+        as root), falls back to --permission-mode plan combined with
+        --allowedTools to ensure read-only tools are auto-authorized
+        in non-interactive mode.
         """
         cmd = ["claude", "-p", prompt, "--print", "--output-format", "text"]
-        if can_skip_permissions(self._config.skip_permissions):
+        skip = can_skip_permissions(self._config.skip_permissions)
+        if skip:
             cmd.append("--dangerously-skip-permissions")
-        if self._config.plan_allowed_tools:
-            cmd.extend(["--allowedTools"] + self._config.plan_allowed_tools)
+
+        # Determine allowed tools: explicit config > class default
+        allowed = (
+            self._config.plan_allowed_tools
+            if self._config.plan_allowed_tools
+            else self._PLANNING_DEFAULT_ALLOWED_TOOLS
+        )
+        cmd.extend(["--allowedTools"] + allowed)
+
+        if not skip:
+            # Cannot use --dangerously-skip-permissions (e.g. root).
+            # Use --permission-mode plan so read-only tools are
+            # auto-authorized without interactive confirmation.
+            cmd.extend(["--permission-mode", "plan"])
+
         cmd.extend(["--disallowedTools"] + self._PLANNING_DISALLOWED_TOOLS)
         return cmd
 
