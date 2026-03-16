@@ -19,7 +19,6 @@ Inspired by [Yuanming Hu's Claude Code workflow](https://mp.weixin.qq.com/s/exam
 - **Rebase Merge + Auto Conflict Resolution** -- Rebase strategy with Claude-powered automatic conflict resolution
 - **Pre-merge Test Verification** -- Automatic test execution before merge, auto-fix and retry on failure
 - **Needs Input** -- Worker detects when Claude needs clarification, pauses for human input
-- **PROGRESS.md Experience Log** -- Records lessons learned and commit IDs after each task
 - **Token Usage Stats** -- Track token consumption per task/daily/monthly via ccusage integration
 - **Stream JSON Real-time Monitoring** -- Parse worker output for real-time progress tracking
 - **Web Manager Dashboard** -- Dark-themed dashboard with sidebar navigation, mobile support
@@ -76,7 +75,6 @@ cf watch             # Real-time worker status
 cf web               # Start Web dashboard
 cf status            # Task status overview
 cf usage             # Token usage report
-cf progress          # Experience log
 ```
 
 ## Command Reference
@@ -105,7 +103,6 @@ cf progress          # Experience log
 | `cf usage daily` | Daily aggregated usage (requires ccusage) |
 | `cf usage monthly` | Monthly aggregated usage (requires ccusage) |
 | `cf usage summary` | Overall usage summary |
-| `cf progress` | View PROGRESS.md experience log |
 | `cf clean` | Clean up worktrees and merged branches |
 | `cf reset <id>` | Reset failed/needs_input/zombie-running task |
 | `cf retry` | Retry all failed tasks |
@@ -158,7 +155,6 @@ claude_flow/
 ├── worktree.py       # Git worktree ops (symlink, rebase, merge lock, push)
 ├── planner.py        # Plan mode (multi-round chat, plan split)
 ├── chat.py           # ChatSession model, ChatManager for interactive planning
-├── progress.py       # PROGRESS.md experience logging
 ├── monitor.py        # Stream JSON real-time parsing and monitoring
 ├── usage.py          # Token usage statistics (ccusage + log fallback)
 ├── utils.py          # Shared utilities

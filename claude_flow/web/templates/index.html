@@ -2865,10 +2865,9 @@
                             <li><strong>Rebase merge</strong> to main branch with merge lock (prevents concurrent merges)</li>
                             <li><strong>Conflict auto-resolution</strong> -- Claude resolves conflicts with task context awareness</li>
                             <li><strong>Remote push</strong> (if <code>auto_push</code> enabled)</li>
-                            <li><strong>Experience log</strong> to PROGRESS.md</li>
                         </ul>
                         <div class="guide-cmd-row">
-                            <div class="guide-cmd-box"><span class="cmd-label cli">CLI</span><code>cf clean</code> (cleanup) <br><code>cf progress</code> (experience log)<br><code>cf usage</code> (token stats)</div>
+                            <div class="guide-cmd-box"><span class="cmd-label cli">CLI</span><code>cf clean</code> (cleanup) <br><code>cf usage</code> (token stats)</div>
                             <div class="guide-cmd-box"><span class="cmd-label web">Web</span><span class="cmd-text">Task card moves to <strong>Done</strong> automatically. View usage stats in the Overview dashboard.</span></div>
                         </div>
                         <div class="guide-tip"><strong>Config: </strong>Set <code>auto_merge: false</code> to skip merging. Use <code>pre_merge_commands: ["pytest -v"]</code> to enable test verification. Merge strategy defaults to <code>rebase</code> with <code>max_merge_retries: 5</code>.</div>

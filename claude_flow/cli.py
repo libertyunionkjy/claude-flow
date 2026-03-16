@@ -1261,17 +1261,3 @@ def usage_summary(ctx):
     )
     click.echo(format_summary(summary))
 
-
-# -- Progress command -------------------------------------------------------
-
-@main.command()
-@click.pass_context
-def progress(ctx):
-    """Show PROGRESS.md experience log."""
-    root = ctx.obj["root"]
-    cfg = Config.load(root)
-    progress_file = root / cfg.progress_file
-    if progress_file.exists():
-        click.echo(progress_file.read_text())
-    else:
-        click.echo("No progress log yet.")

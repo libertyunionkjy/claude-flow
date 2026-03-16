@@ -271,8 +271,7 @@ Each worker's complete execution flow:
 9. **Rebase merge** to main branch (with auto conflict resolution, up to `max_merge_retries` retries)
    - Merge lock prevents concurrent merges from multiple workers
 10. **Remote push** (if `auto_push` configured)
-11. **Log experience** to PROGRESS.md (if `enable_progress_log` enabled)
-12. Clean up worktree, mark task as `done`
+11. Clean up worktree, mark task as `done`
 13. Loop to pick up next task
 
 ---
@@ -329,15 +328,6 @@ cf log task-a1b2c3
 # View raw stream-json log
 cf log task-a1b2c3 --raw
 ```
-
-### Experience Log
-
-```bash
-# View PROGRESS.md
-cf progress
-```
-
-PROGRESS.md records lessons learned after each task completion/failure, including commit IDs, error messages, and Claude-generated experience summaries.
 
 ---
 
@@ -476,7 +466,7 @@ Edit `.claude-flow/config.json`:
 
   // Worktree symlink sharing
   "shared_symlinks": ["dev-tasks.json", "api-key.json"],  // Files to symlink
-  "forbidden_symlinks": ["PROGRESS.md"],                   // Files never symlinked
+  "forbidden_symlinks": [],                                  // Files never symlinked
 
   // Merge strategy
   "auto_merge": true,              // Auto-merge after task completion
@@ -490,10 +480,6 @@ Edit `.claude-flow/config.json`:
 
   // Remote push
   "auto_push": false,              // Push to remote after merge
-
-  // PROGRESS.md experience logging
-  "enable_progress_log": true,     // Enable experience recording
-  "progress_file": "PROGRESS.md",  // Experience log filename
 
   // Worker port assignment
   "base_port": 5200,               // Port base (Worker-0 = 5200, Worker-1 = 5201, ...)
@@ -541,7 +527,6 @@ Edit `.claude-flow/config.json`:
   "max_test_retries": 3,
   "max_merge_retries": 5,
   "auto_push": true,
-  "enable_progress_log": true,
   "shared_symlinks": [".env", "dev-tasks.json"]
 }
 ```
@@ -588,8 +573,6 @@ cf web                   # Or open Web dashboard
 cf status
 cf log task-xxx
 cf usage                 # Token usage report
-cf progress              # Experience log
-
 # Handle special cases
 cf respond task-xxx -m "Use PostgreSQL for the database"  # Answer Claude's question
 cf retry                 # Retry failed tasks
@@ -608,5 +591,4 @@ cf run
 6. **File locking**: Uses `fcntl.flock`, only supports Linux/macOS
 7. **Web Manager**: Requires Flask (`pip install flask`)
 8. **Port assignment**: Each worker gets a dedicated port (base_port + worker_id), passed via the `PORT` environment variable
-9. **PROGRESS.md**: Experience log is written to the main repo (not worktree), using `git -C` operations
-10. **Token usage**: Full reporting requires `ccusage` (`npx ccusage@latest`); basic per-task stats are available from logs without it
+9. **Token usage**: Full reporting requires `ccusage` (`npx ccusage@latest`); basic per-task stats are available from logs without it

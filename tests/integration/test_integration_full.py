@@ -40,7 +40,6 @@ from claude_flow.worktree import WorktreeManager
 def _build_stack(cf_project: Path):
     """Build the complete module stack from an initialized project."""
     cfg = Config.load(cf_project)
-    cfg.enable_progress_log = False
     tm = TaskManager(cf_project)
     plans_dir = cf_project / ".claude-flow" / "plans"
     planner = Planner(cf_project, plans_dir, cfg, task_manager=tm)

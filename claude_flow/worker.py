@@ -119,13 +119,11 @@ class Worker:
             )
         except subprocess.TimeoutExpired:
             self._tm.update_status(task.id, TaskStatus.FAILED, "Timeout")
-            self._log_progress(task, False, "Timeout", wt_path)
             return False
 
         if returncode != 0:
             error_msg = f"Exit code {returncode}"
             self._tm.update_status(task.id, TaskStatus.FAILED, error_msg)
-            self._log_progress(task, False, error_msg, wt_path)
             return False
 
         # 合并前测试验证（non-git mode 也支持）
@@ -133,10 +131,8 @@ class Worker:
             test_passed = self._run_pre_merge_tests(task, wt_path)
             if not test_passed:
                 self._tm.update_status(task.id, TaskStatus.FAILED, "Pre-merge tests failed")
-                self._log_progress(task, False, "Pre-merge tests failed", wt_path)
                 return False
 
-        self._log_progress(task, True, None, wt_path)
         self._tm.update_status(task.id, TaskStatus.DONE)
         logger.info(f"{prefix} Done (non-git): {task.title}")
         return True
@@ -181,14 +177,12 @@ class Worker:
             )
         except subprocess.TimeoutExpired:
             self._tm.update_status(task.id, TaskStatus.FAILED, "Timeout")
-            self._log_progress(task, False, "Timeout", wt_path)
             self._wt.remove(task.id, task.branch)
             return False
 
         if returncode != 0:
             error_msg = f"Exit code {returncode}"
             self._tm.update_status(task.id, TaskStatus.FAILED, error_msg)
-            self._log_progress(task, False, error_msg, wt_path)
             self._wt.remove(task.id, task.branch)
             return False
 
@@ -208,7 +202,6 @@ class Worker:
             sub_merge_ok = self._wt.merge_submodules(wt_path, task)
             if not sub_merge_ok:
                 self._tm.update_status(task.id, TaskStatus.FAILED, "Submodule merge failed")
-                self._log_progress(task, False, "Submodule merge failed", wt_path)
                 self._wt.remove(task.id, task.branch)
                 return False
             # Re-commit to update submodule pointers in the main repo
@@ -231,7 +224,6 @@ class Worker:
                 test_passed = self._run_pre_merge_tests(task, wt_path)
                 if not test_passed:
                     self._tm.update_status(task.id, TaskStatus.FAILED, "Pre-merge tests failed")
-                    self._log_progress(task, False, "Pre-merge tests failed", wt_path)
                     self._wt.remove(task.id, task.branch)
                     return False
 
@@ -257,7 +249,6 @@ class Worker:
 
                 if not success:
                     self._tm.update_status(task.id, TaskStatus.FAILED, "CONFLICT")
-                    self._log_progress(task, False, "Merge conflict", wt_path)
                     return False
 
                 # 合并后测试验证（在 worktree 中验证合并结果的正确性）
@@ -272,9 +263,6 @@ class Worker:
                     push_ok = self._wt.push(self._cfg.main_branch)
                     if not push_ok:
                         logger.warning(f"{prefix} Push failed for {task.id}, task still marked as done")
-
-        # 记录成功经验
-        self._log_progress(task, True, None, wt_path)
 
         # 清理
         self._wt.remove(task.id, task.branch)
@@ -738,19 +726,4 @@ class Worker:
         except Exception as e:
             logger.warning(f"{self._log_prefix()} Failed to save structured log: {e}")
 
-    def _log_progress(self, task: Task, success: bool, error: Optional[str], wt_path: Path) -> None:
-        """记录任务经验到 PROGRESS.md。"""
-        if not self._cfg.enable_progress_log:
-            return
-        try:
-            from .progress import ProgressLogger
-            progress_logger = ProgressLogger(self._root, self._cfg)
-            if success:
-                commit_id = progress_logger._get_commit_id(wt_path)
-                progress_logger.log_success(task, commit_id, wt_path)
-            else:
-                progress_logger.log_failure(task, error or "Unknown error", wt_path)
-        except ImportError:
-            pass  # progress 模块不可用时静默跳过
-        except Exception as e:
-            logger.warning(f"{self._log_prefix()} Progress logging failed: {e}")
+

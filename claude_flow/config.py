@@ -23,7 +23,7 @@ DEFAULT_CONFIG = {
     "plan_allowed_tools": ["Read", "Glob", "Grep"],
     # Worktree symlink sharing
     "shared_symlinks": [],
-    "forbidden_symlinks": ["PROGRESS.md"],
+    "forbidden_symlinks": [],
     # Merge strategy
     "merge_mode": "rebase",
     "max_merge_retries": 5,
@@ -32,9 +32,6 @@ DEFAULT_CONFIG = {
     "max_test_retries": 3,
     # Remote push
     "auto_push": False,
-    # PROGRESS.md experience logging
-    "enable_progress_log": True,
-    "progress_file": "PROGRESS.md",
     # Worker port assignment
     "base_port": 5200,
     # Daemon mode
@@ -67,7 +64,7 @@ class Config:
     )
     # Worktree symlink sharing
     shared_symlinks: List[str] = field(default_factory=list)
-    forbidden_symlinks: List[str] = field(default_factory=lambda: ["PROGRESS.md"])
+    forbidden_symlinks: List[str] = field(default_factory=list)
     # Merge strategy
     merge_mode: str = "rebase"
     max_merge_retries: int = 5
@@ -76,9 +73,6 @@ class Config:
     max_test_retries: int = 3
     # Remote push
     auto_push: bool = False
-    # PROGRESS.md experience logging
-    enable_progress_log: bool = True
-    progress_file: str = "PROGRESS.md"
     # Worker port assignment
     base_port: int = 5200
     # Daemon mode

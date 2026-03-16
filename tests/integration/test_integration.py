@@ -24,7 +24,6 @@ class TestFullLifecycle:
     def _build_stack(self, cf_project: Path):
         """Build the complete module stack from an initialized project."""
         cfg = Config.load(cf_project)
-        cfg.enable_progress_log = False  # skip PROGRESS.md in tests
         tm = TaskManager(cf_project)
         plans_dir = cf_project / ".claude-flow" / "plans"
         planner = Planner(cf_project, plans_dir, cfg, task_manager=tm)
@@ -207,7 +206,6 @@ class TestStdinIsolation:
     def test_worker_run_uses_devnull_stdin(self, cf_project, claude_subprocess_guard):
         """Worker subprocess.run() must pass stdin=subprocess.DEVNULL."""
         cfg = Config.load(cf_project)
-        cfg.enable_progress_log = False
         tm = TaskManager(cf_project)
         wt = WorktreeManager(cf_project, cf_project / cfg.worktree_dir)
         worker = Worker(0, cf_project, tm, wt, cfg)
@@ -228,7 +226,6 @@ class TestStdinIsolation:
     def test_worker_pre_merge_tests_use_devnull_stdin(self, cf_project, claude_subprocess_guard):
         """Pre-merge test commands must also use stdin=subprocess.DEVNULL."""
         cfg = Config.load(cf_project)
-        cfg.enable_progress_log = False
         cfg.pre_merge_commands = ["echo test"]
         tm = TaskManager(cf_project)
         wt = WorktreeManager(cf_project, cf_project / cfg.worktree_dir)
