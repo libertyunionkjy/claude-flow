@@ -2830,6 +2830,44 @@
             color: #00d4ff;
         }
 
+        /* -- Scan Results ---------------------------------------------------- */
+        .scan-results-panel {
+            background: #16213e;
+            border: 1px solid #00d4ff44;
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 16px;
+        }
+        .scan-results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        .scan-results-header h3 {
+            font-size: 14px;
+            color: #00d4ff;
+            margin: 0;
+        }
+        .scan-results-actions { display: flex; gap: 8px; }
+        .btn-sm { padding: 4px 12px; font-size: 12px; }
+        .scan-results-list { display: flex; flex-direction: column; gap: 8px; }
+        .scan-result-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: #1a1a2e;
+            border: 1px solid #2a2a4a;
+            border-radius: 6px;
+            padding: 10px 14px;
+        }
+        .scan-result-info { display: flex; flex-direction: column; gap: 2px; }
+        .scan-result-path { font-size: 13px; color: #e0e0e0; font-family: monospace; }
+        .scan-result-branch { font-size: 11px; color: #888; }
+        .scan-result-item .btn { white-space: nowrap; }
+        .scan-result-item.added { opacity: 0.5; pointer-events: none; }
+        .scan-result-item.added .btn { background: #2a2a4a; color: #888; }
+
         /* -- Settings Project Mode ------------------------------------------- */
         .settings-project-mode {
             margin-top: 20px;
@@ -3236,6 +3274,17 @@
                         <tbody id="reposTableBody"></tbody>
                     </table>
                     <div class="repos-empty" id="reposEmpty">No repositories managed. Click "Add Repository" or "Scan Repos" to get started.</div>
+                    <!-- Scan results panel -->
+                    <div class="scan-results-panel" id="scanResultsPanel" style="display:none;">
+                        <div class="scan-results-header">
+                            <h3>Discovered Repositories</h3>
+                            <div class="scan-results-actions">
+                                <button class="btn btn-primary btn-sm" onclick="addAllScannedRepos()">Add All</button>
+                                <button class="btn btn-outline btn-sm" onclick="closeScanResults()">Dismiss</button>
+                            </div>
+                        </div>
+                        <div class="scan-results-list" id="scanResultsList"></div>
+                    </div>
                 </div>
                 <div class="settings-project-mode" id="projectModeSettings">
                     <h3>Project Mode</h3>
@@ -6993,14 +7042,65 @@
             }
         }
 
+        var _scanResults = [];
+
         async function scanRepos() {
             showToast('Scanning for repositories...');
             var data = await api('/repos/scan', { method: 'POST' });
+            if (data === null) return;
+
+            var repos = Array.isArray(data) ? data : [];
+            _scanResults = repos;
+
+            if (repos.length === 0) {
+                showToast('No unmanaged repositories found');
+                document.getElementById('scanResultsPanel').style.display = 'none';
+                return;
+            }
+
+            var html = '';
+            repos.forEach(function(repo, idx) {
+                var branch = repo.current_branch || 'unknown';
+                html += '<div class="scan-result-item" id="scanItem' + idx + '">'
+                    + '<div class="scan-result-info">'
+                    + '<span class="scan-result-path">' + escapeHtml(repo.path) + '</span>'
+                    + '<span class="scan-result-branch">branch: ' + escapeHtml(branch) + '</span>'
+                    + '</div>'
+                    + '<button class="btn btn-primary btn-sm" onclick="addScannedRepo(' + idx + ')">Add</button>'
+                    + '</div>';
+            });
+            document.getElementById('scanResultsList').innerHTML = html;
+            document.getElementById('scanResultsPanel').style.display = 'block';
+            showToast(repos.length + ' unmanaged repo(s) found');
+        }
+
+        async function addScannedRepo(idx) {
+            var repo = _scanResults[idx];
+            if (!repo) return;
+            var data = await api('/repos', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path: repo.path })
+            });
             if (data !== null) {
-                var count = data.found || (Array.isArray(data) ? data.length : 0);
-                showToast('Scan complete: ' + count + ' repo(s) found');
+                var el = document.getElementById('scanItem' + idx);
+                if (el) { el.classList.add('added'); el.querySelector('.btn').textContent = 'Added'; }
+                showToast('Added: ' + repo.path);
                 loadRepos();
             }
+        }
+
+        async function addAllScannedRepos() {
+            for (var i = 0; i < _scanResults.length; i++) {
+                var el = document.getElementById('scanItem' + i);
+                if (el && el.classList.contains('added')) continue;
+                await addScannedRepo(i);
+            }
+        }
+
+        function closeScanResults() {
+            document.getElementById('scanResultsPanel').style.display = 'none';
+            _scanResults = [];
         }
 
         /* -- Add Repo Modal -------------------------------------------------- */
