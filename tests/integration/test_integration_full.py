@@ -289,6 +289,7 @@ class TestWorktreeMerge:
         """Conflicting rebase -> abort, worktree still usable."""
         cfg, tm, planner, wt, worker = _build_stack(cf_project)
         cfg.skip_permissions = False  # Ensure no auto conflict resolution
+        cfg.claude_merge_fallback = False  # Disable fallback to test pure abort behavior
 
         wt_path = wt.create("task-005", "cf/task-005")
 

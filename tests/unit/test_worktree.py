@@ -1,7 +1,7 @@
 import subprocess
 import threading
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, call
 from claude_flow.worktree import WorktreeManager, MERGE_LOCK_FILE
 from claude_flow.config import Config
 
@@ -256,4 +256,184 @@ class TestWorktreeManager:
         assert (git_repo / "dirty_rebase.txt").read_text() == "dirty rebase content"
 
         mgr.remove("task-dirty3", "cf/task-dirty3")
+
+    # ------------------------------------------------------------------
+    # Claude Code merge fallback tests
+    # ------------------------------------------------------------------
+
+    def test_claude_code_merge_fallback_success(self, git_repo):
+        """_claude_code_merge_fallback 成功时应返回 True。"""
+        wt_dir = git_repo / ".claude-flow" / "worktrees"
+        mgr = WorktreeManager(git_repo, wt_dir)
+
+        config = Config(skip_permissions=True, claude_merge_fallback=True)
+
+        def mock_run(args, cwd=None, check=True, timeout=None):
+            cmd = " ".join(args)
+            result = MagicMock()
+            result.returncode = 0
+            result.stdout = ""
+            result.stderr = ""
+            if "git status" in cmd and "--porcelain" not in cmd:
+                result.stdout = "On branch main\nnothing to commit"
+            elif "git status --porcelain" in cmd:
+                result.stdout = ""  # clean after merge
+            elif "git log" in cmd:
+                result.stdout = "abc1234 some commit"
+            elif "git diff --stat" in cmd:
+                result.stdout = "file.py | 10 ++++------"
+            elif "git diff --name-only" in cmd:
+                result.stdout = ""  # no conflict files
+            elif "git diff --check" in cmd:
+                result.returncode = 0  # no conflict markers
+            return result
+
+        with patch.object(mgr, "_run", side_effect=mock_run):
+            with patch("claude_flow.worktree.can_skip_permissions", return_value=True):
+                ok = mgr._claude_code_merge_fallback(
+                    "cf/test-fb1", "main",
+                    task_title="Test", task_prompt="Do something",
+                    timeout=300, config=config,
+                )
+        assert ok is True
+
+    def test_claude_code_merge_fallback_disabled(self, git_repo):
+        """claude_merge_fallback=False 时，merge 冲突不应调用兜底。"""
+        wt_dir = git_repo / ".claude-flow" / "worktrees"
+        mgr = WorktreeManager(git_repo, wt_dir)
+        wt_path = mgr.create("task-fb-off", "cf/task-fb-off")
+
+        # 制造冲突
+        (git_repo / "README.md").write_text("# Main version")
+        subprocess.run(["git", "-C", str(git_repo), "add", "."], check=True, capture_output=True)
+        subprocess.run(["git", "-C", str(git_repo), "commit", "-m", "main"],
+                       check=True, capture_output=True)
+        (wt_path / "README.md").write_text("# Branch version")
+        subprocess.run(["git", "-C", str(wt_path), "add", "."], check=True, capture_output=True)
+        subprocess.run(["git", "-C", str(wt_path), "commit", "-m", "branch"],
+                       check=True, capture_output=True)
+
+        config = Config(claude_merge_fallback=False)
+
+        # Mock can_skip_permissions to False so regular conflict resolution is skipped
+        with patch("claude_flow.worktree.can_skip_permissions", return_value=False):
+            with patch.object(mgr, "_claude_code_merge_fallback") as mock_fallback:
+                result = mgr.merge("cf/task-fb-off", "main", config=config)
+
+        # 不应调用兜底（因为 claude_merge_fallback=False）
+        mock_fallback.assert_not_called()
+        assert result is False
+
+        mgr.remove("task-fb-off", "cf/task-fb-off")
+
+    def test_claude_code_merge_fallback_timeout(self, git_repo):
+        """Claude 超时时 _claude_code_merge_fallback 应返回 False。"""
+        wt_dir = git_repo / ".claude-flow" / "worktrees"
+        mgr = WorktreeManager(git_repo, wt_dir)
+
+        config = Config(skip_permissions=True, claude_merge_fallback=True)
+
+        def mock_run(args, cwd=None, check=True, timeout=None):
+            cmd = " ".join(args)
+            result = MagicMock()
+            result.returncode = 0
+            result.stdout = ""
+            result.stderr = ""
+            if "claude" in cmd:
+                # Simulate timeout (returncode 124)
+                result.returncode = 124
+                result.stderr = "Timeout after 300s"
+            return result
+
+        with patch.object(mgr, "_run", side_effect=mock_run):
+            with patch("claude_flow.worktree.can_skip_permissions", return_value=True):
+                ok = mgr._claude_code_merge_fallback(
+                    "cf/test-timeout", "main",
+                    timeout=300, config=config,
+                )
+        assert ok is False
+
+    def test_merge_triggers_fallback_on_conflict(self, git_repo):
+        """merge() 常规策略失败后应触发 Claude Code 兜底。"""
+        wt_dir = git_repo / ".claude-flow" / "worktrees"
+        mgr = WorktreeManager(git_repo, wt_dir)
+        wt_path = mgr.create("task-fb-merge", "cf/task-fb-merge")
+
+        # 制造冲突
+        (git_repo / "README.md").write_text("# Main conflict")
+        subprocess.run(["git", "-C", str(git_repo), "add", "."], check=True, capture_output=True)
+        subprocess.run(["git", "-C", str(git_repo), "commit", "-m", "main conflict"],
+                       check=True, capture_output=True)
+        (wt_path / "README.md").write_text("# Branch conflict")
+        subprocess.run(["git", "-C", str(wt_path), "add", "."], check=True, capture_output=True)
+        subprocess.run(["git", "-C", str(wt_path), "commit", "-m", "branch conflict"],
+                       check=True, capture_output=True)
+
+        config = Config(claude_merge_fallback=True)
+
+        # Mock can_skip_permissions to False so regular conflict resolution is skipped,
+        # forcing the code to reach the fallback path
+        with patch("claude_flow.worktree.can_skip_permissions", return_value=False):
+            with patch.object(mgr, "_claude_code_merge_fallback", return_value=True) as mock_fb:
+                result = mgr.merge("cf/task-fb-merge", "main", config=config)
+
+        # 兜底应被调用且 merge 返回 True
+        mock_fb.assert_called_once()
+        assert result is True
+
+        mgr.remove("task-fb-merge", "cf/task-fb-merge")
+
+    def test_rebase_triggers_fallback_on_conflict(self, git_repo):
+        """rebase_and_merge() 失败后应触发 Claude Code 兜底。"""
+        wt_dir = git_repo / ".claude-flow" / "worktrees"
+        mgr = WorktreeManager(git_repo, wt_dir)
+        wt_path = mgr.create("task-fb-rebase", "cf/task-fb-rebase")
+
+        # 制造冲突
+        (git_repo / "README.md").write_text("# Main rebase conflict")
+        subprocess.run(["git", "-C", str(git_repo), "add", "."], check=True, capture_output=True)
+        subprocess.run(["git", "-C", str(git_repo), "commit", "-m", "main rebase"],
+                       check=True, capture_output=True)
+        (wt_path / "README.md").write_text("# Branch rebase conflict")
+        subprocess.run(["git", "-C", str(wt_path), "add", "."], check=True, capture_output=True)
+        subprocess.run(["git", "-C", str(wt_path), "commit", "-m", "branch rebase"],
+                       check=True, capture_output=True)
+
+        config = Config(claude_merge_fallback=True)
+
+        # Mock can_skip_permissions to False so regular conflict resolution is skipped
+        with patch("claude_flow.worktree.can_skip_permissions", return_value=False):
+            with patch.object(mgr, "_claude_code_merge_fallback", return_value=False) as mock_fb:
+                result = mgr.rebase_and_merge("cf/task-fb-rebase", "main", config=config)
+
+        # 兜底应被调用（即使它也失败了）
+        mock_fb.assert_called_once()
+        assert result is False
+
+        mgr.remove("task-fb-rebase", "cf/task-fb-rebase")
+
+    def test_safe_checkout_stashes_untracked(self, git_repo):
+        """_safe_checkout 的 stash push 应包含 -u 参数以处理 untracked files。"""
+        wt_dir = git_repo / ".claude-flow" / "worktrees"
+        mgr = WorktreeManager(git_repo, wt_dir)
+        wt_path = mgr.create("task-untracked", "cf/task-untracked")
+
+        # 在 worktree 中提交修改
+        (wt_path / "feature.txt").write_text("feature")
+        subprocess.run(["git", "-C", str(wt_path), "add", "."], check=True, capture_output=True)
+        subprocess.run(["git", "-C", str(wt_path), "commit", "-m", "feat"],
+                       check=True, capture_output=True)
+
+        # 在主仓库添加 untracked 文件
+        (git_repo / "untracked_new.txt").write_text("I am untracked")
+
+        # merge 应成功，untracked 文件应在 stash pop 后恢复
+        success = mgr.merge("cf/task-untracked", "main")
+        assert success is True
+
+        # untracked 文件应仍然存在
+        assert (git_repo / "untracked_new.txt").exists()
+        assert (git_repo / "untracked_new.txt").read_text() == "I am untracked"
+
+        mgr.remove("task-untracked", "cf/task-untracked")
 

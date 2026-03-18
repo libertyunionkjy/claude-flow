@@ -318,7 +318,7 @@ class TestWorktreeEdgeCases:
 
     def test_merge_nonexistent_branch(self, git_repo: Path):
         """Merging a branch that doesn't exist should return False or raise."""
-        config = Config()
+        config = Config(claude_merge_fallback=False)
         wm = WorktreeManager(git_repo, git_repo / ".claude-flow" / "worktrees")
         result = wm.merge("nonexistent-branch", "main", config=config)
         assert result is False or result is None

@@ -43,6 +43,9 @@ DEFAULT_CONFIG = {
     # Submodule branch management
     "default_sub_branches": {},
     "auto_push_submodules": False,
+    # Claude Code merge fallback
+    "claude_merge_fallback": True,
+    "claude_merge_fallback_timeout": 300,
 }
 
 
@@ -84,6 +87,9 @@ class Config:
     # Submodule branch management
     default_sub_branches: dict[str, str] = field(default_factory=dict)
     auto_push_submodules: bool = False
+    # Claude Code merge fallback
+    claude_merge_fallback: bool = True
+    claude_merge_fallback_timeout: int = 300
 
     @classmethod
     def load(cls, project_root: Path) -> Config:
