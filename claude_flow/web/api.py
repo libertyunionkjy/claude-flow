@@ -1850,29 +1850,43 @@ def scan_repos():
     managed_paths = {d.get("path") for d in cfg.managed_repos}
     discovered = []
 
-    # Scan immediate subdirectories only (depth 1)
+    _SKIP_DIRS = {
+        "node_modules", "__pycache__", ".venv", "venv", "dist", "build",
+        ".tox", ".mypy_cache", ".pytest_cache", ".eggs", "target",
+    }
+
     if not root.exists():
         return _ok([])
 
-    for entry in sorted(root.iterdir()):
-        if not entry.is_dir():
-            continue
-        if entry.name.startswith("."):
-            continue
-        rel_path = str(entry.relative_to(root))
-        if rel_path in managed_paths:
-            continue
-        if _is_git_dir(entry):
-            # Get current branch
-            br = _git_run(
-                ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-                cwd=entry, check=False,
-            )
-            discovered.append({
-                "path": rel_path,
-                "current_branch": br.stdout.strip() if br.returncode == 0 else "",
-            })
+    # Recursive scan: find all git repos, stop recursion at .git boundaries
+    def _walk(directory: Path, rel_prefix: str = ""):
+        try:
+            children = sorted(directory.iterdir())
+        except PermissionError:
+            return
+        for child in children:
+            if not child.is_dir():
+                continue
+            name = child.name
+            if name.startswith(".") or name in _SKIP_DIRS:
+                continue
+            rel_path = name if not rel_prefix else f"{rel_prefix}/{name}"
+            if _is_git_dir(child):
+                # Found a git repo -- do not recurse into it
+                if rel_path not in managed_paths:
+                    br = _git_run(
+                        ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+                        cwd=child, check=False,
+                    )
+                    discovered.append({
+                        "path": rel_path,
+                        "current_branch": br.stdout.strip() if br.returncode == 0 else "",
+                    })
+            else:
+                # Not a git repo, recurse deeper
+                _walk(child, rel_path)
 
+    _walk(root)
     return _ok(discovered)
 
 
