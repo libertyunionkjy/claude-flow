@@ -98,29 +98,41 @@ class TaskManager:
                 fcntl.flock(lock, fcntl.LOCK_UN)
 
     def add(self, title: str, prompt: str, priority: int = 0, submodules: list[str] | None = None,
-            use_subagent: bool | None = None, sub_branches: dict[str, str] | None = None) -> Task:
+            use_subagent: bool | None = None, sub_branches: dict[str, str] | None = None,
+            repos: list[str] | None = None, repo_base_branches: dict[str, str] | None = None,
+            repo_merge_targets: dict[str, str] | None = None) -> Task:
         """Add a new task.
 
         Args:
             sub_branches: Mapping of submodule path to base branch name.
                           Merged with config defaults (explicit values take priority).
+            repos: List of repo paths involved (multi-repo mode).
+            repo_base_branches: Mapping of repo path to base branch name.
+            repo_merge_targets: Mapping of repo path to merge target branch.
         """
         def _do():
             tasks = self._load()
             task = Task(title=title, prompt=prompt, priority=priority, submodules=submodules or [],
-                        sub_branches=sub_branches or {}, use_subagent=use_subagent)
+                        sub_branches=sub_branches or {}, use_subagent=use_subagent,
+                        repos=repos or [], repo_base_branches=repo_base_branches or {},
+                        repo_merge_targets=repo_merge_targets or {})
             tasks.append(task)
             self._save(tasks)
             return task
         return self._with_lock(_do)
 
     def add_mini(self, title: str, prompt: str, priority: int = 0, submodules: list[str] | None = None,
-                 sub_branches: dict[str, str] | None = None) -> Task:
+                 sub_branches: dict[str, str] | None = None,
+                 repos: list[str] | None = None, repo_base_branches: dict[str, str] | None = None,
+                 repo_merge_targets: dict[str, str] | None = None) -> Task:
         """Add a mini task that skips planning/approval and is immediately executable.
 
         Args:
             sub_branches: Mapping of submodule path to base branch name.
                           Merged with config defaults (explicit values take priority).
+            repos: List of repo paths involved (multi-repo mode).
+            repo_base_branches: Mapping of repo path to base branch name.
+            repo_merge_targets: Mapping of repo path to merge target branch.
         """
         def _do():
             tasks = self._load()
@@ -132,6 +144,9 @@ class TaskManager:
                 status=TaskStatus.APPROVED,
                 submodules=submodules or [],
                 sub_branches=sub_branches or {},
+                repos=repos or [],
+                repo_base_branches=repo_base_branches or {},
+                repo_merge_targets=repo_merge_targets or {},
             )
             tasks.append(task)
             self._save(tasks)

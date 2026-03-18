@@ -14,7 +14,7 @@ from .config import Config
 from .models import Task, TaskStatus
 from .task_manager import TaskManager
 from .utils import can_skip_permissions
-from .worktree import WorktreeManager
+from .worktree import MultiRepoWorktreeManager, WorktreeManager
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +37,8 @@ class Worker:
         worktree_manager: WorktreeManager,
         config: Config,
         is_git: bool = True,
+        project_mode: str = "single_git",
+        multi_repo_wt: Optional[MultiRepoWorktreeManager] = None,
     ):
         self.worker_id = worker_id
         self._root = project_root
@@ -44,6 +46,8 @@ class Worker:
         self._wt = worktree_manager
         self._cfg = config
         self._is_git = is_git
+        self._project_mode = project_mode
+        self._multi_wt = multi_repo_wt
         self._logs_dir = project_root / ".claude-flow" / "logs"
         self._logs_dir.mkdir(parents=True, exist_ok=True)
         # Worker 专属端口
@@ -102,9 +106,9 @@ class Worker:
             self._current_task_id = None
 
     def _execute_task_inner(self, task: Task) -> bool:
-        prefix = self._log_prefix()
-
-        if self._is_git:
+        if self._project_mode == "multi_repo" and len(task.repos) > 0:
+            return self._execute_task_multi_repo(task)
+        elif self._is_git:
             return self._execute_task_git(task)
         else:
             return self._execute_task_simple(task)
@@ -281,6 +285,140 @@ class Worker:
         self._tm.update_status(task.id, TaskStatus.DONE)
         logger.info(f"{prefix} Done: {task.title}")
         return True
+
+    def _execute_task_multi_repo(self, task: Task) -> bool:
+        """Multi-repo mode: create composite worktree, run Claude, commit/merge per repo."""
+        prefix = self._log_prefix()
+
+        # 1. 确定每个仓库的基础分支
+        repo_branches: dict[str, str] = {}
+        for repo_path in task.repos:
+            base = task.repo_base_branches.get(repo_path)
+            if not base:
+                repo_cfg = self._cfg.get_repo_by_path(repo_path)
+                base = repo_cfg.main_branch if repo_cfg else "main"
+            repo_branches[repo_path] = base
+
+        # 2. 创建组合工作目录
+        try:
+            composite_path = self._multi_wt.create_composite(task.id, repo_branches)
+        except Exception as e:
+            self._tm.update_status(task.id, TaskStatus.FAILED,
+                                   f"Composite creation failed: {e}")
+            return False
+
+        logger.info(f"{prefix} Created composite worktree at {composite_path}")
+
+        try:
+            # 3. 构建 prompt（注入多仓库目录结构说明）
+            prompt = self._build_multi_repo_prompt(task, composite_path)
+
+            # 4. 构建 claude 命令
+            cmd = ["claude", "-p", prompt, "--output-format", "stream-json", "--verbose"]
+            self._append_permission_flags(cmd)
+            cmd.extend(self._cfg.claude_args)
+
+            # 5. 运行 Claude Code（cwd = composite_path）
+            log_file = self._logs_dir / f"{task.id}.log"
+            json_log_file = self._logs_dir / f"{task.id}.json"
+            env = os.environ.copy()
+            env["PORT"] = str(self.port)
+            env["WORKER_ID"] = str(self.worker_id)
+
+            try:
+                returncode = self._run_streaming(
+                    cmd, cwd=str(composite_path), env=env,
+                    task=task, log_file=log_file, json_log_file=json_log_file,
+                )
+            except subprocess.TimeoutExpired:
+                self._tm.update_status(task.id, TaskStatus.FAILED, "Timeout")
+                return False
+
+            if returncode != 0:
+                error_msg = f"Exit code {returncode}"
+                self._tm.update_status(task.id, TaskStatus.FAILED, error_msg)
+                return False
+
+            # 6. Per-repo 自动提交
+            self._tm.update_status(task.id, TaskStatus.MERGING)
+            commit_results = self._multi_wt.commit_repos(task.id, composite_path, task.repos)
+
+            has_any_changes = any(commit_results.values())
+            if not has_any_changes:
+                logger.info(f"{prefix} No changes in any repo, marking done")
+                self._tm.update_status(task.id, TaskStatus.DONE)
+                return True
+
+            # 7. Pre-merge tests（在组合目录中运行）
+            if self._cfg.pre_merge_commands:
+                test_ok = self._run_pre_merge_tests(task, str(composite_path))
+                if not test_ok:
+                    self._tm.update_status(task.id, TaskStatus.FAILED,
+                                           "Pre-merge tests failed")
+                    return False
+
+            # 8. Per-repo 合并
+            if self._cfg.auto_merge:
+                merge_targets: dict[str, str] = {}
+                for repo_path in task.repos:
+                    if not commit_results.get(repo_path):
+                        continue  # 该仓库无变更，跳过合并
+                    target = task.repo_merge_targets.get(repo_path)
+                    if not target:
+                        target = task.repo_base_branches.get(repo_path)
+                    if not target:
+                        repo_cfg = self._cfg.get_repo_by_path(repo_path)
+                        target = repo_cfg.main_branch if repo_cfg else "main"
+                    merge_targets[repo_path] = target
+
+                if merge_targets:
+                    merge_results = self._multi_wt.merge_repos(task.id, merge_targets)
+
+                    failed_repos = [r for r, ok in merge_results.items() if not ok]
+                    if failed_repos:
+                        self._tm.update_status(
+                            task.id, TaskStatus.FAILED,
+                            f"Merge failed for repos: {', '.join(failed_repos)}")
+                        return False
+
+            # 9. 清理（成功路径）
+            self._multi_wt.remove_composite(task.id, task.repos)
+            self._tm.update_status(task.id, TaskStatus.DONE)
+            logger.info(f"{prefix} Done (multi-repo): {task.title}")
+            return True
+
+        except Exception as e:
+            self._tm.update_status(task.id, TaskStatus.FAILED,
+                                   f"Multi-repo execution error: {e}")
+            return False
+        finally:
+            # Ensure cleanup (if success path already called remove_composite,
+            # this will quietly skip since the directory no longer exists)
+            if composite_path.exists():
+                try:
+                    self._multi_wt.remove_composite(task.id, task.repos)
+                except Exception:
+                    pass  # best effort
+
+    def _build_multi_repo_prompt(self, task: Task, composite_path: Path) -> str:
+        """Build prompt with multi-repo workspace context injected."""
+        prompt = self._build_prompt(task)
+
+        repo_info = []
+        for repo_path in task.repos:
+            base = task.repo_base_branches.get(repo_path, "main")
+            repo_info.append(f"  - {repo_path}/ (基于分支: {base})")
+
+        constraint = (
+            f"\n\n[多仓库工作区]\n"
+            f"你正在一个包含多个独立项目的工作区中工作。\n"
+            f"当前工作目录: {composite_path}\n"
+            f"包含以下项目:\n"
+            + "\n".join(repo_info)
+            + f"\n请只在以上目录中修改文件。每个子目录是一个独立的 git 仓库。\n"
+        )
+
+        return prompt + constraint
 
     def run_loop(self, worker_registry: Optional[dict] = None) -> int:
         """一次性执行循环：取完 approved 任务就退出。

@@ -11,7 +11,7 @@ import click
 
 from .chat import ChatManager
 from .config import Config
-from .models import TaskStatus, TaskType
+from .models import ManagedRepo, ProjectMode, TaskStatus, TaskType
 from .planner import Planner
 from .task_manager import TaskManager
 from .worker import Worker
@@ -128,6 +128,23 @@ def _git_commit_count(repo: Path) -> int:
         return 0
 
 
+def _detect_default_branch(repo_path: Path) -> str:
+    """Detect the default branch of a git repository.
+
+    Checks for common default branch names (main, master) and falls back
+    to the current branch.
+    """
+    for candidate in ("main", "master"):
+        result = subprocess.run(
+            ["git", "rev-parse", "--verify", "--quiet", candidate],
+            cwd=str(repo_path), capture_output=True, text=True,
+        )
+        if result.returncode == 0:
+            return candidate
+    # Fall back to current branch
+    return _git_current_branch(repo_path)
+
+
 def _discover_git_repos(root: Path) -> list[dict]:
     """Recursively scan subdirectories and return info about all git repos found.
 
@@ -191,66 +208,225 @@ def _interactive_select(repos: list[dict]) -> list[str]:
     return [repos[i - 1]["path"] for i in indices if 1 <= i <= len(repos)]
 
 
+def _init_adopt_submodules(root: Path, repos: tuple, adopt_all: bool):
+    """Handle --adopt mode: scan and add git repos as submodules."""
+    if repos:
+        selected = list(repos)
+    elif adopt_all:
+        discovered = _discover_git_repos(root)
+        if not discovered:
+            click.echo("No git repositories found in subdirectories.")
+        selected = [r["path"] for r in discovered]
+    else:
+        discovered = _discover_git_repos(root)
+        if not discovered:
+            click.echo("No git repositories found in subdirectories.")
+            selected = []
+        else:
+            selected = _interactive_select(discovered)
+
+    if selected:
+        click.echo(f"\nAdopting {len(selected)} repositories as submodules...")
+        for rel_path in selected:
+            result = subprocess.run(
+                ["git", "-c", "protocol.file.allow=always",
+                 "submodule", "add", f"./{rel_path}", rel_path],
+                cwd=str(root), capture_output=True, text=True,
+            )
+            if result.returncode == 0:
+                click.echo(f"  + {rel_path}/ added as submodule")
+            else:
+                stderr = result.stderr.strip()
+                click.echo(f"  ! {rel_path}/ failed: {stderr}")
+
+
+def _init_multi_repo(root: Path, repos: tuple) -> tuple[list[dict], str]:
+    """Handle multi_repo mode: scan, select and configure managed repos.
+
+    Returns (managed_repos_dicts, project_mode_value).
+    If ``repos`` is provided via --repo, uses those directly (non-interactive).
+    Otherwise runs interactive selection.
+    """
+    if repos:
+        # Non-interactive: use provided repo paths
+        managed = []
+        for rp in repos:
+            repo_path = root / rp
+            if not (repo_path / ".git").exists():
+                click.echo(f"  Warning: {rp} is not a git repository, skipping")
+                continue
+            default_branch = _detect_default_branch(repo_path)
+            alias = Path(rp).name
+            managed.append(ManagedRepo(
+                path=rp, alias=alias, main_branch=default_branch,
+            ).to_dict())
+        return managed, ProjectMode.MULTI_REPO.value
+
+    # Interactive: discover and select
+    discovered = _discover_git_repos(root)
+    if not discovered:
+        click.echo("No git repositories found in subdirectories.")
+        return [], ProjectMode.MULTI_REPO.value
+
+    click.echo(f"\nFound {len(discovered)} git repositories:\n")
+    max_path_len = max(len(r["path"]) for r in discovered) + 2
+    for i, r in enumerate(discovered, 1):
+        path_col = f"{r['path']}/".ljust(max_path_len)
+        click.echo(f"  [{i}] {path_col} ({r['branch']}, "
+                   f"{r['commits']} commits)")
+    click.echo()
+    raw = click.prompt(
+        "Select repos to manage (comma-separated numbers, or 'all')",
+        default="all",
+    )
+    if raw.strip().lower() == "all":
+        selected = discovered
+    else:
+        try:
+            indices = [int(x.strip()) for x in raw.split(",")]
+        except ValueError:
+            click.echo("Invalid input, no repos selected.")
+            return [], ProjectMode.MULTI_REPO.value
+        selected = [discovered[i - 1] for i in indices if 1 <= i <= len(discovered)]
+
+    if not selected:
+        return [], ProjectMode.MULTI_REPO.value
+
+    # Configure each selected repo
+    managed = []
+    for r in selected:
+        repo_path = root / r["path"]
+        default_branch = _detect_default_branch(repo_path)
+        default_alias = Path(r["path"]).name
+        alias = click.prompt(f"  Alias for {r['path']}", default=default_alias)
+        main_br = click.prompt(f"  Main branch for {r['path']}", default=default_branch)
+        managed.append(ManagedRepo(
+            path=r["path"], alias=alias, main_branch=main_br,
+        ).to_dict())
+        click.echo(f"    -> {alias} ({main_br})")
+
+    return managed, ProjectMode.MULTI_REPO.value
+
+
+def _detect_project_mode(root: Path, is_git: bool) -> str:
+    """Auto-detect the project mode based on directory state.
+
+    Returns a recommendation string for display, and the detected ProjectMode value.
+    """
+    if is_git:
+        gitmodules = root / ".gitmodules"
+        if gitmodules.exists():
+            return ProjectMode.GIT_SUBMODULE.value
+        return ProjectMode.SINGLE_GIT.value
+
+    # Not a git repo -- check for sub-repos
+    discovered = _discover_git_repos(root)
+    if discovered:
+        return ProjectMode.MULTI_REPO.value
+    return ProjectMode.NON_GIT.value
+
+
+_MODE_DESCRIPTIONS = {
+    ProjectMode.SINGLE_GIT.value: "Single git repository",
+    ProjectMode.GIT_SUBMODULE.value: "Git repo with submodules",
+    ProjectMode.MULTI_REPO.value: "Multiple independent git repos",
+    ProjectMode.NON_GIT.value: "Plain directory (no git)",
+}
+
+
 @main.command()
 @click.option("--adopt", is_flag=True, default=False,
               help="Adopt existing git repos as submodules")
 @click.option("--all", "adopt_all", is_flag=True, default=False,
               help="With --adopt: add all detected repos without prompting")
+@click.option("--mode", "mode", default=None,
+              type=click.Choice(["single_git", "git_submodule", "multi_repo", "non_git"],
+                                case_sensitive=False),
+              help="Project organization mode")
+@click.option("--repo", "init_repos", multiple=True,
+              help="Repo path to manage (repeatable, for multi_repo / adopt)")
 @click.argument("repos", nargs=-1)
 @click.pass_context
-def init(ctx, adopt, adopt_all, repos):
+def init(ctx, adopt, adopt_all, mode, init_repos, repos):
     """Initialize .claude-flow/ in the current project.
 
     With --adopt: scan for git repos in subdirectories and add them
     as submodules. Without arguments, shows an interactive picker.
     With explicit repo names, adds only those. With --all, adds
     everything found.
+
+    With --mode: set the project organization mode (single_git,
+    git_submodule, multi_repo, non_git). Without --mode, an
+    interactive wizard will recommend a mode based on directory state.
     """
     root = ctx.obj["root"]
     is_git = ctx.obj["is_git"]
 
-    # Handle --adopt mode: set up git repo and add submodules
+    # Backward compat: --adopt implies git_submodule mode
     if adopt:
         if not is_git:
             subprocess.run(["git", "init"], cwd=str(root), capture_output=True,
                            text=True, check=True)
             is_git = True
             ctx.obj["is_git"] = True
+        _init_adopt_submodules(root, repos or init_repos, adopt_all)
+        mode = mode or ProjectMode.GIT_SUBMODULE.value
 
-        if repos:
-            selected = list(repos)
-        elif adopt_all:
-            discovered = _discover_git_repos(root)
-            if not discovered:
-                click.echo("No git repositories found in subdirectories.")
-            selected = [r["path"] for r in discovered]
-        else:
-            discovered = _discover_git_repos(root)
-            if not discovered:
-                click.echo("No git repositories found in subdirectories.")
-                selected = []
-            else:
-                selected = _interactive_select(discovered)
-
-        if selected:
-            click.echo(f"\nAdopting {len(selected)} repositories as submodules...")
-            for rel_path in selected:
-                result = subprocess.run(
-                    ["git", "-c", "protocol.file.allow=always",
-                     "submodule", "add", f"./{rel_path}", rel_path],
-                    cwd=str(root), capture_output=True, text=True,
-                )
-                if result.returncode == 0:
-                    click.echo(f"  + {rel_path}/ added as submodule")
+    # Determine project mode
+    managed_repos_dicts: list[dict] = []
+    if mode is None and not adopt:
+        detected = _detect_project_mode(root, is_git)
+        # Only run interactive wizard if stdin is a tty
+        if sys.stdin.isatty():
+            click.echo(f"\nProject mode detection:")
+            click.echo(f"  Detected: {_MODE_DESCRIPTIONS.get(detected, detected)}")
+            click.echo()
+            for i, (val, desc) in enumerate(_MODE_DESCRIPTIONS.items(), 1):
+                marker = " (recommended)" if val == detected else ""
+                click.echo(f"  [{i}] {val:<16} - {desc}{marker}")
+            click.echo()
+            choice = click.prompt(
+                "Select project mode",
+                default=str(list(_MODE_DESCRIPTIONS.keys()).index(detected) + 1),
+            )
+            try:
+                idx = int(choice)
+                mode = list(_MODE_DESCRIPTIONS.keys())[idx - 1]
+            except (ValueError, IndexError):
+                # Try matching by name
+                if choice in _MODE_DESCRIPTIONS:
+                    mode = choice
                 else:
-                    stderr = result.stderr.strip()
-                    click.echo(f"  ! {rel_path}/ failed: {stderr}")
+                    click.echo(f"Invalid choice, using detected mode: {detected}")
+                    mode = detected
+        else:
+            # Non-interactive: use auto-detected mode
+            mode = detected
+
+    # Default fallback
+    if mode is None:
+        mode = ProjectMode.SINGLE_GIT.value if is_git else ProjectMode.NON_GIT.value
+
+    # Mode-specific setup
+    if mode == ProjectMode.MULTI_REPO.value:
+        managed_repos_dicts, mode = _init_multi_repo(root, init_repos)
+    elif mode == ProjectMode.GIT_SUBMODULE.value and not adopt:
+        # If user selected submodule mode but didn't use --adopt, run adopt flow
+        if not is_git:
+            subprocess.run(["git", "init"], cwd=str(root), capture_output=True,
+                           text=True, check=True)
+            is_git = True
+            ctx.obj["is_git"] = True
+        _init_adopt_submodules(root, repos or init_repos, adopt_all)
 
     # Initialize .claude-flow/ directory structure
     cf_dir = root / ".claude-flow"
     for sub in ["logs", "plans", "worktrees", "chats"]:
         (cf_dir / sub).mkdir(parents=True, exist_ok=True)
     cfg = Config()
+    cfg.project_mode = mode
+    if managed_repos_dicts:
+        cfg.managed_repos = managed_repos_dicts
     cfg.save(root)
     # Add .claude-flow/worktrees, lock, log, chats to .gitignore (git repos only)
     if is_git:
@@ -261,8 +437,14 @@ def init(ctx, adopt, adopt_all, repos):
         if to_add:
             with open(gitignore, "a") as f:
                 f.write("\n# claude-flow\n" + "\n".join(to_add) + "\n")
-    mode_label = "git" if is_git else "non-git"
-    click.echo(f"Initialized .claude-flow/ in {root} ({mode_label} mode)")
+    mode_desc = _MODE_DESCRIPTIONS.get(mode, mode)
+    # Include mode key in output for backward compatibility (e.g. "non_git" -> "non-git")
+    mode_label = mode.replace("_", "-")
+    click.echo(f"Initialized .claude-flow/ in {root} ({mode_label}: {mode_desc})")
+    if managed_repos_dicts:
+        click.echo(f"  Managed repos: {len(managed_repos_dicts)}")
+        for d in managed_repos_dicts:
+            click.echo(f"    - {d['alias']} ({d['path']}, branch: {d['main_branch']})")
 
 
 # -- Task commands ----------------------------------------------------------
@@ -271,6 +453,91 @@ def init(ctx, adopt, adopt_all, repos):
 def task():
     """Manage tasks."""
     pass
+
+
+def _parse_repo_params(
+    cfg: Config,
+    repo_names: tuple[str, ...],
+    repo_branches_raw: tuple[str, ...],
+    repo_targets_raw: tuple[str, ...],
+    all_repos: bool,
+) -> tuple[list[str], dict[str, str], dict[str, str]]:
+    """Parse multi-repo task parameters and return (repos, base_branches, merge_targets).
+
+    If project_mode is not multi_repo, returns empty values.
+    """
+    if cfg.project_mode != ProjectMode.MULTI_REPO.value:
+        return [], {}, {}
+
+    managed = cfg.get_managed_repos()
+    if not managed:
+        return [], {}, {}
+
+    # Determine which repos are involved
+    if all_repos:
+        repos = [m.path for m in managed]
+    elif repo_names:
+        repos = []
+        for name in repo_names:
+            resolved = cfg.resolve_repo(name)
+            if resolved:
+                repos.append(resolved.path)
+            else:
+                raise click.BadParameter(
+                    f"Unknown repo '{name}'. Available: "
+                    + ", ".join(f"{m.alias} ({m.path})" for m in managed),
+                    param_hint="'--repo'",
+                )
+    else:
+        return [], {}, {}
+
+    # Parse base branches (repo:branch)
+    base_branches: dict[str, str] = {}
+    for item in repo_branches_raw:
+        if ":" not in item:
+            raise click.BadParameter(
+                f"Invalid format '{item}', expected 'repo:branch'",
+                param_hint="'--repo-branch'",
+            )
+        repo_ref, branch = item.split(":", 1)
+        resolved = cfg.resolve_repo(repo_ref.strip())
+        if not resolved:
+            raise click.BadParameter(
+                f"Unknown repo '{repo_ref}' in repo-branch",
+                param_hint="'--repo-branch'",
+            )
+        base_branches[resolved.path] = branch.strip()
+
+    # Fill defaults for repos without explicit base branch
+    for rp in repos:
+        if rp not in base_branches:
+            repo_obj = cfg.get_repo_by_path(rp)
+            if repo_obj:
+                base_branches[rp] = repo_obj.main_branch
+
+    # Parse merge targets (repo:branch)
+    merge_targets: dict[str, str] = {}
+    for item in repo_targets_raw:
+        if ":" not in item:
+            raise click.BadParameter(
+                f"Invalid format '{item}', expected 'repo:branch'",
+                param_hint="'--repo-target'",
+            )
+        repo_ref, branch = item.split(":", 1)
+        resolved = cfg.resolve_repo(repo_ref.strip())
+        if not resolved:
+            raise click.BadParameter(
+                f"Unknown repo '{repo_ref}' in repo-target",
+                param_hint="'--repo-target'",
+            )
+        merge_targets[resolved.path] = branch.strip()
+
+    # Fill defaults: merge target = base branch when not specified
+    for rp in repos:
+        if rp not in merge_targets:
+            merge_targets[rp] = base_branches.get(rp, "main")
+
+    return repos, base_branches, merge_targets
 
 
 def _parse_sub_branches(raw: tuple[str, ...], cfg: Config) -> dict[str, str]:
@@ -300,8 +567,17 @@ def _parse_sub_branches(raw: tuple[str, ...], cfg: Config) -> dict[str, str]:
 @click.option("--sub-branch", "-sb", "sub_branches_raw", multiple=True,
               help="submodule_path:branch (e.g. libs/core:feature-auth)")
 @click.option("--subagent/--no-subagent", default=None, help="Enable subagent mode for this task")
+@click.option("-r", "--repo", "repo_names", multiple=True,
+              help="Target repo path or alias (repeatable, multi-repo mode)")
+@click.option("--repo-branch", "repo_branches_raw", multiple=True,
+              help="repo:branch - base branch per repo (e.g. frontend:develop)")
+@click.option("--repo-target", "repo_targets_raw", multiple=True,
+              help="repo:branch - merge target per repo (e.g. frontend:main)")
+@click.option("--all-repos", is_flag=True, default=False,
+              help="Include all managed repos (multi-repo mode)")
 @click.pass_context
-def task_add(ctx, title, prompt, filepath, priority, submodules, sub_branches_raw, subagent):
+def task_add(ctx, title, prompt, filepath, priority, submodules, sub_branches_raw, subagent,
+             repo_names, repo_branches_raw, repo_targets_raw, all_repos):
     """Add a new task."""
     root = ctx.obj["root"]
     tm = TaskManager(root)
@@ -316,8 +592,13 @@ def task_add(ctx, title, prompt, filepath, priority, submodules, sub_branches_ra
             return
     cfg = Config.load(root)
     sub_branches = _parse_sub_branches(sub_branches_raw, cfg) if sub_branches_raw else dict(cfg.default_sub_branches)
+    repos, repo_base_branches, repo_merge_targets = _parse_repo_params(
+        cfg, repo_names, repo_branches_raw, repo_targets_raw, all_repos,
+    )
     t = tm.add(title, prompt, priority=priority, submodules=list(submodules),
-               use_subagent=subagent, sub_branches=sub_branches)
+               use_subagent=subagent, sub_branches=sub_branches,
+               repos=repos, repo_base_branches=repo_base_branches,
+               repo_merge_targets=repo_merge_targets)
     click.echo(f"Added: {t.id} - {t.title} (priority: {priority})")
 
 
@@ -329,8 +610,17 @@ def task_add(ctx, title, prompt, filepath, priority, submodules, sub_branches_ra
 @click.option("--sub-branch", "-sb", "sub_branches_raw", multiple=True,
               help="submodule_path:branch (e.g. libs/core:feature-auth)")
 @click.option("--run", "auto_run", is_flag=True, help="Immediately start a worker to execute")
+@click.option("-r", "--repo", "repo_names", multiple=True,
+              help="Target repo path or alias (repeatable, multi-repo mode)")
+@click.option("--repo-branch", "repo_branches_raw", multiple=True,
+              help="repo:branch - base branch per repo (e.g. frontend:develop)")
+@click.option("--repo-target", "repo_targets_raw", multiple=True,
+              help="repo:branch - merge target per repo (e.g. frontend:main)")
+@click.option("--all-repos", is_flag=True, default=False,
+              help="Include all managed repos (multi-repo mode)")
 @click.pass_context
-def task_mini(ctx, prompt, title, priority, submodules, sub_branches_raw, auto_run):
+def task_mini(ctx, prompt, title, priority, submodules, sub_branches_raw, auto_run,
+              repo_names, repo_branches_raw, repo_targets_raw, all_repos):
     """Add a mini task (skips planning/approval, executes directly).
 
     Mini tasks are lightweight tasks that bypass the full planning cycle.
@@ -348,8 +638,13 @@ def task_mini(ctx, prompt, title, priority, submodules, sub_branches_raw, auto_r
     if title is None:
         title = prompt[:60] + ("..." if len(prompt) > 60 else "")
     sub_branches = _parse_sub_branches(sub_branches_raw, cfg) if sub_branches_raw else dict(cfg.default_sub_branches)
+    repos, repo_base_branches, repo_merge_targets = _parse_repo_params(
+        cfg, repo_names, repo_branches_raw, repo_targets_raw, all_repos,
+    )
     t = tm.add_mini(title, prompt, priority=priority, submodules=list(submodules),
-                    sub_branches=sub_branches)
+                    sub_branches=sub_branches,
+                    repos=repos, repo_base_branches=repo_base_branches,
+                    repo_merge_targets=repo_merge_targets)
     click.echo(f"Mini task added: {t.id} - {t.title} [approved]")
 
     if auto_run:
@@ -413,6 +708,16 @@ def task_show(ctx, task_id):
     if t.sub_branches:
         for sp, br in t.sub_branches.items():
             click.echo(f"  {sp} -> {br}")
+    if t.repos:
+        click.echo(f"Repos:    {', '.join(t.repos)}")
+        if t.repo_base_branches:
+            click.echo("  Base branches:")
+            for rp, br in t.repo_base_branches.items():
+                click.echo(f"    {rp} -> {br}")
+        if t.repo_merge_targets:
+            click.echo("  Merge targets:")
+            for rp, br in t.repo_merge_targets.items():
+                click.echo(f"    {rp} -> {br}")
     click.echo(f"Created:  {t.created_at}")
     if t.progress:
         click.echo(f"Progress: {t.progress}")

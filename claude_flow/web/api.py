@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import subprocess as _sp
 import threading
 from pathlib import Path
 
@@ -13,7 +14,7 @@ except ImportError:
     )
 
 from ..config import Config
-from ..models import TaskStatus, TaskType
+from ..models import ManagedRepo, ProjectMode, TaskStatus, TaskType
 from ..worktree import WorktreeManager
 
 api_bp = Blueprint("api", __name__, url_prefix="/api")
@@ -21,6 +22,57 @@ api_bp = Blueprint("api", __name__, url_prefix="/api")
 # Module-level registry for active workers by task_id.
 # Used to stop worker subprocesses when deleting a running task.
 _active_workers: dict = {}
+
+
+# -- Multi-repo helpers -------------------------------------------------------
+
+def _validate_repo_path(repo_path: str, root: Path | None = None) -> str | None:
+    """Validate a repo path for safety. Returns error message or None.
+
+    Args:
+        repo_path: Relative path to validate.
+        root: Project root directory. If None, uses current_app.config["PROJECT_ROOT"].
+    """
+    if not repo_path or not repo_path.strip():
+        return "路径不能为空"
+    if ".." in repo_path.split("/"):
+        return "路径不允许包含 .."
+    if repo_path.startswith("/"):
+        return "路径必须是相对路径"
+    # Resolve and verify within workspace
+    if root is None:
+        root = current_app.config["PROJECT_ROOT"]
+    resolved = (root / repo_path).resolve()
+    if not resolved.is_relative_to(root.resolve()):
+        return "路径超出工作区范围"
+    return None
+
+
+def _get_project_mode() -> str:
+    """Get project mode from config."""
+    cfg = current_app.config["CF_CONFIG"]
+    return cfg.project_mode
+
+
+def _is_multi_repo() -> bool:
+    """Check if the current project is in multi_repo mode."""
+    return _get_project_mode() == ProjectMode.MULTI_REPO.value
+
+
+def _get_repo_abs_path(repo_path: str) -> Path:
+    """Resolve a relative repo path to absolute path under project root."""
+    root = current_app.config["PROJECT_ROOT"]
+    return (root / repo_path).resolve()
+
+
+def _is_git_dir(path: Path) -> bool:
+    """Check if a directory is a git repository."""
+    return (path / ".git").exists()
+
+
+def _git_run(args: list[str], cwd: Path, **kwargs) -> _sp.CompletedProcess:
+    """Run a git command, consistent with project style."""
+    return _sp.run(args, cwd=str(cwd), capture_output=True, text=True, **kwargs)
 
 
 def _ok(data):
@@ -111,6 +163,21 @@ def create_task():
     else:
         return _err("use_subagent 必须是布尔值或 null")
 
+    # Multi-repo fields (only processed in multi_repo mode)
+    repos = []
+    repo_base_branches = {}
+    repo_merge_targets = {}
+    if _is_multi_repo():
+        repos = data.get("repos", [])
+        if not isinstance(repos, list):
+            return _err("repos 必须是数组")
+        repo_base_branches = data.get("repo_base_branches", {})
+        if not isinstance(repo_base_branches, dict):
+            return _err("repo_base_branches 必须是对象")
+        repo_merge_targets = data.get("repo_merge_targets", {})
+        if not isinstance(repo_merge_targets, dict):
+            return _err("repo_merge_targets 必须是对象")
+
     task_type = data.get("task_type", "normal")
     if task_type == "mini":
         task = tm.add_mini(title, prompt, priority=priority, submodules=submodules,
@@ -118,6 +185,20 @@ def create_task():
     else:
         task = tm.add(title, prompt, priority=priority, submodules=submodules,
                       use_subagent=use_subagent, sub_branches=sub_branches)
+
+    # Set multi-repo fields if provided
+    if repos:
+        def _set_repos():
+            tasks = tm._load()
+            for t in tasks:
+                if t.id == task.id:
+                    t.repos = repos
+                    t.repo_base_branches = repo_base_branches
+                    t.repo_merge_targets = repo_merge_targets
+                    tm._save(tasks)
+                    return
+        tm._with_lock(_set_repos)
+
     return _ok(task.to_dict()), 201
 
 
@@ -475,10 +556,17 @@ def global_status():
     for t in tasks:
         counts[t.status.value] += 1
 
-    return _ok({
+    cfg = current_app.config["CF_CONFIG"]
+    result = {
         "total": len(tasks),
         "counts": counts,
-    })
+        "project_mode": cfg.project_mode,
+    }
+    if cfg.project_mode == ProjectMode.MULTI_REPO.value:
+        result["managed_repos"] = [
+            ManagedRepo.from_dict(d).to_dict() for d in cfg.managed_repos
+        ]
+    return _ok(result)
 
 
 @api_bp.route("/overview", methods=["GET"])
@@ -552,7 +640,7 @@ def overview():
     finished = done_count + failed_count
     success_rate = round(done_count / finished * 100, 1) if finished > 0 else None
 
-    return _ok({
+    overview_data = {
         "total": len(tasks),
         "counts": counts,
         "workers": workers,
@@ -561,7 +649,27 @@ def overview():
         "success_rate": success_rate,
         "done_count": done_count,
         "failed_count": failed_count,
-    })
+    }
+
+    # Per-repo statistics (multi_repo mode)
+    cfg = current_app.config["CF_CONFIG"]
+    if cfg.project_mode == ProjectMode.MULTI_REPO.value:
+        repo_stats: dict[str, dict] = {}
+        for d in cfg.managed_repos:
+            repo = ManagedRepo.from_dict(d)
+            repo_stats[repo.path] = {
+                "alias": repo.alias,
+                "total": 0,
+                "counts": {s.value: 0 for s in TaskStatus},
+            }
+        for t in tasks:
+            for rp in t.repos:
+                if rp in repo_stats:
+                    repo_stats[rp]["total"] += 1
+                    repo_stats[rp]["counts"][t.status.value] += 1
+        overview_data["repo_stats"] = repo_stats
+
+    return _ok(overview_data)
 
 
 @api_bp.route("/workers", methods=["GET"])
@@ -1103,14 +1211,47 @@ def create_mini_task():
     if not isinstance(sub_branches, dict):
         return _err("sub_branches must be an object {path: branch}")
 
+    # Multi-repo fields (only processed in multi_repo mode)
+    repos = []
+    repo_base_branches = {}
+    repo_merge_targets = {}
+    if _is_multi_repo():
+        repos = data.get("repos", [])
+        if not isinstance(repos, list):
+            return _err("repos must be an array")
+        repo_base_branches = data.get("repo_base_branches", {})
+        if not isinstance(repo_base_branches, dict):
+            return _err("repo_base_branches must be an object")
+        repo_merge_targets = data.get("repo_merge_targets", {})
+        if not isinstance(repo_merge_targets, dict):
+            return _err("repo_merge_targets must be an object")
+
     task = tm.add_mini(title, prompt, submodules=submodules,
                        sub_branches=sub_branches)
+
+    # Set multi-repo fields if provided
+    if repos:
+        def _set_repos():
+            tasks = tm._load()
+            for t in tasks:
+                if t.id == task.id:
+                    t.repos = repos
+                    t.repo_base_branches = repo_base_branches
+                    t.repo_merge_targets = repo_merge_targets
+                    tm._save(tasks)
+                    return
+        tm._with_lock(_set_repos)
+
     return _ok(task.to_dict()), 201
 
 
 @api_bp.route("/mini-tasks/<task_id>/start", methods=["POST"])
 def start_mini_task(task_id: str):
-    """Start a mini task: create worktree, start PTY session, mark running."""
+    """Start a mini task: create worktree, start PTY session, mark running.
+
+    In multi_repo mode with task.repos, creates a composite working directory
+    with per-repo worktrees via symlinks.
+    """
     import subprocess
     from datetime import datetime
 
@@ -1131,16 +1272,60 @@ def start_mini_task(task_id: str):
     if not pty_mgr:
         return _err("PTY manager not available", 500)
 
-    # Create worktree
     branch = f"cf/{task_id}"
     is_git = current_app.config.get("IS_GIT", True)
-    wt = WorktreeManager(root, root / cfg.worktree_dir, is_git=is_git)
-    try:
-        wt_path = wt.create(task_id, branch, config=cfg,
-                            submodules=task.submodules or None,
-                            sub_branches=task.sub_branches or None)
-    except subprocess.CalledProcessError as e:
-        return _err(f"Worktree creation failed: {e.stderr}", 500)
+
+    # Multi-repo mode: create composite working directory
+    if _is_multi_repo() and task.repos:
+        composite_dir = root / cfg.worktree_dir / task_id
+        composite_dir.mkdir(parents=True, exist_ok=True)
+
+        created_wts: list[tuple[str, WorktreeManager, Path]] = []
+        try:
+            for repo_path in task.repos:
+                repo_abs = _get_repo_abs_path(repo_path)
+                if not repo_abs.exists() or not _is_git_dir(repo_abs):
+                    raise ValueError(f"Repository not found or not a git dir: {repo_path}")
+
+                repo_wt_dir = repo_abs / cfg.worktree_dir
+                repo_wt = WorktreeManager(repo_abs, repo_wt_dir, is_git=True)
+                base = task.repo_base_branches.get(repo_path)
+                repo_branch = branch
+                if base:
+                    # Create branch from specified base
+                    wt_path = repo_wt.create(task_id, repo_branch, config=cfg)
+                else:
+                    wt_path = repo_wt.create(task_id, repo_branch, config=cfg)
+
+                created_wts.append((repo_path, repo_wt, wt_path))
+
+                # Symlink repo worktree into composite directory
+                link_target = composite_dir / repo_path
+                link_target.parent.mkdir(parents=True, exist_ok=True)
+                if link_target.exists() or link_target.is_symlink():
+                    link_target.unlink()
+                link_target.symlink_to(wt_path)
+
+        except (subprocess.CalledProcessError, ValueError) as e:
+            # Rollback created worktrees
+            for rp, rwt, _ in created_wts:
+                rwt.remove(task_id, branch)
+            if composite_dir.exists():
+                import shutil
+                shutil.rmtree(str(composite_dir), ignore_errors=True)
+            err_msg = e.stderr if hasattr(e, "stderr") else str(e)
+            return _err(f"Multi-repo worktree creation failed: {err_msg}", 500)
+
+        wt_path = composite_dir
+    else:
+        # Single repo mode: existing logic
+        wt = WorktreeManager(root, root / cfg.worktree_dir, is_git=is_git)
+        try:
+            wt_path = wt.create(task_id, branch, config=cfg,
+                                submodules=task.submodules or None,
+                                sub_branches=task.sub_branches or None)
+        except subprocess.CalledProcessError as e:
+            return _err(f"Worktree creation failed: {e.stderr}", 500)
 
     # Update task status and branch
     tm.update_status(task_id, TaskStatus.RUNNING)
@@ -1163,7 +1348,11 @@ def start_mini_task(task_id: str):
         )
     except Exception as e:
         tm.update_status(task_id, TaskStatus.FAILED, f"PTY creation failed: {e}")
-        wt.remove(task_id, branch)
+        if _is_multi_repo() and task.repos:
+            _cleanup_multi_repo_worktrees(task_id, task, branch)
+        else:
+            wt = WorktreeManager(root, root / cfg.worktree_dir, is_git=is_git)
+            wt.remove(task_id, branch)
         return _err(f"PTY creation failed: {e}", 500)
 
     updated = tm.get(task_id)
@@ -1206,7 +1395,10 @@ def stop_mini_task(task_id: str):
 
 @api_bp.route("/mini-tasks/<task_id>/diff", methods=["GET"])
 def mini_task_diff(task_id: str):
-    """Get git diff for merge preview."""
+    """Get git diff for merge preview.
+
+    Multi-repo mode returns per-repo diff: {repo_path: diff_text, ...}.
+    """
     import subprocess as sp
 
     tm = current_app.config["TASK_MANAGER"]
@@ -1220,6 +1412,26 @@ def mini_task_diff(task_id: str):
     root = current_app.config["PROJECT_ROOT"]
     cfg = current_app.config["CF_CONFIG"]
 
+    # Multi-repo mode: per-repo diff
+    if _is_multi_repo() and task.repos:
+        repo_diffs = {}
+        for repo_path in task.repos:
+            repo_abs = _get_repo_abs_path(repo_path)
+            repo_cfg = cfg.get_repo_by_path(repo_path)
+            main_br = repo_cfg.main_branch if repo_cfg else cfg.main_branch
+            diff_result = sp.run(
+                ["git", "diff", f"{main_br}...{task.branch}"],
+                cwd=str(repo_abs), capture_output=True, text=True,
+            )
+            repo_diffs[repo_path] = diff_result.stdout
+        return _ok({
+            "task_id": task_id,
+            "multi_repo": True,
+            "diffs": repo_diffs,
+            "branch": task.branch,
+        })
+
+    # Single repo mode
     result = sp.run(
         ["git", "diff", f"{cfg.main_branch}...{task.branch}"],
         cwd=str(root), capture_output=True, text=True,
@@ -1239,7 +1451,10 @@ def mini_task_diff(task_id: str):
 
 @api_bp.route("/mini-tasks/<task_id>/merge", methods=["POST"])
 def merge_mini_task(task_id: str):
-    """Merge mini task branch, clean up worktree."""
+    """Merge mini task branch, clean up worktree.
+
+    Multi-repo mode: per-repo independent merge.
+    """
     tm = current_app.config["TASK_MANAGER"]
     task = tm.get(task_id)
 
@@ -1250,6 +1465,47 @@ def merge_mini_task(task_id: str):
 
     root = current_app.config["PROJECT_ROOT"]
     cfg = current_app.config["CF_CONFIG"]
+
+    # Multi-repo mode: per-repo merge
+    if _is_multi_repo() and task.repos:
+        failed_repos = []
+        for repo_path in task.repos:
+            repo_abs = _get_repo_abs_path(repo_path)
+            repo_cfg = cfg.get_repo_by_path(repo_path)
+            main_br = repo_cfg.main_branch if repo_cfg else cfg.main_branch
+            strategy = repo_cfg.merge_strategy if repo_cfg else cfg.merge_strategy
+            auto_push = repo_cfg.auto_push if repo_cfg else cfg.auto_push
+
+            repo_wt_dir = repo_abs / cfg.worktree_dir
+            repo_wt = WorktreeManager(repo_abs, repo_wt_dir, is_git=True)
+
+            success = repo_wt.merge(
+                task.branch, main_br, strategy,
+                config=cfg, task_title=task.title, task_prompt=task.prompt,
+            )
+            if not success:
+                failed_repos.append(repo_path)
+            else:
+                repo_wt.remove(task_id, task.branch)
+                if auto_push:
+                    repo_wt.push(main_br)
+
+        # Clean up composite directory
+        composite_dir = root / cfg.worktree_dir / task_id
+        if composite_dir.exists():
+            import shutil
+            shutil.rmtree(str(composite_dir), ignore_errors=True)
+
+        if failed_repos:
+            tm.update_status(task_id, TaskStatus.FAILED,
+                             f"Merge conflict in repos: {', '.join(failed_repos)}")
+            return _err(f"Merge failed in repos: {', '.join(failed_repos)}")
+
+        tm.update_status(task_id, TaskStatus.DONE)
+        updated = tm.get(task_id)
+        return _ok(updated.to_dict())
+
+    # Single repo mode
     is_git = current_app.config.get("IS_GIT", True)
     wt = WorktreeManager(root, root / cfg.worktree_dir, is_git=is_git)
 
@@ -1273,7 +1529,10 @@ def merge_mini_task(task_id: str):
 
 @api_bp.route("/mini-tasks/<task_id>/discard", methods=["POST"])
 def discard_mini_task(task_id: str):
-    """Discard mini task -- remove worktree without merging."""
+    """Discard mini task -- remove worktree without merging.
+
+    Multi-repo mode: clean up all repo worktrees.
+    """
     tm = current_app.config["TASK_MANAGER"]
     task = tm.get(task_id)
 
@@ -1287,10 +1546,505 @@ def discard_mini_task(task_id: str):
     if task.branch:
         root = current_app.config["PROJECT_ROOT"]
         cfg = current_app.config["CF_CONFIG"]
-        is_git = current_app.config.get("IS_GIT", True)
-        wt = WorktreeManager(root, root / cfg.worktree_dir, is_git=is_git)
-        wt.remove(task_id, task.branch)
+
+        # Multi-repo mode: clean up all repo worktrees
+        if _is_multi_repo() and task.repos:
+            _cleanup_multi_repo_worktrees(task_id, task, task.branch)
+        else:
+            is_git = current_app.config.get("IS_GIT", True)
+            wt = WorktreeManager(root, root / cfg.worktree_dir, is_git=is_git)
+            wt.remove(task_id, task.branch)
 
     tm.update_status(task_id, TaskStatus.FAILED, "Discarded by user")
     updated = tm.get(task_id)
     return _ok(updated.to_dict())
+
+
+# -- Multi-repo cleanup helper -----------------------------------------------
+
+def _cleanup_multi_repo_worktrees(task_id: str, task, branch: str) -> None:
+    """Clean up worktrees across all repos for a multi-repo task."""
+    root = current_app.config["PROJECT_ROOT"]
+    cfg = current_app.config["CF_CONFIG"]
+
+    for repo_path in task.repos:
+        repo_abs = _get_repo_abs_path(repo_path)
+        if not repo_abs.exists():
+            continue
+        repo_wt_dir = repo_abs / cfg.worktree_dir
+        repo_wt = WorktreeManager(repo_abs, repo_wt_dir, is_git=True)
+        repo_wt.remove(task_id, branch)
+
+    # Remove composite directory
+    composite_dir = root / cfg.worktree_dir / task_id
+    if composite_dir.exists():
+        import shutil
+        shutil.rmtree(str(composite_dir), ignore_errors=True)
+
+
+# -- Repository management endpoints -----------------------------------------
+
+@api_bp.route("/repos", methods=["GET"])
+def list_repos():
+    """List all managed repositories and their git status."""
+    cfg = current_app.config["CF_CONFIG"]
+    root = current_app.config["PROJECT_ROOT"]
+    repos = cfg.get_managed_repos()
+
+    result = []
+    for repo in repos:
+        repo_abs = (root / repo.path).resolve()
+        entry = repo.to_dict()
+        entry["exists"] = repo_abs.exists()
+        entry["is_git"] = _is_git_dir(repo_abs) if repo_abs.exists() else False
+
+        if entry["is_git"]:
+            # Get current branch
+            br = _git_run(
+                ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+                cwd=repo_abs, check=False,
+            )
+            entry["current_branch"] = br.stdout.strip() if br.returncode == 0 else ""
+
+            # Check for uncommitted changes
+            st = _git_run(
+                ["git", "status", "--porcelain"],
+                cwd=repo_abs, check=False,
+            )
+            entry["has_changes"] = bool(st.stdout.strip()) if st.returncode == 0 else False
+        else:
+            entry["current_branch"] = ""
+            entry["has_changes"] = False
+
+        result.append(entry)
+
+    return _ok(result)
+
+
+@api_bp.route("/repos", methods=["POST"])
+def add_repo():
+    """Add a new managed repository. body: {path, alias?, main_branch?}"""
+    cfg = current_app.config["CF_CONFIG"]
+    root = current_app.config["PROJECT_ROOT"]
+    data = request.get_json(silent=True)
+
+    if not data:
+        return _err("请求体不能为空")
+
+    path = data.get("path", "").strip()
+    if not path:
+        return _err("path 为必填字段")
+
+    err = _validate_repo_path(path)
+    if err:
+        return _err(err)
+
+    # Check if already managed
+    if cfg.get_repo_by_path(path):
+        return _err(f"仓库 {path} 已在管理列表中")
+
+    # Validate path exists and is a git repo
+    repo_abs = (root / path).resolve()
+    if not repo_abs.exists():
+        return _err(f"路径不存在: {path}")
+    if not _is_git_dir(repo_abs):
+        return _err(f"路径不是 git 仓库: {path}")
+
+    # Build ManagedRepo
+    repo_data = {
+        "path": path,
+        "alias": data.get("alias", ""),
+        "main_branch": data.get("main_branch", "main"),
+    }
+    repo = ManagedRepo.from_dict(repo_data)
+
+    # Add to config and save
+    cfg.managed_repos.append(repo.to_dict())
+    cfg.save(root)
+
+    return _ok(repo.to_dict()), 201
+
+
+@api_bp.route("/repos/<path:repo_path>", methods=["PATCH"])
+def update_repo(repo_path: str):
+    """Update managed repository configuration.
+
+    body: {alias?, main_branch?, auto_merge?, merge_strategy?, merge_mode?, auto_push?}
+    """
+    err = _validate_repo_path(repo_path)
+    if err:
+        return _err(err)
+
+    cfg = current_app.config["CF_CONFIG"]
+    root = current_app.config["PROJECT_ROOT"]
+    data = request.get_json(silent=True)
+
+    if not data:
+        return _err("请求体不能为空")
+
+    # Find the repo in managed_repos
+    found_idx = None
+    for i, d in enumerate(cfg.managed_repos):
+        if d.get("path") == repo_path:
+            found_idx = i
+            break
+
+    if found_idx is None:
+        return _err(f"仓库 {repo_path} 未在管理列表中", 404)
+
+    # Update allowed fields
+    allowed = {"alias", "main_branch", "auto_merge", "merge_strategy", "merge_mode", "auto_push"}
+    for key in allowed:
+        if key in data:
+            cfg.managed_repos[found_idx][key] = data[key]
+
+    cfg.save(root)
+
+    repo = ManagedRepo.from_dict(cfg.managed_repos[found_idx])
+    return _ok(repo.to_dict())
+
+
+@api_bp.route("/repos/<path:repo_path>", methods=["DELETE"])
+def remove_repo(repo_path: str):
+    """Remove a managed repository from the config."""
+    err = _validate_repo_path(repo_path)
+    if err:
+        return _err(err)
+
+    cfg = current_app.config["CF_CONFIG"]
+    root = current_app.config["PROJECT_ROOT"]
+
+    original_len = len(cfg.managed_repos)
+    cfg.managed_repos = [d for d in cfg.managed_repos if d.get("path") != repo_path]
+
+    if len(cfg.managed_repos) == original_len:
+        return _err(f"仓库 {repo_path} 未在管理列表中", 404)
+
+    cfg.save(root)
+    return _ok({"removed": repo_path})
+
+
+@api_bp.route("/repos/<path:repo_path>/branches", methods=["GET"])
+def repo_branches(repo_path: str):
+    """Get branch list for a managed repository."""
+    err = _validate_repo_path(repo_path)
+    if err:
+        return _err(err)
+
+    root = current_app.config["PROJECT_ROOT"]
+    repo_abs = (root / repo_path).resolve()
+
+    if not repo_abs.exists():
+        return _err(f"仓库路径不存在: {repo_path}", 404)
+    if not _is_git_dir(repo_abs):
+        return _err(f"不是 git 仓库: {repo_path}")
+
+    result = _git_run(
+        ["git", "branch", "--format=%(refname:short)"],
+        cwd=repo_abs, check=False,
+    )
+    branches = [b.strip() for b in result.stdout.strip().splitlines() if b.strip()]
+    return _ok(branches)
+
+
+@api_bp.route("/repos/<path:repo_path>/worktrees", methods=["GET"])
+def repo_worktrees(repo_path: str):
+    """Get worktree list for a managed repository."""
+    err = _validate_repo_path(repo_path)
+    if err:
+        return _err(err)
+
+    root = current_app.config["PROJECT_ROOT"]
+    repo_abs = (root / repo_path).resolve()
+
+    if not repo_abs.exists():
+        return _err(f"仓库路径不存在: {repo_path}", 404)
+    if not _is_git_dir(repo_abs):
+        return _err(f"不是 git 仓库: {repo_path}")
+
+    result = _git_run(
+        ["git", "worktree", "list", "--porcelain"],
+        cwd=repo_abs, check=False,
+    )
+
+    worktrees = []
+    current_wt: dict = {}
+    for line in result.stdout.splitlines():
+        if line.startswith("worktree "):
+            if current_wt:
+                worktrees.append(current_wt)
+            current_wt = {"path": line.split(" ", 1)[1]}
+        elif line.startswith("HEAD "):
+            current_wt["head"] = line.split(" ", 1)[1]
+        elif line.startswith("branch "):
+            current_wt["branch"] = line.split(" ", 1)[1].split("/")[-1]
+        elif line == "bare":
+            current_wt["bare"] = True
+    if current_wt:
+        worktrees.append(current_wt)
+
+    return _ok(worktrees)
+
+
+@api_bp.route("/repos/<path:repo_path>/status", methods=["GET"])
+def repo_status(repo_path: str):
+    """Get detailed status for a managed repository."""
+    err = _validate_repo_path(repo_path)
+    if err:
+        return _err(err)
+
+    root = current_app.config["PROJECT_ROOT"]
+    repo_abs = (root / repo_path).resolve()
+
+    if not repo_abs.exists():
+        return _err(f"仓库路径不存在: {repo_path}", 404)
+    if not _is_git_dir(repo_abs):
+        return _err(f"不是 git 仓库: {repo_path}")
+
+    # Current branch
+    br = _git_run(
+        ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+        cwd=repo_abs, check=False,
+    )
+    current_branch = br.stdout.strip() if br.returncode == 0 else ""
+
+    # Uncommitted changes
+    st = _git_run(
+        ["git", "status", "--porcelain"],
+        cwd=repo_abs, check=False,
+    )
+    has_changes = bool(st.stdout.strip()) if st.returncode == 0 else False
+
+    # Remote URL
+    remote = _git_run(
+        ["git", "remote", "get-url", "origin"],
+        cwd=repo_abs, check=False,
+    )
+    remote_url = remote.stdout.strip() if remote.returncode == 0 else ""
+
+    # Last commit
+    log = _git_run(
+        ["git", "log", "-1", "--format=%H %s"],
+        cwd=repo_abs, check=False,
+    )
+    last_commit = log.stdout.strip() if log.returncode == 0 else ""
+
+    return _ok({
+        "repo_path": repo_path,
+        "current_branch": current_branch,
+        "has_changes": has_changes,
+        "remote_url": remote_url,
+        "last_commit": last_commit,
+    })
+
+
+@api_bp.route("/repos/scan", methods=["POST"])
+def scan_repos():
+    """Scan workspace subdirectories for git repositories.
+
+    Returns discovered repos that are not already managed.
+    """
+    cfg = current_app.config["CF_CONFIG"]
+    root = current_app.config["PROJECT_ROOT"]
+
+    managed_paths = {d.get("path") for d in cfg.managed_repos}
+    discovered = []
+
+    # Scan immediate subdirectories only (depth 1)
+    if not root.exists():
+        return _ok([])
+
+    for entry in sorted(root.iterdir()):
+        if not entry.is_dir():
+            continue
+        if entry.name.startswith("."):
+            continue
+        rel_path = str(entry.relative_to(root))
+        if rel_path in managed_paths:
+            continue
+        if _is_git_dir(entry):
+            # Get current branch
+            br = _git_run(
+                ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+                cwd=entry, check=False,
+            )
+            discovered.append({
+                "path": rel_path,
+                "current_branch": br.stdout.strip() if br.returncode == 0 else "",
+            })
+
+    return _ok(discovered)
+
+
+# -- Per-repo task status endpoints -------------------------------------------
+
+@api_bp.route("/tasks/<task_id>/repo-status", methods=["GET"])
+def task_repo_status(task_id: str):
+    """Get per-repo execution status for a task.
+
+    Checks git status in each repo's worktree subdirectory within the
+    composite working directory.
+    """
+    tm = current_app.config["TASK_MANAGER"]
+    task = tm.get(task_id)
+
+    if not task:
+        return _err(f"任务 {task_id} 不存在", 404)
+
+    if not task.repos:
+        return _err(f"任务 {task_id} 没有关联仓库")
+
+    root = current_app.config["PROJECT_ROOT"]
+    cfg = current_app.config["CF_CONFIG"]
+
+    repo_statuses = {}
+    for repo_path in task.repos:
+        repo_abs = _get_repo_abs_path(repo_path)
+        wt_path = repo_abs / cfg.worktree_dir / task_id
+
+        entry: dict = {
+            "repo_path": repo_path,
+            "worktree_exists": wt_path.exists(),
+        }
+
+        if wt_path.exists():
+            # Current branch
+            br = _git_run(
+                ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+                cwd=wt_path, check=False,
+            )
+            entry["current_branch"] = br.stdout.strip() if br.returncode == 0 else ""
+
+            # Status
+            st = _git_run(
+                ["git", "status", "--porcelain"],
+                cwd=wt_path, check=False,
+            )
+            entry["has_changes"] = bool(st.stdout.strip()) if st.returncode == 0 else False
+            entry["changes"] = st.stdout.strip() if st.returncode == 0 else ""
+
+            # Diff stat
+            repo_cfg = cfg.get_repo_by_path(repo_path)
+            main_br = repo_cfg.main_branch if repo_cfg else cfg.main_branch
+            diff_stat = _git_run(
+                ["git", "diff", "--stat", f"{main_br}...HEAD"],
+                cwd=wt_path, check=False,
+            )
+            entry["diff_stat"] = diff_stat.stdout.strip() if diff_stat.returncode == 0 else ""
+        else:
+            entry["current_branch"] = ""
+            entry["has_changes"] = False
+            entry["changes"] = ""
+            entry["diff_stat"] = ""
+
+        repo_statuses[repo_path] = entry
+
+    return _ok(repo_statuses)
+
+
+@api_bp.route("/tasks/<task_id>/repo-diff/<path:repo_path>", methods=["GET"])
+def task_repo_diff(task_id: str, repo_path: str):
+    """Get git diff for a specific repo in a multi-repo task."""
+    err = _validate_repo_path(repo_path)
+    if err:
+        return _err(err)
+
+    tm = current_app.config["TASK_MANAGER"]
+    task = tm.get(task_id)
+
+    if not task:
+        return _err(f"任务 {task_id} 不存在", 404)
+
+    if repo_path not in task.repos:
+        return _err(f"仓库 {repo_path} 不在任务 {task_id} 的关联仓库中")
+
+    root = current_app.config["PROJECT_ROOT"]
+    cfg = current_app.config["CF_CONFIG"]
+    repo_abs = _get_repo_abs_path(repo_path)
+    wt_path = repo_abs / cfg.worktree_dir / task_id
+
+    if not wt_path.exists():
+        return _err(f"仓库 {repo_path} 的 worktree 不存在", 404)
+
+    repo_cfg = cfg.get_repo_by_path(repo_path)
+    main_br = repo_cfg.main_branch if repo_cfg else cfg.main_branch
+
+    diff_result = _git_run(
+        ["git", "diff", f"{main_br}...HEAD"],
+        cwd=wt_path, check=False,
+    )
+    stat_result = _git_run(
+        ["git", "diff", "--stat", f"{main_br}...HEAD"],
+        cwd=wt_path, check=False,
+    )
+
+    return _ok({
+        "task_id": task_id,
+        "repo_path": repo_path,
+        "diff": diff_result.stdout,
+        "stat": stat_result.stdout,
+    })
+
+
+# -- Project mode endpoints ---------------------------------------------------
+
+@api_bp.route("/project-mode", methods=["GET"])
+def get_project_mode():
+    """Get current project mode."""
+    cfg = current_app.config["CF_CONFIG"]
+    return _ok({
+        "mode": cfg.project_mode,
+        "managed_repos": [
+            ManagedRepo.from_dict(d).to_dict() for d in cfg.managed_repos
+        ],
+    })
+
+
+@api_bp.route("/project-mode", methods=["POST"])
+def set_project_mode():
+    """Update project mode. body: {mode, managed_repos?}"""
+    cfg = current_app.config["CF_CONFIG"]
+    root = current_app.config["PROJECT_ROOT"]
+    data = request.get_json(silent=True)
+
+    if not data:
+        return _err("请求体不能为空")
+
+    mode = data.get("mode")
+    if not mode:
+        return _err("mode 为必填字段")
+
+    # Validate mode value
+    try:
+        ProjectMode(mode)
+    except ValueError:
+        valid = [m.value for m in ProjectMode]
+        return _err(f"无效的 mode: {mode}，有效值: {valid}")
+
+    cfg.project_mode = mode
+
+    # Optionally update managed_repos
+    managed = data.get("managed_repos")
+    if managed is not None:
+        if not isinstance(managed, list):
+            return _err("managed_repos 必须是数组")
+        # Validate each repo entry
+        validated = []
+        for entry in managed:
+            if not isinstance(entry, dict) or not entry.get("path"):
+                return _err("每个 managed_repo 必须包含 path 字段")
+            err = _validate_repo_path(entry["path"])
+            if err:
+                return _err(f"仓库 {entry['path']}: {err}")
+            repo = ManagedRepo.from_dict(entry)
+            validated.append(repo.to_dict())
+        cfg.managed_repos = validated
+
+    cfg.save(root)
+
+    return _ok({
+        "mode": cfg.project_mode,
+        "managed_repos": [
+            ManagedRepo.from_dict(d).to_dict() for d in cfg.managed_repos
+        ],
+    })

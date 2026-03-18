@@ -12,7 +12,7 @@ except ImportError:
 
 from ..chat import ChatManager
 from ..config import Config
-from ..models import TaskStatus
+from ..models import ProjectMode, TaskStatus
 from ..planner import Planner
 from ..pty_manager import PtyManager
 from ..task_manager import TaskManager
@@ -84,6 +84,15 @@ def create_app(project_root: Path, config: Config) -> Flask:
     # PTY Manager for mini task terminals
     pty_manager = PtyManager()
     app.config["PTY_MANAGER"] = pty_manager
+
+    # Multi-repo mode flag for API endpoints
+    app.config["PROJECT_MODE"] = config.project_mode
+    if config.project_mode == ProjectMode.MULTI_REPO.value:
+        import logging
+        logging.getLogger(__name__).info(
+            "Multi-repo mode enabled with %d managed repos",
+            len(config.managed_repos),
+        )
 
     # Recover tasks stuck in PLANNING state due to interrupted finalize
     _recover_stuck_planning_tasks(task_manager, chat_manager, plans_dir)

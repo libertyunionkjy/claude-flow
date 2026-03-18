@@ -5,6 +5,8 @@ from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import List, Optional
 
+from .models import ManagedRepo
+
 CLAUDE_FLOW_DIR = ".claude-flow"
 CONFIG_FILE = "config.json"
 
@@ -46,6 +48,9 @@ DEFAULT_CONFIG = {
     # Claude Code merge fallback
     "claude_merge_fallback": True,
     "claude_merge_fallback_timeout": 300,
+    # Project organization mode
+    "project_mode": "single_git",
+    "managed_repos": [],
 }
 
 
@@ -90,6 +95,34 @@ class Config:
     # Claude Code merge fallback
     claude_merge_fallback: bool = True
     claude_merge_fallback_timeout: int = 300
+    # Project organization mode
+    project_mode: str = "single_git"
+    managed_repos: list[dict] = field(default_factory=list)
+
+    # -- Multi-repo helpers --------------------------------------------------
+
+    def get_managed_repos(self) -> list[ManagedRepo]:
+        """Deserialize managed_repos dicts into ManagedRepo objects."""
+        return [ManagedRepo.from_dict(d) for d in self.managed_repos]
+
+    def get_repo_by_path(self, path: str) -> ManagedRepo | None:
+        """Look up a managed repo by its relative path."""
+        for d in self.managed_repos:
+            if d.get("path") == path:
+                return ManagedRepo.from_dict(d)
+        return None
+
+    def get_repo_by_alias(self, alias: str) -> ManagedRepo | None:
+        """Look up a managed repo by its alias."""
+        for d in self.managed_repos:
+            repo = ManagedRepo.from_dict(d)
+            if repo.alias == alias:
+                return repo
+        return None
+
+    def resolve_repo(self, name: str) -> ManagedRepo | None:
+        """Resolve a repo by path or alias."""
+        return self.get_repo_by_path(name) or self.get_repo_by_alias(name)
 
     @classmethod
     def load(cls, project_root: Path) -> Config:

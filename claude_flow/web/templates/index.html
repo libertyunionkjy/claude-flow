@@ -2284,6 +2284,620 @@
 
         /* Sidebar active state for mini_tasks */
         .nav-item[data-tab="mini_tasks"].active { border-left-color: #a29bfe; color: #c0b8ff; }
+
+        /* -- Repositories ---------------------------------------------------- */
+        .nav-item[data-tab="repos"].active { border-left-color: #00d4ff; color: #00d4ff; }
+        .nav-item[data-tab="repos"] .nav-dot { background: #00d4ff; }
+
+        .repo-status-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        .repo-status-dot.clean { background: #51cf66; }
+        .repo-status-dot.dirty { background: #ffd43b; }
+        .repo-status-dot.error { background: #ff6b6b; }
+
+        /* Sidebar repo list items */
+        .sidebar-repo-list {
+            max-height: 180px;
+            overflow-y: auto;
+            padding: 0 4px;
+        }
+        .sidebar-repo-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            font-size: 12px;
+            color: #8888aa;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: background 0.15s;
+        }
+        .sidebar-repo-item:hover {
+            background: rgba(255,255,255,0.04);
+            color: #b0b0cc;
+        }
+        .sidebar-repo-item .repo-alias {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .sidebar-repo-add-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            font-size: 11px;
+            color: #00d4ff;
+            cursor: pointer;
+            border: none;
+            background: transparent;
+            width: 100%;
+            text-align: left;
+            font-family: inherit;
+            transition: background 0.15s;
+        }
+        .sidebar-repo-add-btn:hover {
+            background: rgba(0,212,255,0.06);
+        }
+
+        /* -- Repos Page ------------------------------------------------------ */
+        .repos-page {
+            display: none;
+            flex-direction: column;
+            height: 100%;
+            overflow: hidden;
+        }
+        .repos-page.active { display: flex; }
+
+        .repos-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 24px;
+            background: #12122a;
+            border-bottom: 1px solid #2a2a4a;
+            flex-shrink: 0;
+        }
+        .repos-header h2 { font-size: 20px; color: #00d4ff; margin: 0; }
+        .repos-header-actions { display: flex; gap: 8px; }
+
+        .repos-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px 24px;
+        }
+
+        .repos-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        .repos-table th {
+            text-align: left;
+            padding: 10px 12px;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: #5a6a8a;
+            border-bottom: 1px solid #2a2a4a;
+            font-weight: 600;
+            white-space: nowrap;
+            background: #0f0f23;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        .repos-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #1e2a4a;
+            color: #d0d0e0;
+        }
+        .repos-table tr:hover td { background: rgba(255,255,255,0.03); }
+        .repos-table .repo-path-cell {
+            font-family: "SF Mono", "Fira Code", monospace;
+            font-size: 12px;
+            color: #8888aa;
+            max-width: 250px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .repos-table .repo-alias-cell {
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .repos-table .repo-alias-cell:hover { color: #00d4ff; }
+
+        .repos-empty {
+            text-align: center;
+            color: #4a4a6a;
+            font-size: 14px;
+            padding: 60px 20px;
+        }
+
+        /* Repo Detail Panel */
+        .repo-detail-panel {
+            display: none;
+            background: #16213e;
+            border: 1px solid #2a2a4a;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .repo-detail-panel.active { display: block; }
+        .repo-detail-panel h3 {
+            font-size: 16px;
+            color: #00d4ff;
+            margin: 0 0 16px 0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .repo-detail-panel h3 .close-detail {
+            background: none;
+            border: none;
+            color: #5a6a8a;
+            font-size: 18px;
+            cursor: pointer;
+            padding: 0 4px;
+        }
+        .repo-detail-panel h3 .close-detail:hover { color: #ff6b6b; }
+
+        .repo-detail-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        .repo-detail-item {
+            font-size: 12px;
+        }
+        .repo-detail-item .rd-label {
+            color: #5a6a8a;
+            font-weight: 500;
+            margin-bottom: 2px;
+        }
+        .repo-detail-item .rd-value {
+            color: #d0d0e0;
+            word-break: break-all;
+        }
+
+        .repo-detail-section {
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid #2a2a4a;
+        }
+        .repo-detail-section-title {
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: #5a6a8a;
+            margin-bottom: 10px;
+        }
+
+        .repo-branch-list, .repo-worktree-list {
+            max-height: 200px;
+            overflow-y: auto;
+            background: #0f0f23;
+            border: 1px solid #2a2a4a;
+            border-radius: 6px;
+        }
+        .repo-branch-item, .repo-worktree-item {
+            padding: 6px 12px;
+            font-size: 12px;
+            font-family: "SF Mono", "Fira Code", monospace;
+            color: #b0b0c8;
+            border-bottom: 1px solid #1a1a35;
+        }
+        .repo-branch-item:last-child, .repo-worktree-item:last-child { border-bottom: none; }
+        .repo-branch-item.current {
+            color: #00d4ff;
+            font-weight: 600;
+        }
+        .repo-worktree-item {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+        }
+        .repo-worktree-item .wt-path {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .repo-worktree-item .wt-branch {
+            color: #5a6a8a;
+            flex-shrink: 0;
+        }
+
+        /* Repo config edit area */
+        .repo-config-edit {
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid #2a2a4a;
+        }
+        .repo-config-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 10px;
+        }
+        .repo-config-row label {
+            font-size: 12px;
+            color: #5a6a8a;
+            min-width: 120px;
+            flex-shrink: 0;
+        }
+        .repo-config-row select,
+        .repo-config-row input[type="text"] {
+            flex: 1;
+            padding: 6px 10px;
+            background: #0f0f23;
+            border: 1px solid #2a2a4a;
+            border-radius: 6px;
+            color: #e0e0e0;
+            font-size: 12px;
+            font-family: inherit;
+        }
+        .repo-config-row select:focus,
+        .repo-config-row input[type="text"]:focus {
+            outline: none;
+            border-color: #00d4ff;
+        }
+
+        /* -- Add Repo Modal -------------------------------------------------- */
+        .modal-add-repo { max-width: 520px; }
+        .advanced-toggle {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: none;
+            border: none;
+            color: #5a6a8a;
+            font-size: 12px;
+            cursor: pointer;
+            padding: 8px 0;
+            font-family: inherit;
+            transition: color 0.15s;
+        }
+        .advanced-toggle:hover { color: #00d4ff; }
+        .advanced-toggle .toggle-arrow {
+            font-size: 10px;
+            transition: transform 0.2s;
+        }
+        .advanced-toggle.open .toggle-arrow { transform: rotate(90deg); }
+        .advanced-options {
+            display: none;
+            padding: 12px;
+            background: #0f0f23;
+            border: 1px solid #2a2a4a;
+            border-radius: 6px;
+            margin-top: 4px;
+        }
+        .advanced-options.open { display: block; }
+
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 36px;
+            height: 20px;
+        }
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: #2a2a4a;
+            border-radius: 10px;
+            transition: background 0.2s;
+        }
+        .toggle-slider::before {
+            content: '';
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            left: 2px;
+            bottom: 2px;
+            background: #e0e0e0;
+            border-radius: 50%;
+            transition: transform 0.2s;
+        }
+        .toggle-switch input:checked + .toggle-slider {
+            background: #00d4ff;
+        }
+        .toggle-switch input:checked + .toggle-slider::before {
+            transform: translateX(16px);
+        }
+
+        /* -- Task Repo Selection --------------------------------------------- */
+        .repo-selection-area {
+            margin-top: 12px;
+            padding: 12px;
+            background: #0d0d1f;
+            border: 1px solid #2a2a4a;
+            border-radius: 8px;
+        }
+        .repo-selection-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+        .repo-selection-header .rs-title {
+            font-size: 13px;
+            color: #8888aa;
+            font-weight: 500;
+        }
+        .repo-selection-header .rs-actions {
+            display: flex;
+            gap: 6px;
+        }
+        .repo-select-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 10px 12px;
+            border-bottom: 1px solid #1a1a35;
+            transition: background 0.15s;
+        }
+        .repo-select-item:last-child { border-bottom: none; }
+        .repo-select-item:hover { background: rgba(0,212,255,0.04); }
+        .repo-select-item.checked { background: rgba(0,212,255,0.07); }
+        .repo-select-item input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            margin-top: 2px;
+            flex-shrink: 0;
+            accent-color: #00d4ff;
+            cursor: pointer;
+        }
+        .repo-select-info {
+            flex: 1;
+            min-width: 0;
+        }
+        .repo-select-name {
+            font-size: 13px;
+            color: #e0e0e0;
+            font-weight: 500;
+        }
+        .repo-select-branches {
+            display: flex;
+            gap: 12px;
+            margin-top: 6px;
+        }
+        .repo-select-branch-group {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+        }
+        .repo-select-branch-group label {
+            color: #5a6a8a;
+            white-space: nowrap;
+        }
+        .repo-select-branch-group select {
+            padding: 3px 6px;
+            background: #111128;
+            border: 1px solid #2a2a4a;
+            border-radius: 4px;
+            color: #e0e0e0;
+            font-size: 11px;
+            font-family: inherit;
+            max-width: 160px;
+        }
+
+        /* -- Task Detail Repos Section --------------------------------------- */
+        .detail-repos-section {
+            margin-top: 16px;
+            padding: 14px;
+            background: #16213e;
+            border: 1px solid #1e2a4a;
+            border-radius: 8px;
+        }
+        .detail-repos-title {
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: #5a6a8a;
+            margin-bottom: 10px;
+        }
+        .detail-repo-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 8px 10px;
+            background: #0f0f23;
+            border-radius: 6px;
+            margin-bottom: 6px;
+            font-size: 12px;
+        }
+        .detail-repo-item:last-child { margin-bottom: 0; }
+        .detail-repo-item .dri-name {
+            font-weight: 600;
+            color: #e0e0e0;
+        }
+        .detail-repo-item .dri-branches {
+            flex: 1;
+            color: #8888aa;
+            font-family: "SF Mono", "Fira Code", monospace;
+            font-size: 11px;
+        }
+        .detail-repo-item .dri-diff-btn {
+            flex-shrink: 0;
+        }
+
+        /* -- Per-Repo Diff Modal --------------------------------------------- */
+        .repo-diff-tabs {
+            display: flex;
+            gap: 0;
+            border-bottom: 1px solid #2a2a4a;
+            margin-bottom: 12px;
+            overflow-x: auto;
+        }
+        .repo-diff-tab {
+            padding: 8px 16px;
+            background: none;
+            border: none;
+            border-bottom: 2px solid transparent;
+            color: #6c7a9a;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            font-family: inherit;
+            white-space: nowrap;
+            transition: all 0.15s;
+        }
+        .repo-diff-tab:hover { color: #b0b0cc; }
+        .repo-diff-tab.active {
+            color: #00d4ff;
+            border-bottom-color: #00d4ff;
+        }
+        .repo-diff-content {
+            background: #0a0a16;
+            border: 1px solid #2a2a4a;
+            border-radius: 6px;
+            padding: 12px;
+            font-family: "SF Mono", "Fira Code", monospace;
+            font-size: 12px;
+            line-height: 1.5;
+            max-height: 500px;
+            overflow: auto;
+            white-space: pre-wrap;
+        }
+        .repo-diff-content .diff-add { color: #51cf66; }
+        .repo-diff-content .diff-del { color: #ff6b6b; }
+        .repo-diff-content .diff-hdr { color: #74b9ff; font-weight: 600; }
+
+        /* -- Overview Repo Cards --------------------------------------------- */
+        .overview-repos-section {
+            margin-top: 28px;
+        }
+        .overview-repos-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 14px;
+        }
+        .overview-repo-card {
+            background: #16213e;
+            border: 1px solid #2a2a4a;
+            border-radius: 8px;
+            padding: 16px;
+            transition: border-color 0.2s;
+            cursor: pointer;
+        }
+        .overview-repo-card:hover { border-color: #3a3a6a; }
+        .overview-repo-card-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .overview-repo-card-name {
+            font-size: 14px;
+            font-weight: 600;
+            color: #e0e0e0;
+            flex: 1;
+        }
+        .overview-repo-card-info {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            font-size: 12px;
+            color: #8888aa;
+        }
+        .overview-repo-card-info .repo-info-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .overview-repo-card-info .repo-info-label { color: #5a6a8a; }
+        .overview-repo-card-tasks {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #2a2a4a;
+            font-size: 12px;
+            color: #00d4ff;
+        }
+
+        /* -- Settings Project Mode ------------------------------------------- */
+        .settings-project-mode {
+            margin-top: 20px;
+            padding: 16px;
+            background: #16213e;
+            border: 1px solid #2a2a4a;
+            border-radius: 8px;
+        }
+        .settings-project-mode h3 {
+            font-size: 14px;
+            color: #00d4ff;
+            margin: 0 0 12px 0;
+        }
+        .mode-current {
+            font-size: 13px;
+            color: #d0d0e0;
+            margin-bottom: 10px;
+        }
+        .mode-selector {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+        .mode-selector label {
+            font-size: 12px;
+            color: #5a6a8a;
+            white-space: nowrap;
+        }
+        .mode-selector select {
+            flex: 1;
+            max-width: 240px;
+            padding: 6px 10px;
+            background: #0f0f23;
+            border: 1px solid #2a2a4a;
+            border-radius: 6px;
+            color: #e0e0e0;
+            font-size: 13px;
+            font-family: inherit;
+        }
+        .mode-warning {
+            display: none;
+            padding: 8px 12px;
+            background: rgba(255,165,2,0.1);
+            border: 1px solid rgba(255,165,2,0.3);
+            border-radius: 6px;
+            font-size: 12px;
+            color: #ffa502;
+            margin-top: 8px;
+        }
+        .mode-warning.visible { display: block; }
+
+        .mode-descriptions {
+            margin-top: 10px;
+            font-size: 12px;
+            color: #6a6a8a;
+            line-height: 1.6;
+        }
+
+        /* Mobile responsive for repos */
+        @media (max-width: 768px) {
+            .repos-header { padding: 12px 14px; }
+            .repos-list { padding: 12px 14px; }
+            .repo-detail-grid { grid-template-columns: 1fr; }
+            .repo-select-branches { flex-direction: column; gap: 6px; }
+            .nav-item[data-tab="repos"].active { border-bottom-color: #00d4ff; border-left-color: transparent; }
+            .overview-repos-grid { grid-template-columns: 1fr; }
+        }
     </style>
 </head>
 <body>
@@ -2346,6 +2960,14 @@
                 <span class="nav-label">Failed</span>
                 <span class="nav-count" id="nav-count-failed">0</span>
             </button>
+            <div class="sidebar-section-label">Repositories</div>
+            <button class="nav-item" data-tab="repos" onclick="switchTab('repos')">
+                <span class="nav-dot"></span>
+                <span class="nav-label">Repositories</span>
+                <span class="nav-count" id="nav-count-repos">0</span>
+            </button>
+            <div class="sidebar-repo-list" id="sidebarRepoList"></div>
+            <button class="sidebar-repo-add-btn" onclick="openAddRepoModal()">+ Add Repository</button>
             <div class="sidebar-section-label">Mini Tasks</div>
             <button class="nav-item" data-tab="mini_tasks" onclick="switchTab('mini_tasks')">
                 <span class="nav-dot" style="background: #a29bfe;"></span>
@@ -2585,6 +3207,57 @@
             <div class="overview-section" id="ovWorkersSection" style="display:none;">
                 <div class="overview-section-title">Active Workers</div>
                 <div class="overview-workers" id="ovWorkers"></div>
+            </div>
+        </div>
+
+        <!-- Repos Page (hidden by default) -->
+        <div class="repos-page" id="reposPage">
+            <div class="repos-header">
+                <h2>Repositories</h2>
+                <div class="repos-header-actions">
+                    <button class="btn btn-outline" onclick="scanRepos()">Scan Repos</button>
+                    <button class="btn btn-primary" onclick="openAddRepoModal()">+ Add Repository</button>
+                </div>
+            </div>
+            <div class="repos-list">
+                <div class="repo-detail-panel" id="repoDetailPanel"></div>
+                <div id="reposTableWrap">
+                    <table class="repos-table" id="reposTable" style="display:none;">
+                        <thead>
+                            <tr>
+                                <th>Alias</th>
+                                <th>Path</th>
+                                <th>Main Branch</th>
+                                <th>Current Branch</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="reposTableBody"></tbody>
+                    </table>
+                    <div class="repos-empty" id="reposEmpty">No repositories managed. Click "Add Repository" or "Scan Repos" to get started.</div>
+                </div>
+                <div class="settings-project-mode" id="projectModeSettings">
+                    <h3>Project Mode</h3>
+                    <div class="mode-current" id="modeCurrentDisplay">Current mode: <strong>single_git</strong></div>
+                    <div class="mode-selector">
+                        <label>Switch mode:</label>
+                        <select id="projectModeSelect" onchange="onProjectModeChange(this.value)">
+                            <option value="single_git">Single Git</option>
+                            <option value="git_submodule">Git Submodule</option>
+                            <option value="multi_repo">Multi Repo</option>
+                            <option value="non_git">Non-Git</option>
+                        </select>
+                        <button class="btn btn-primary btn-small" id="applyModeBtn" onclick="applyProjectMode()" style="display:none;">Apply</button>
+                    </div>
+                    <div class="mode-warning" id="modeWarning">Switching project mode may affect existing tasks and configurations.</div>
+                    <div class="mode-descriptions">
+                        <strong>single_git</strong> - Standard single Git repository<br>
+                        <strong>git_submodule</strong> - Git repo with submodules<br>
+                        <strong>multi_repo</strong> - Multiple independent repositories<br>
+                        <strong>non_git</strong> - Non-Git project directory
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -2963,6 +3636,19 @@
                     <option value="false">Disabled</option>
                 </select>
             </div>
+            <div class="form-group" id="taskRepoSelectionGroup" style="display:none;">
+                <label>Involved Repositories</label>
+                <div class="repo-selection-area" id="taskRepoSelection">
+                    <div class="repo-selection-header">
+                        <span class="rs-title">Select repositories for this task</span>
+                        <div class="rs-actions">
+                            <button class="btn btn-outline btn-small" onclick="taskRepoSelectAll(true)">All</button>
+                            <button class="btn btn-outline btn-small" onclick="taskRepoSelectAll(false)">None</button>
+                        </div>
+                    </div>
+                    <div id="taskRepoList"></div>
+                </div>
+            </div>
             <div class="modal-actions">
                 <button class="btn btn-cancel" onclick="closeNewTaskModal()">Cancel</button>
                 <button class="btn btn-primary" onclick="createTask()">Create</button>
@@ -3041,6 +3727,72 @@
             <div class="modal-actions">
                 <button class="btn btn-cancel" id="confirmModalCancel">Cancel</button>
                 <button class="btn btn-danger" id="confirmModalOk">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Repo Modal -->
+    <div class="modal-overlay" id="addRepoModal">
+        <div class="modal modal-add-repo">
+            <h2>Add Repository</h2>
+            <div class="form-group">
+                <label for="repoPath">Repository Path</label>
+                <input type="text" id="repoPath" placeholder="/path/to/repository">
+            </div>
+            <div class="form-group">
+                <label for="repoAlias">Alias (optional)</label>
+                <input type="text" id="repoAlias" placeholder="Defaults to directory name">
+            </div>
+            <div class="form-group">
+                <label for="repoMainBranch">Main Branch</label>
+                <select id="repoMainBranch" disabled>
+                    <option value="">-- Add path first, then load branches --</option>
+                </select>
+                <button class="btn btn-outline btn-small" onclick="loadRepoBranches()" style="margin-top:4px;font-size:10px;">Load Branches</button>
+            </div>
+            <button class="advanced-toggle" id="advancedToggle" onclick="toggleAdvancedOptions()">
+                <span class="toggle-arrow">&#9654;</span> Advanced Options
+            </button>
+            <div class="advanced-options" id="advancedOptions">
+                <div class="form-group">
+                    <label for="repoMergeStrategy">Merge Strategy</label>
+                    <select id="repoMergeStrategy">
+                        <option value="rebase">Rebase</option>
+                        <option value="merge">Merge</option>
+                        <option value="squash">Squash</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="repoMergeMode">Merge Mode</label>
+                    <select id="repoMergeMode">
+                        <option value="--no-ff">No Fast-Forward (--no-ff)</option>
+                        <option value="--ff-only">Fast-Forward Only (--ff-only)</option>
+                        <option value="">Default</option>
+                    </select>
+                </div>
+                <div class="form-group" style="display:flex;align-items:center;gap:10px;">
+                    <label for="repoAutoPush" style="margin-bottom:0;">Auto Push</label>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="repoAutoPush">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-cancel" onclick="closeAddRepoModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="addRepo()">Add</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Per-Repo Diff Modal -->
+    <div class="modal-overlay" id="repoDiffModal">
+        <div class="modal modal-lg">
+            <h2 id="repoDiffModalTitle">Repo Diff</h2>
+            <div class="repo-diff-tabs" id="repoDiffTabs"></div>
+            <div class="repo-diff-content" id="repoDiffContent">Loading...</div>
+            <div class="modal-actions">
+                <button class="btn btn-cancel" onclick="closeRepoDiffModal()">Close</button>
             </div>
         </div>
     </div>
@@ -3175,6 +3927,7 @@
             document.getElementById('miniTasksPage').classList.remove('active');
             document.getElementById('miniTerminalPage').classList.remove('active');
             document.getElementById('miniDiffPage').classList.remove('active');
+            document.getElementById('reposPage').classList.remove('active');
             guideVisible = false;
             usageVisible = false;
             overviewVisible = false;
@@ -3198,6 +3951,12 @@
                 document.getElementById('topBar').style.display = 'none';
                 document.getElementById('allTasksPanel').classList.add('active');
                 renderAllTasksTable();
+            } else if (status === 'repos') {
+                // Show Repos page
+                document.getElementById('contentPanel').style.display = 'none';
+                document.getElementById('topBar').style.display = 'none';
+                document.getElementById('reposPage').classList.add('active');
+                loadRepos();
             } else if (status === 'mini_tasks') {
                 // Show Mini Task Manager page
                 document.getElementById('contentPanel').style.display = 'none';
@@ -4130,6 +4889,11 @@
             document.getElementById('newTaskModal').classList.add('active');
             document.getElementById('taskTitle').focus();
             loadSubmodules('task');
+            // Show repo selection if multi_repo mode
+            updateTaskFormForMode();
+            if (_projectMode === 'multi_repo') {
+                renderTaskRepoSelection();
+            }
         }
 
         function closeNewTaskModal() {
@@ -4151,6 +4915,15 @@
             if (subSel.submodules.length > 0) {
                 body.submodules = subSel.submodules;
                 body.sub_branches = subSel.sub_branches;
+            }
+            // Collect multi-repo selections
+            if (_projectMode === 'multi_repo') {
+                var repoSel = collectTaskRepoSelection();
+                if (repoSel.repos.length > 0) {
+                    body.repos = repoSel.repos;
+                    body.repo_base_branches = repoSel.repo_base_branches;
+                    body.repo_merge_targets = repoSel.repo_merge_targets;
+                }
             }
             var data = await api('/tasks', {
                 method: 'POST',
@@ -4231,10 +5004,14 @@
             document.getElementById('guidePage').classList.remove('active');
             document.getElementById('allTasksPanel').classList.remove('active');
             document.getElementById('usagePage').classList.remove('active');
+            document.getElementById('reposPage').classList.remove('active');
             document.getElementById('detailView').classList.add('active');
 
             // Render detail content
             renderTaskDetail(task);
+
+            // Render repos section if task has repos
+            renderDetailReposSection(task);
 
             // Load active tab data
             switchDetailTab(detailActiveTab);
@@ -4262,6 +5039,11 @@
                 document.getElementById('topBar').style.display = 'none';
                 document.getElementById('allTasksPanel').classList.add('active');
                 renderAllTasksTable();
+            } else if (activeTab === 'repos') {
+                document.getElementById('contentPanel').style.display = 'none';
+                document.getElementById('topBar').style.display = 'none';
+                document.getElementById('reposPage').classList.add('active');
+                loadRepos();
             } else {
                 document.getElementById('contentPanel').style.display = '';
                 document.getElementById('topBar').style.display = '';
@@ -4744,6 +5526,7 @@
 
                 // Re-render detail
                 renderTaskDetail(data);
+                renderDetailReposSection(data);
 
                 // Also refresh nav counts
                 var statusData = await api('/tasks');
@@ -5010,6 +5793,7 @@
                 topBar.style.display = 'none';
                 document.getElementById('detailView').classList.remove('active');
                 document.getElementById('allTasksPanel').classList.remove('active');
+                document.getElementById('reposPage').classList.remove('active');
                 btn.querySelector('.nav-label').textContent = 'Back to Board';
                 // Deactivate all nav items
                 document.querySelectorAll('.nav-item[data-tab]').forEach(function(item) {
@@ -5065,6 +5849,7 @@
                 topBar.style.display = 'none';
                 document.getElementById('detailView').classList.remove('active');
                 document.getElementById('allTasksPanel').classList.remove('active');
+                document.getElementById('reposPage').classList.remove('active');
                 btn.querySelector('.nav-label').textContent = 'Back to Board';
                 document.querySelectorAll('.nav-item[data-tab]').forEach(function(item) {
                     item.classList.remove('active');
@@ -5358,6 +6143,9 @@
 
             // Workers
             renderOverviewWorkers(data.workers);
+
+            // Repository overview cards
+            renderOverviewRepos();
 
             // Refresh timestamp
             var now = new Date();
@@ -5720,6 +6508,7 @@
             document.getElementById('overviewPage').classList.remove('active');
             document.getElementById('allTasksPanel').classList.remove('active');
             document.getElementById('detailView').classList.remove('active');
+            document.getElementById('reposPage').classList.remove('active');
             document.getElementById('miniTerminalPage').classList.add('active');
 
             // If tab already exists, just activate it
@@ -5901,6 +6690,7 @@
             document.getElementById('overviewPage').classList.remove('active');
             document.getElementById('allTasksPanel').classList.remove('active');
             document.getElementById('detailView').classList.remove('active');
+            document.getElementById('reposPage').classList.remove('active');
             document.getElementById('miniDiffPage').classList.add('active');
 
             var body = document.getElementById('miniDiffBody');
@@ -5999,10 +6789,605 @@
             refreshMiniTaskList();
         }, 5000);
 
+        /* -- Repository Management ------------------------------------------- */
+        var _managedRepos = [];
+        var _projectMode = 'single_git';
+        var _repoRefreshTimer = null;
+        var _activeRepoDetail = null;
+
+        async function loadRepos() {
+            try {
+                var data = await api('/repos');
+                if (data !== null) {
+                    _managedRepos = Array.isArray(data) ? data : [];
+                    var countEl = document.getElementById('nav-count-repos');
+                    if (countEl) countEl.textContent = _managedRepos.length;
+                    renderSidebarRepos();
+                    if (activeTab === 'repos') {
+                        renderReposTable();
+                    }
+                }
+            } catch(e) {
+                // API may not exist yet, silently ignore
+                _managedRepos = [];
+            }
+        }
+
+        function renderSidebarRepos() {
+            var container = document.getElementById('sidebarRepoList');
+            if (!container) return;
+            if (_managedRepos.length === 0) {
+                container.innerHTML = '';
+                return;
+            }
+            var html = '';
+            _managedRepos.forEach(function(repo) {
+                var alias = repo.alias || repo.path.split('/').pop();
+                var statusClass = repo.status === 'error' ? 'error' :
+                    (repo.has_changes || repo.status === 'dirty') ? 'dirty' : 'clean';
+                html += '<div class="sidebar-repo-item" onclick="showRepoDetail(\'' + encodeURIComponent(repo.path) + '\')" title="' + escapeHtml(repo.path) + '">'
+                    + '<span class="repo-status-dot ' + statusClass + '"></span>'
+                    + '<span class="repo-alias">' + escapeHtml(alias) + '</span>'
+                    + '</div>';
+            });
+            container.innerHTML = html;
+        }
+
+        function renderReposTable() {
+            var table = document.getElementById('reposTable');
+            var tbody = document.getElementById('reposTableBody');
+            var empty = document.getElementById('reposEmpty');
+
+            if (_managedRepos.length === 0) {
+                table.style.display = 'none';
+                empty.style.display = '';
+                return;
+            }
+            table.style.display = '';
+            empty.style.display = 'none';
+
+            var html = '';
+            _managedRepos.forEach(function(repo) {
+                var alias = repo.alias || repo.path.split('/').pop();
+                var statusClass = repo.status === 'error' ? 'error' :
+                    (repo.has_changes || repo.status === 'dirty') ? 'dirty' : 'clean';
+                var statusLabel = repo.status === 'error' ? 'Error' :
+                    (repo.has_changes || repo.status === 'dirty') ? 'Has Changes' : 'Clean';
+                var currentBranch = repo.current_branch || '-';
+                var mainBranch = repo.main_branch || 'main';
+
+                html += '<tr>'
+                    + '<td class="repo-alias-cell" onclick="showRepoDetail(\'' + encodeURIComponent(repo.path) + '\')">' + escapeHtml(alias) + '</td>'
+                    + '<td class="repo-path-cell" title="' + escapeHtml(repo.path) + '">' + escapeHtml(repo.path) + '</td>'
+                    + '<td>' + escapeHtml(mainBranch) + '</td>'
+                    + '<td>' + escapeHtml(currentBranch) + '</td>'
+                    + '<td><span class="repo-status-dot ' + statusClass + '" style="margin-right:6px;"></span>' + statusLabel + '</td>'
+                    + '<td>'
+                    + '<button class="btn btn-outline btn-small" onclick="editRepoConfig(\'' + encodeURIComponent(repo.path) + '\')">Edit</button> '
+                    + '<button class="btn btn-danger btn-small" onclick="removeRepo(\'' + encodeURIComponent(repo.path) + '\')">Remove</button>'
+                    + '</td>'
+                    + '</tr>';
+            });
+            tbody.innerHTML = html;
+        }
+
+        async function showRepoDetail(encodedPath) {
+            var repoPath = decodeURIComponent(encodedPath);
+            _activeRepoDetail = repoPath;
+            var panel = document.getElementById('repoDetailPanel');
+            var repo = _managedRepos.find(function(r) { return r.path === repoPath; });
+            var alias = repo ? (repo.alias || repoPath.split('/').pop()) : repoPath.split('/').pop();
+
+            panel.innerHTML = '<h3>' + escapeHtml(alias) + '<button class="close-detail" onclick="closeRepoDetail()">&times;</button></h3>'
+                + '<div class="repo-detail-grid" id="rdGrid"><div style="color:#8888aa;font-size:13px;">Loading...</div></div>'
+                + '<div class="repo-detail-section"><div class="repo-detail-section-title">Branches</div><div class="repo-branch-list" id="rdBranches"><div style="padding:10px;color:#5a6a8a;font-size:12px;">Loading...</div></div></div>'
+                + '<div class="repo-detail-section"><div class="repo-detail-section-title">Active Worktrees</div><div class="repo-worktree-list" id="rdWorktrees"><div style="padding:10px;color:#5a6a8a;font-size:12px;">Loading...</div></div></div>'
+                + '<div class="repo-config-edit" id="rdConfigEdit"></div>';
+            panel.classList.add('active');
+
+            // If on repos page, switch to it
+            if (activeTab !== 'repos') {
+                switchTab('repos');
+            }
+
+            // Load repo status
+            var statusData = await api('/repos/' + encodedPath + '/status');
+            if (statusData !== null) {
+                var grid = document.getElementById('rdGrid');
+                var items = [];
+                items.push({ label: 'Path', value: repoPath });
+                items.push({ label: 'Alias', value: alias });
+                if (statusData.main_branch) items.push({ label: 'Main Branch', value: statusData.main_branch });
+                if (statusData.current_branch) items.push({ label: 'Current Branch', value: statusData.current_branch });
+                if (statusData.remote_url) items.push({ label: 'Remote URL', value: statusData.remote_url });
+                var statusLabel = statusData.has_changes ? 'Has Changes' : 'Clean';
+                items.push({ label: 'Status', value: statusLabel });
+
+                grid.innerHTML = items.map(function(it) {
+                    return '<div class="repo-detail-item"><div class="rd-label">' + it.label + '</div><div class="rd-value">' + escapeHtml(String(it.value)) + '</div></div>';
+                }).join('');
+            }
+
+            // Load branches
+            var branchData = await api('/repos/' + encodedPath + '/branches');
+            var branchList = document.getElementById('rdBranches');
+            if (branchData !== null && Array.isArray(branchData) && branchData.length > 0) {
+                var currentBr = (statusData && statusData.current_branch) || '';
+                branchList.innerHTML = branchData.map(function(br) {
+                    var cls = br === currentBr ? 'repo-branch-item current' : 'repo-branch-item';
+                    return '<div class="' + cls + '">' + escapeHtml(br) + (br === currentBr ? ' (current)' : '') + '</div>';
+                }).join('');
+            } else {
+                branchList.innerHTML = '<div style="padding:10px;color:#5a6a8a;font-size:12px;">No branches found</div>';
+            }
+
+            // Load worktrees
+            var wtData = await api('/repos/' + encodedPath + '/worktrees');
+            var wtList = document.getElementById('rdWorktrees');
+            if (wtData !== null && Array.isArray(wtData) && wtData.length > 0) {
+                wtList.innerHTML = wtData.map(function(wt) {
+                    return '<div class="repo-worktree-item"><span class="wt-path">' + escapeHtml(wt.path || wt) + '</span>'
+                        + (wt.branch ? '<span class="wt-branch">' + escapeHtml(wt.branch) + '</span>' : '')
+                        + '</div>';
+                }).join('');
+            } else {
+                wtList.innerHTML = '<div style="padding:10px;color:#5a6a8a;font-size:12px;">No active worktrees</div>';
+            }
+
+            // Config edit area
+            renderRepoConfigEdit(repo, encodedPath);
+        }
+
+        function renderRepoConfigEdit(repo, encodedPath) {
+            var container = document.getElementById('rdConfigEdit');
+            if (!container || !repo) { if (container) container.innerHTML = ''; return; }
+            container.innerHTML = '<div class="repo-detail-section-title">Configuration</div>'
+                + '<div class="repo-config-row"><label>Alias</label><input type="text" id="rdCfgAlias" value="' + escapeHtml(repo.alias || '') + '"></div>'
+                + '<div class="repo-config-row"><label>Main Branch</label><input type="text" id="rdCfgMainBranch" value="' + escapeHtml(repo.main_branch || 'main') + '"></div>'
+                + '<div class="repo-config-row"><label>Merge Strategy</label><select id="rdCfgMergeStrategy">'
+                + '<option value="rebase"' + (repo.merge_strategy === 'rebase' ? ' selected' : '') + '>Rebase</option>'
+                + '<option value="merge"' + (repo.merge_strategy === 'merge' ? ' selected' : '') + '>Merge</option>'
+                + '<option value="squash"' + (repo.merge_strategy === 'squash' ? ' selected' : '') + '>Squash</option>'
+                + '</select></div>'
+                + '<div style="margin-top:10px;"><button class="btn btn-primary btn-small" onclick="saveRepoConfig(\'' + encodedPath + '\')">Save</button></div>';
+        }
+
+        async function saveRepoConfig(encodedPath) {
+            var alias = document.getElementById('rdCfgAlias').value.trim();
+            var mainBranch = document.getElementById('rdCfgMainBranch').value.trim();
+            var mergeStrategy = document.getElementById('rdCfgMergeStrategy').value;
+            var body = {};
+            if (alias) body.alias = alias;
+            if (mainBranch) body.main_branch = mainBranch;
+            if (mergeStrategy) body.merge_strategy = mergeStrategy;
+
+            var data = await api('/repos/' + encodedPath, {
+                method: 'PATCH',
+                body: JSON.stringify(body),
+            });
+            if (data !== null) {
+                showToast('Repository config updated');
+                loadRepos();
+            }
+        }
+
+        function closeRepoDetail() {
+            _activeRepoDetail = null;
+            document.getElementById('repoDetailPanel').classList.remove('active');
+        }
+
+        function editRepoConfig(encodedPath) {
+            showRepoDetail(encodedPath);
+        }
+
+        async function removeRepo(encodedPath) {
+            var confirmed = await showConfirm('Remove this repository from management? (This does not delete the repo.)', { title: 'Remove Repository', okText: 'Remove' });
+            if (!confirmed) return;
+            var data = await api('/repos/' + encodedPath, { method: 'DELETE' });
+            if (data !== null) {
+                showToast('Repository removed');
+                if (_activeRepoDetail === decodeURIComponent(encodedPath)) {
+                    closeRepoDetail();
+                }
+                loadRepos();
+            }
+        }
+
+        async function scanRepos() {
+            showToast('Scanning for repositories...');
+            var data = await api('/repos/scan', { method: 'POST' });
+            if (data !== null) {
+                var count = data.found || (Array.isArray(data) ? data.length : 0);
+                showToast('Scan complete: ' + count + ' repo(s) found');
+                loadRepos();
+            }
+        }
+
+        /* -- Add Repo Modal -------------------------------------------------- */
+        function openAddRepoModal() {
+            document.getElementById('repoPath').value = '';
+            document.getElementById('repoAlias').value = '';
+            document.getElementById('repoMainBranch').innerHTML = '<option value="">-- Add path first, then load branches --</option>';
+            document.getElementById('repoMainBranch').disabled = true;
+            document.getElementById('repoMergeStrategy').value = 'rebase';
+            document.getElementById('repoMergeMode').value = '--no-ff';
+            document.getElementById('repoAutoPush').checked = false;
+            document.getElementById('advancedToggle').classList.remove('open');
+            document.getElementById('advancedOptions').classList.remove('open');
+            document.getElementById('addRepoModal').classList.add('active');
+            document.getElementById('repoPath').focus();
+        }
+
+        function closeAddRepoModal() {
+            document.getElementById('addRepoModal').classList.remove('active');
+        }
+
+        function toggleAdvancedOptions() {
+            var toggle = document.getElementById('advancedToggle');
+            var options = document.getElementById('advancedOptions');
+            toggle.classList.toggle('open');
+            options.classList.toggle('open');
+        }
+
+        async function loadRepoBranches() {
+            var path = document.getElementById('repoPath').value.trim();
+            if (!path) { showToast('Enter a repository path first', true); return; }
+            var encodedPath = encodeURIComponent(path);
+            var sel = document.getElementById('repoMainBranch');
+            sel.innerHTML = '<option value="">Loading...</option>';
+
+            var data = await api('/repos/' + encodedPath + '/branches');
+            if (data !== null && Array.isArray(data) && data.length > 0) {
+                var opts = data.map(function(br) {
+                    var selected = (br === 'main' || br === 'master') ? ' selected' : '';
+                    return '<option value="' + escapeHtml(br) + '"' + selected + '>' + escapeHtml(br) + '</option>';
+                }).join('');
+                sel.innerHTML = '<option value="">-- Select --</option>' + opts;
+                sel.disabled = false;
+            } else {
+                sel.innerHTML = '<option value="">No branches found</option>';
+                sel.disabled = true;
+            }
+        }
+
+        async function addRepo() {
+            var path = document.getElementById('repoPath').value.trim();
+            if (!path) { showToast('Please enter a repository path', true); return; }
+
+            var body = { path: path };
+            var alias = document.getElementById('repoAlias').value.trim();
+            if (alias) body.alias = alias;
+            var mainBranch = document.getElementById('repoMainBranch').value;
+            if (mainBranch) body.main_branch = mainBranch;
+            var mergeStrategy = document.getElementById('repoMergeStrategy').value;
+            if (mergeStrategy) body.merge_strategy = mergeStrategy;
+            var mergeMode = document.getElementById('repoMergeMode').value;
+            if (mergeMode) body.merge_mode = mergeMode;
+            body.auto_push = document.getElementById('repoAutoPush').checked;
+
+            var data = await api('/repos', {
+                method: 'POST',
+                body: JSON.stringify(body),
+            });
+            if (data !== null) {
+                showToast('Repository added');
+                closeAddRepoModal();
+                loadRepos();
+            }
+        }
+
+        // Click-outside to close add repo modal
+        document.getElementById('addRepoModal').addEventListener('click', function(e) {
+            if (e.target === this) closeAddRepoModal();
+        });
+
+        /* -- Repo Diff Modal ------------------------------------------------- */
+        var _repoDiffTaskId = null;
+        var _repoDiffRepos = [];
+
+        function openRepoDiffModal(taskId) {
+            _repoDiffTaskId = taskId;
+            var task = allTasks.find(function(t) { return t.id === taskId; });
+            _repoDiffRepos = (task && task.repos) || [];
+            document.getElementById('repoDiffModalTitle').textContent = 'Repo Diff: ' + (task ? task.title : taskId);
+            document.getElementById('repoDiffContent').innerHTML = 'Select a repository tab above.';
+
+            // Render tabs
+            var tabsHtml = '';
+            _repoDiffRepos.forEach(function(repoPath, idx) {
+                var alias = repoPath.split('/').pop();
+                // Try to find alias from managed repos
+                var managed = _managedRepos.find(function(r) { return r.path === repoPath; });
+                if (managed && managed.alias) alias = managed.alias;
+                var cls = idx === 0 ? 'repo-diff-tab active' : 'repo-diff-tab';
+                tabsHtml += '<button class="' + cls + '" onclick="switchRepoDiffTab(this, \'' + encodeURIComponent(repoPath) + '\')">' + escapeHtml(alias) + '</button>';
+            });
+            document.getElementById('repoDiffTabs').innerHTML = tabsHtml;
+
+            document.getElementById('repoDiffModal').classList.add('active');
+
+            // Load first tab diff
+            if (_repoDiffRepos.length > 0) {
+                loadRepoDiff(encodeURIComponent(_repoDiffRepos[0]));
+            }
+        }
+
+        function closeRepoDiffModal() {
+            _repoDiffTaskId = null;
+            document.getElementById('repoDiffModal').classList.remove('active');
+        }
+
+        function switchRepoDiffTab(btn, encodedRepoPath) {
+            document.querySelectorAll('.repo-diff-tab').forEach(function(t) { t.classList.remove('active'); });
+            btn.classList.add('active');
+            loadRepoDiff(encodedRepoPath);
+        }
+
+        async function loadRepoDiff(encodedRepoPath) {
+            if (!_repoDiffTaskId) return;
+            var el = document.getElementById('repoDiffContent');
+            el.innerHTML = 'Loading diff...';
+
+            var data = await api('/tasks/' + _repoDiffTaskId + '/repo-diff/' + encodedRepoPath);
+            if (data !== null && data.diff) {
+                var html = '';
+                data.diff.split('\n').forEach(function(line) {
+                    if (line.startsWith('+')) html += '<span class="diff-add">' + escapeHtml(line) + '</span>\n';
+                    else if (line.startsWith('-')) html += '<span class="diff-del">' + escapeHtml(line) + '</span>\n';
+                    else if (line.startsWith('@@') || line.startsWith('diff ')) html += '<span class="diff-hdr">' + escapeHtml(line) + '</span>\n';
+                    else html += escapeHtml(line) + '\n';
+                });
+                el.innerHTML = html || '<span style="color:#5a6a8a;">No changes</span>';
+            } else {
+                el.innerHTML = '<span style="color:#5a6a8a;">No diff available</span>';
+            }
+        }
+
+        document.getElementById('repoDiffModal').addEventListener('click', function(e) {
+            if (e.target === this) closeRepoDiffModal();
+        });
+
+        /* -- Project Mode ---------------------------------------------------- */
+        async function loadProjectMode() {
+            try {
+                var data = await api('/project-mode');
+                if (data !== null) {
+                    _projectMode = data.mode || 'single_git';
+                    updateTaskFormForMode();
+                    updateProjectModeUI();
+                }
+            } catch(e) {
+                _projectMode = 'single_git';
+            }
+        }
+
+        function updateProjectModeUI() {
+            var display = document.getElementById('modeCurrentDisplay');
+            if (display) display.innerHTML = 'Current mode: <strong>' + escapeHtml(_projectMode) + '</strong>';
+            var sel = document.getElementById('projectModeSelect');
+            if (sel) sel.value = _projectMode;
+            var btn = document.getElementById('applyModeBtn');
+            if (btn) btn.style.display = 'none';
+            var warn = document.getElementById('modeWarning');
+            if (warn) warn.classList.remove('visible');
+        }
+
+        function onProjectModeChange(newMode) {
+            var btn = document.getElementById('applyModeBtn');
+            var warn = document.getElementById('modeWarning');
+            if (newMode !== _projectMode) {
+                if (btn) btn.style.display = '';
+                if (warn) warn.classList.add('visible');
+            } else {
+                if (btn) btn.style.display = 'none';
+                if (warn) warn.classList.remove('visible');
+            }
+        }
+
+        function applyProjectMode() {
+            var sel = document.getElementById('projectModeSelect');
+            if (sel) changeProjectMode(sel.value);
+        }
+
+        async function changeProjectMode(newMode) {
+            var data = await api('/project-mode', {
+                method: 'POST',
+                body: JSON.stringify({ mode: newMode }),
+            });
+            if (data !== null) {
+                _projectMode = newMode;
+                showToast('Project mode changed to ' + newMode);
+                updateTaskFormForMode();
+                updateProjectModeUI();
+                loadRepos();
+            }
+        }
+
+        function updateTaskFormForMode() {
+            var repoGroup = document.getElementById('taskRepoSelectionGroup');
+            if (repoGroup) {
+                repoGroup.style.display = _projectMode === 'multi_repo' ? '' : 'none';
+            }
+        }
+
+        /* -- Task Repo Selection in Create Form ------------------------------ */
+        function renderTaskRepoSelection() {
+            var container = document.getElementById('taskRepoList');
+            if (!container || _managedRepos.length === 0) return;
+
+            var html = '';
+            _managedRepos.forEach(function(repo) {
+                var alias = repo.alias || repo.path.split('/').pop();
+                var mainBranch = repo.main_branch || 'main';
+                html += '<div class="repo-select-item" data-repo-path="' + escapeHtml(repo.path) + '">'
+                    + '<input type="checkbox" data-path="' + escapeHtml(repo.path) + '" onchange="this.closest(\'.repo-select-item\').classList.toggle(\'checked\', this.checked)">'
+                    + '<div class="repo-select-info">'
+                    + '<div class="repo-select-name">' + escapeHtml(alias) + '</div>'
+                    + '<div class="repo-select-branches">'
+                    + '<div class="repo-select-branch-group"><label>Base:</label><select data-role="base" class="repo-base-branch"><option value="' + escapeHtml(mainBranch) + '">' + escapeHtml(mainBranch) + '</option></select></div>'
+                    + '<div class="repo-select-branch-group"><label>Merge to:</label><select data-role="target" class="repo-merge-target"><option value="' + escapeHtml(mainBranch) + '">' + escapeHtml(mainBranch) + '</option></select></div>'
+                    + '</div></div></div>';
+            });
+            container.innerHTML = html;
+
+            // Load branches for each repo
+            _managedRepos.forEach(function(repo) {
+                loadRepoBranchesForTaskSelection(repo.path);
+            });
+        }
+
+        async function loadRepoBranchesForTaskSelection(repoPath) {
+            var encodedPath = encodeURIComponent(repoPath);
+            var data = await api('/repos/' + encodedPath + '/branches');
+            if (data === null || !Array.isArray(data)) return;
+
+            var item = document.querySelector('.repo-select-item[data-repo-path="' + repoPath + '"]');
+            if (!item) return;
+
+            var repo = _managedRepos.find(function(r) { return r.path === repoPath; });
+            var mainBranch = repo ? (repo.main_branch || 'main') : 'main';
+
+            var opts = data.map(function(br) {
+                var selected = br === mainBranch ? ' selected' : '';
+                return '<option value="' + escapeHtml(br) + '"' + selected + '>' + escapeHtml(br) + '</option>';
+            }).join('');
+
+            var baseSel = item.querySelector('.repo-base-branch');
+            var targetSel = item.querySelector('.repo-merge-target');
+            if (baseSel) baseSel.innerHTML = opts;
+            if (targetSel) targetSel.innerHTML = opts;
+        }
+
+        function taskRepoSelectAll(checked) {
+            var items = document.querySelectorAll('#taskRepoList .repo-select-item input[type="checkbox"]');
+            items.forEach(function(cb) {
+                cb.checked = checked;
+                cb.closest('.repo-select-item').classList.toggle('checked', checked);
+            });
+        }
+
+        function collectTaskRepoSelection() {
+            var repos = [];
+            var baseBranches = {};
+            var mergeTargets = {};
+            document.querySelectorAll('#taskRepoList .repo-select-item').forEach(function(item) {
+                var cb = item.querySelector('input[type="checkbox"]');
+                if (cb && cb.checked) {
+                    var path = cb.dataset.path;
+                    repos.push(path);
+                    var baseSel = item.querySelector('.repo-base-branch');
+                    var targetSel = item.querySelector('.repo-merge-target');
+                    if (baseSel && baseSel.value) baseBranches[path] = baseSel.value;
+                    if (targetSel && targetSel.value) mergeTargets[path] = targetSel.value;
+                }
+            });
+            return { repos: repos, repo_base_branches: baseBranches, repo_merge_targets: mergeTargets };
+        }
+
+        /* -- Task Detail: Repos Section -------------------------------------- */
+        function renderDetailReposSection(task) {
+            // Remove any existing repos section
+            var existing = document.getElementById('detailReposSection');
+            if (existing) existing.remove();
+
+            if (!task.repos || !Array.isArray(task.repos) || task.repos.length === 0) return;
+
+            var section = document.createElement('div');
+            section.id = 'detailReposSection';
+            section.className = 'detail-repos-section';
+
+            var html = '<div class="detail-repos-title">Involved Repositories</div>';
+            task.repos.forEach(function(repoPath) {
+                var alias = repoPath.split('/').pop();
+                var managed = _managedRepos.find(function(r) { return r.path === repoPath; });
+                if (managed && managed.alias) alias = managed.alias;
+
+                var baseBranch = (task.repo_base_branches && task.repo_base_branches[repoPath]) || '-';
+                var mergeTarget = (task.repo_merge_targets && task.repo_merge_targets[repoPath]) || baseBranch;
+
+                html += '<div class="detail-repo-item">'
+                    + '<span class="dri-name">' + escapeHtml(alias) + '</span>'
+                    + '<span class="dri-branches">' + escapeHtml(baseBranch) + ' &rarr; ' + escapeHtml(mergeTarget) + '</span>'
+                    + '<button class="btn btn-outline btn-small dri-diff-btn" onclick="openRepoDiffModal(\'' + task.id + '\')">View Diff</button>'
+                    + '</div>';
+            });
+            section.innerHTML = html;
+
+            // Insert after the info panel
+            var infoPanel = document.querySelector('.detail-info-panel');
+            if (infoPanel && infoPanel.parentNode) {
+                infoPanel.parentNode.insertBefore(section, infoPanel.nextSibling);
+            }
+        }
+
+        /* -- Overview: Repos Cards ------------------------------------------- */
+        function renderOverviewRepos() {
+            // Remove any existing section
+            var existing = document.getElementById('overviewReposSection');
+            if (existing) existing.remove();
+
+            if (_managedRepos.length === 0) return;
+
+            var section = document.createElement('div');
+            section.id = 'overviewReposSection';
+            section.className = 'overview-repos-section';
+            var html = '<div class="overview-section-title">Repository Overview</div>';
+            html += '<div class="overview-repos-grid">';
+
+            _managedRepos.forEach(function(repo) {
+                var alias = repo.alias || repo.path.split('/').pop();
+                var statusClass = repo.status === 'error' ? 'error' :
+                    (repo.has_changes || repo.status === 'dirty') ? 'dirty' : 'clean';
+                var statusLabel = repo.status === 'error' ? 'Error' :
+                    (repo.has_changes || repo.status === 'dirty') ? 'Has Changes' : 'Clean';
+                var currentBranch = repo.current_branch || '-';
+
+                // Count active tasks for this repo
+                var activeTasks = allTasks.filter(function(t) {
+                    return t.repos && Array.isArray(t.repos) && t.repos.indexOf(repo.path) >= 0
+                        && t.status !== 'done' && t.status !== 'failed';
+                }).length;
+
+                html += '<div class="overview-repo-card" onclick="showRepoDetail(\'' + encodeURIComponent(repo.path) + '\')">'
+                    + '<div class="overview-repo-card-header">'
+                    + '<span class="repo-status-dot ' + statusClass + '"></span>'
+                    + '<span class="overview-repo-card-name">' + escapeHtml(alias) + '</span>'
+                    + '</div>'
+                    + '<div class="overview-repo-card-info">'
+                    + '<div class="repo-info-row"><span class="repo-info-label">Branch:</span> ' + escapeHtml(currentBranch) + '</div>'
+                    + '<div class="repo-info-row"><span class="repo-info-label">Status:</span> ' + statusLabel + '</div>'
+                    + '</div>'
+                    + (activeTasks > 0 ? '<div class="overview-repo-card-tasks">' + activeTasks + ' active task(s)</div>' : '')
+                    + '</div>';
+            });
+
+            html += '</div>';
+            section.innerHTML = html;
+
+            // Append to overview page after workers section
+            var overviewPage = document.getElementById('overviewPage');
+            if (overviewPage) {
+                overviewPage.appendChild(section);
+            }
+        }
+
+        /* -- Repo refresh timer ---------------------------------------------- */
+        function startRepoRefresh() {
+            if (_repoRefreshTimer) clearInterval(_repoRefreshTimer);
+            _repoRefreshTimer = setInterval(function() {
+                if (activeTab === 'repos') {
+                    loadRepos();
+                }
+            }, 10000);
+        }
+
         /* -- Init ------------------------------------------------------------ */
         switchTab(activeTab);
         fetchTasks();
         startAutoRefresh();
+        loadRepos();
+        loadProjectMode();
+        startRepoRefresh();
     </script>
 </body>
 </html>

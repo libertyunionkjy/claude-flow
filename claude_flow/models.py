@@ -25,6 +25,58 @@ class TaskType(Enum):
     MINI = "mini"
 
 
+class ProjectMode(Enum):
+    SINGLE_GIT = "single_git"        # Single git repository (default)
+    GIT_SUBMODULE = "git_submodule"  # Git repo with submodules
+    MULTI_REPO = "multi_repo"        # Non-git dir with multiple independent git repos
+    NON_GIT = "non_git"              # Plain directory, no git
+
+
+@dataclass
+class ManagedRepo:
+    """Configuration for a managed git repository in multi-repo workspace."""
+    path: str               # Relative path from workspace root, e.g. "project-a"
+    alias: str = ""         # Short name for CLI/UI reference
+    main_branch: str = "main"
+    auto_merge: bool = True
+    merge_strategy: str = "--no-ff"
+    merge_mode: str = "rebase"
+    auto_push: bool = False
+
+    def __post_init__(self):
+        if not self.path or not self.path.strip():
+            raise ValueError("ManagedRepo path cannot be empty")
+        if ".." in self.path.split("/"):
+            raise ValueError(f"ManagedRepo path cannot contain '..': {self.path}")
+        if self.path.startswith("/"):
+            raise ValueError(f"ManagedRepo path must be relative: {self.path}")
+        if not self.alias:
+            self.alias = self.path.rstrip("/").split("/")[-1]
+
+    def to_dict(self) -> dict:
+        return {
+            "path": self.path,
+            "alias": self.alias,
+            "main_branch": self.main_branch,
+            "auto_merge": self.auto_merge,
+            "merge_strategy": self.merge_strategy,
+            "merge_mode": self.merge_mode,
+            "auto_push": self.auto_push,
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict) -> ManagedRepo:
+        return cls(
+            path=d["path"],
+            alias=d.get("alias", ""),
+            main_branch=d.get("main_branch", "main"),
+            auto_merge=d.get("auto_merge", True),
+            merge_strategy=d.get("merge_strategy", "--no-ff"),
+            merge_mode=d.get("merge_mode", "rebase"),
+            auto_push=d.get("auto_push", False),
+        )
+
+
 def _generate_task_id() -> str:
     short = uuid.uuid4().hex[:6]
     return f"task-{short}"
@@ -51,6 +103,10 @@ class Task:
     submodules: list[str] = field(default_factory=list)
     sub_branches: dict[str, str] = field(default_factory=dict)
     use_subagent: Optional[bool] = None  # None = inherit from config
+    # Multi-repo workspace fields
+    repos: list[str] = field(default_factory=list)                    # Repo paths involved
+    repo_base_branches: dict[str, str] = field(default_factory=dict)  # repo_path -> base branch
+    repo_merge_targets: dict[str, str] = field(default_factory=dict)  # repo_path -> merge target
 
     @property
     def is_mini(self) -> bool:
@@ -78,6 +134,9 @@ class Task:
             "submodules": self.submodules,
             "sub_branches": self.sub_branches,
             "use_subagent": self.use_subagent,
+            "repos": self.repos,
+            "repo_base_branches": self.repo_base_branches,
+            "repo_merge_targets": self.repo_merge_targets,
         }
 
     @classmethod
@@ -102,4 +161,7 @@ class Task:
             submodules=d.get("submodules", []),
             sub_branches=d.get("sub_branches", {}),
             use_subagent=d.get("use_subagent"),
+            repos=d.get("repos", []),
+            repo_base_branches=d.get("repo_base_branches", {}),
+            repo_merge_targets=d.get("repo_merge_targets", {}),
         )

@@ -1,3 +1,4 @@
+import os
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -425,3 +426,71 @@ def git_repo_with_multi_submodules(tmp_path: Path) -> dict:
         },
         "submodule_paths": ["libs/core", "libs/ui", "apps/server"],
     }
+
+
+# ---------------------------------------------------------------------------
+# Multi-repo workspace helpers
+# ---------------------------------------------------------------------------
+
+def _init_git_repo(repo_dir: Path, name: str):
+    """Initialize a git repository with an initial commit."""
+    repo_dir.mkdir(parents=True, exist_ok=True)
+    git_env = {
+        **os.environ,
+        "GIT_AUTHOR_NAME": "test",
+        "GIT_AUTHOR_EMAIL": "t@t.com",
+        "GIT_COMMITTER_NAME": "test",
+        "GIT_COMMITTER_EMAIL": "t@t.com",
+    }
+    subprocess.run(["git", "init", "-b", "main"], cwd=str(repo_dir),
+                   capture_output=True, check=True, env=git_env)
+    subprocess.run(["git", "config", "user.email", "t@t.com"], cwd=str(repo_dir),
+                   capture_output=True, check=True, env=git_env)
+    subprocess.run(["git", "config", "user.name", "test"], cwd=str(repo_dir),
+                   capture_output=True, check=True, env=git_env)
+    (repo_dir / "README.md").write_text(f"# {name}\n")
+    subprocess.run(["git", "add", "."], cwd=str(repo_dir),
+                   capture_output=True, check=True, env=git_env)
+    subprocess.run(["git", "commit", "-m", "init"], cwd=str(repo_dir),
+                   capture_output=True, check=True, env=git_env)
+    # Create a feature branch and switch back to main
+    subprocess.run(["git", "checkout", "-b", "feature-x"], cwd=str(repo_dir),
+                   capture_output=True, check=True, env=git_env)
+    subprocess.run(["git", "checkout", "main"], cwd=str(repo_dir),
+                   capture_output=True, check=True, env=git_env)
+
+
+@pytest.fixture
+def multi_repo_workspace(tmp_path: Path) -> dict:
+    """Create a workspace with 3 independent git repos and .claude-flow initialized.
+
+    Structure:
+        workspace/
+        +-- project-a/     (git repo)
+        +-- project-b/     (git repo)
+        +-- libs/core/     (git repo, nested path)
+        +-- .claude-flow/
+            +-- worktrees/
+
+    Each repo is on ``main`` branch with one initial commit and a ``feature-x`` branch.
+
+    Returns:
+        dict with keys:
+        - workspace: Path to the workspace root
+        - repos: dict mapping repo name to its Path
+    """
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+
+    repos = {}
+    for name in ["project-a", "project-b", "libs/core"]:
+        repo_dir = workspace / name
+        _init_git_repo(repo_dir, name)
+        repos[name] = repo_dir
+
+    # Initialize .claude-flow
+    cf_dir = workspace / ".claude-flow"
+    for sub in ["worktrees", "logs", "plans"]:
+        (cf_dir / sub).mkdir(parents=True, exist_ok=True)
+
+    return {"workspace": workspace, "repos": repos}

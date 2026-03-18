@@ -9,6 +9,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Iterator, List, Optional, TypeVar
 
+from .models import ManagedRepo
 from .utils import can_skip_permissions
 
 T = TypeVar("T")
@@ -25,6 +26,22 @@ NETWORK_TIMEOUT = 30
 MERGE_LOCK_FILE = "merge.lock"
 
 
+def _git_env() -> dict[str, str]:
+    """Build environment dict for non-interactive git operations.
+
+    Sets GIT_EDITOR and GIT_SEQUENCE_EDITOR to 'true' to prevent interactive
+    editor prompts, and provides fallback author/committer identity.
+    """
+    env = os.environ.copy()
+    env["GIT_EDITOR"] = "true"
+    env["GIT_SEQUENCE_EDITOR"] = "true"
+    env.setdefault("GIT_AUTHOR_NAME", "claude-flow")
+    env.setdefault("GIT_AUTHOR_EMAIL", "claude-flow@localhost")
+    env.setdefault("GIT_COMMITTER_NAME", "claude-flow")
+    env.setdefault("GIT_COMMITTER_EMAIL", "claude-flow@localhost")
+    return env
+
+
 class WorktreeManager:
     def __init__(self, repo_root: Path, worktree_dir: Path, is_git: bool = True):
         self._repo = repo_root
@@ -34,27 +51,11 @@ class WorktreeManager:
 
     def _run(self, args: List[str], cwd: Path | None = None, check: bool = True,
              timeout: Optional[int] = None) -> subprocess.CompletedProcess:
-        # Prevent git from opening interactive editors (e.g. during rebase --continue).
-        # GIT_EDITOR handles commit message editing, GIT_SEQUENCE_EDITOR handles
-        # interactive rebase todo lists. Setting both to 'true' (the shell builtin
-        # that exits 0) ensures all git operations run non-interactively.
-        env = os.environ.copy()
-        # Force override to prevent any editor from blocking non-interactive workers,
-        # regardless of user's ~/.gitconfig core.editor setting.
-        env["GIT_EDITOR"] = "true"
-        env["GIT_SEQUENCE_EDITOR"] = "true"
-        # Provide fallback author identity for submodule commits where
-        # user.email/user.name may not be configured (e.g. worktree-internal
-        # submodule git dirs that don't inherit the parent repo's config).
-        env.setdefault("GIT_AUTHOR_NAME", "claude-flow")
-        env.setdefault("GIT_AUTHOR_EMAIL", "claude-flow@localhost")
-        env.setdefault("GIT_COMMITTER_NAME", "claude-flow")
-        env.setdefault("GIT_COMMITTER_EMAIL", "claude-flow@localhost")
         try:
             return subprocess.run(
                 args, cwd=cwd or self._repo,
                 capture_output=True, text=True, check=check,
-                timeout=timeout, env=env,
+                timeout=timeout, env=_git_env(),
             )
         except subprocess.TimeoutExpired:
             cmd_str = " ".join(args)
@@ -880,3 +881,443 @@ class WorktreeManager:
             self.remove(task_id, branch)
             count += 1
         return count
+
+
+class MultiRepoWorktreeManager:
+    """Manage worktrees across multiple independent git repositories.
+
+    Used when the workspace is a non-git parent directory containing multiple
+    independent git repos.  Each task gets a "composite" directory under
+    ``.claude-flow/worktrees/{task_id}/`` with one git worktree per repo.
+    """
+
+    def __init__(self, workspace_root: Path, composite_dir: Path,
+                 managed_repos: list[ManagedRepo]):
+        self._workspace = workspace_root
+        self._composite_dir = composite_dir  # .claude-flow/worktrees
+        self._repos = {r.path: r for r in managed_repos}
+        self._merge_lock_file = composite_dir / MERGE_LOCK_FILE
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _run(self, args: List[str], cwd: Path | None = None, check: bool = True,
+             timeout: Optional[int] = None) -> subprocess.CompletedProcess:
+        """Run a subprocess command with standard git environment."""
+        try:
+            return subprocess.run(
+                args, cwd=cwd or self._workspace,
+                capture_output=True, text=True, check=check,
+                timeout=timeout, env=_git_env(),
+            )
+        except subprocess.TimeoutExpired:
+            cmd_str = " ".join(args)
+            logger.warning(f"Command timed out after {timeout}s: {cmd_str}")
+            return subprocess.CompletedProcess(args, returncode=124, stdout="", stderr=f"Timeout after {timeout}s")
+
+    def _with_merge_lock(self, fn: Callable[[], T]) -> T:
+        """Execute *fn* under an exclusive file lock to prevent concurrent merges."""
+        self._merge_lock_file.parent.mkdir(parents=True, exist_ok=True)
+        with open(self._merge_lock_file, "w") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            try:
+                return fn()
+            finally:
+                fcntl.flock(lock, fcntl.LOCK_UN)
+
+    def _repo_dir(self, repo_path: str) -> Path:
+        """Absolute path to the original git repository."""
+        return self._workspace / repo_path
+
+    # ------------------------------------------------------------------
+    # Composite worktree lifecycle
+    # ------------------------------------------------------------------
+
+    def create_composite(self, task_id: str, repo_branches: dict[str, str]) -> Path:
+        """Create a composite working directory with one worktree per repo.
+
+        Args:
+            task_id: Task identifier (e.g. "task-a1b2c3").
+            repo_branches: Mapping of repo path to the base branch for
+                           the new ``cf/{task_id}`` worktree branch.
+
+        Returns:
+            Path to the composite directory.
+        """
+        composite_path = self._composite_dir / task_id
+        composite_path.mkdir(parents=True, exist_ok=True)
+
+        created_repos: list[str] = []  # Track successfully created worktrees
+        try:
+            for repo_path, base_branch in repo_branches.items():
+                src_repo = self._repo_dir(repo_path)
+                wt_dest = composite_path / repo_path
+                branch_name = f"cf/{task_id}"
+
+                self._run(
+                    ["git", "-C", str(src_repo), "worktree", "add",
+                     str(wt_dest), "-b", branch_name, base_branch],
+                )
+                created_repos.append(repo_path)
+                logger.info(f"Created worktree for {repo_path} at {wt_dest} "
+                            f"(branch {branch_name} from {base_branch})")
+        except Exception:
+            # Rollback: clean up already created worktrees
+            for repo_path in created_repos:
+                try:
+                    wt_path = composite_path / repo_path
+                    repo_dir = self._repo_dir(repo_path)
+                    self._run(["git", "worktree", "remove", str(wt_path), "--force"],
+                              cwd=repo_dir, check=False)
+                    self._run(["git", "branch", "-D", f"cf/{task_id}"],
+                              cwd=repo_dir, check=False)
+                except Exception:
+                    pass  # best effort cleanup
+            # Clean up composite directory
+            import shutil
+            if composite_path.exists():
+                shutil.rmtree(composite_path, ignore_errors=True)
+            raise  # re-raise original exception
+
+        return composite_path
+
+    def commit_repos(self, task_id: str, composite_path: Path,
+                     repos: list[str]) -> dict[str, bool]:
+        """Stage and commit changes in each repo sub-directory.
+
+        Args:
+            task_id: Task identifier for the commit message.
+            composite_path: Path to the composite directory.
+            repos: List of repo paths to process.
+
+        Returns:
+            Mapping of repo path to whether it had changes that were committed.
+        """
+        results: dict[str, bool] = {}
+
+        for repo_path in repos:
+            sub_dir = composite_path / repo_path
+            if not sub_dir.exists():
+                logger.warning(f"Repo directory not found: {sub_dir}")
+                results[repo_path] = False
+                continue
+
+            status = self._run(
+                ["git", "status", "--porcelain"],
+                cwd=sub_dir, check=False,
+            )
+            has_changes = bool(status.stdout.strip())
+
+            if has_changes:
+                self._run(["git", "add", "-A"], cwd=sub_dir, check=False)
+                commit_result = self._run(
+                    ["git", "commit", "-m", f"feat(cf/{task_id}): auto-commit changes"],
+                    cwd=sub_dir, check=False,
+                )
+                if commit_result.returncode != 0:
+                    logger.warning(f"Commit failed for {repo_path}: {commit_result.stderr}")
+                    results[repo_path] = False
+                else:
+                    logger.info(f"Committed changes in {repo_path}")
+                    results[repo_path] = True
+            else:
+                logger.debug(f"No changes in {repo_path}")
+                results[repo_path] = False
+
+        return results
+
+    def merge_repos(self, task_id: str, repo_merge_targets: dict[str, str],
+                    repo_configs: dict[str, ManagedRepo] | None = None) -> dict[str, bool]:
+        """Merge task branches back into target branches in each original repo.
+
+        Executed under a file lock to prevent concurrent merge operations.
+
+        Args:
+            task_id: Task identifier.
+            repo_merge_targets: Mapping of repo path to target branch for merge.
+            repo_configs: Optional per-repo config overrides.  Falls back to
+                          the instance's ``_repos`` mapping.
+
+        Returns:
+            Mapping of repo path to merge success status.
+        """
+        def _do() -> dict[str, bool]:
+            results: dict[str, bool] = {}
+            configs = repo_configs or self._repos
+
+            for repo_path, target_branch in repo_merge_targets.items():
+                repo_dir = self._repo_dir(repo_path)
+                branch_name = f"cf/{task_id}"
+                repo_cfg = configs.get(repo_path)
+                merge_mode = repo_cfg.merge_mode if repo_cfg else "rebase"
+
+                try:
+                    # Checkout the target branch in the original repo
+                    self._run(["git", "checkout", target_branch], cwd=repo_dir)
+
+                    if merge_mode == "rebase":
+                        # Rebase the task branch onto target, then ff-only merge
+                        composite_repo = self._composite_dir / task_id / repo_path
+                        if composite_repo.exists():
+                            rebase_result = self._run(
+                                ["git", "rebase", target_branch],
+                                cwd=composite_repo, check=False,
+                            )
+                            if rebase_result.returncode != 0:
+                                logger.error(
+                                    f"Rebase failed for {repo_path}: {rebase_result.stderr}")
+                                self._run(
+                                    ["git", "rebase", "--abort"],
+                                    cwd=composite_repo, check=False,
+                                )
+                                results[repo_path] = False
+                                continue
+
+                        merge_result = self._run(
+                            ["git", "merge", "--ff-only", branch_name],
+                            cwd=repo_dir, check=False,
+                        )
+                        if merge_result.returncode != 0:
+                            # Fallback to --no-ff if ff-only fails
+                            logger.warning(
+                                f"ff-only merge failed for {repo_path}, "
+                                f"falling back to --no-ff")
+                            merge_result = self._run(
+                                ["git", "merge", "--no-ff", branch_name,
+                                 "-m", f"feat(cf/{task_id}): merge {repo_path}"],
+                                cwd=repo_dir, check=False,
+                            )
+                    else:
+                        # Standard merge (--no-ff or custom strategy)
+                        strategy = (repo_cfg.merge_strategy
+                                    if repo_cfg else "--no-ff")
+                        merge_result = self._run(
+                            ["git", "merge", strategy, branch_name,
+                             "-m", f"feat(cf/{task_id}): merge {repo_path}"],
+                            cwd=repo_dir, check=False,
+                        )
+
+                    if merge_result.returncode != 0:
+                        logger.error(
+                            f"Merge failed for {repo_path}: {merge_result.stderr}")
+                        self._run(
+                            ["git", "merge", "--abort"],
+                            cwd=repo_dir, check=False,
+                        )
+                        results[repo_path] = False
+                    else:
+                        # Clean up the task branch
+                        self._run(
+                            ["git", "branch", "-D", branch_name],
+                            cwd=repo_dir, check=False,
+                        )
+                        logger.info(f"Merged {branch_name} into {target_branch} "
+                                    f"for {repo_path}")
+                        results[repo_path] = True
+
+                except subprocess.CalledProcessError as e:
+                    logger.error(f"Merge operation failed for {repo_path}: {e.stderr}")
+                    self._run(
+                        ["git", "merge", "--abort"],
+                        cwd=repo_dir, check=False,
+                    )
+                    results[repo_path] = False
+
+            return results
+
+        return self._with_merge_lock(_do)
+
+    def remove_composite(self, task_id: str, repos: list[str]) -> None:
+        """Remove worktrees and clean up a composite directory.
+
+        Args:
+            task_id: Task identifier.
+            repos: List of repo paths whose worktrees should be removed.
+        """
+        composite_path = self._composite_dir / task_id
+        branch_name = f"cf/{task_id}"
+
+        for repo_path in repos:
+            src_repo = self._repo_dir(repo_path)
+            wt_dest = composite_path / repo_path
+
+            # Remove the git worktree
+            self._run(
+                ["git", "-C", str(src_repo), "worktree", "remove",
+                 str(wt_dest), "--force"],
+                check=False,
+            )
+            # Delete the task branch
+            self._run(
+                ["git", "-C", str(src_repo), "branch", "-D", branch_name],
+                check=False,
+            )
+            logger.debug(f"Removed worktree and branch for {repo_path}")
+
+        # Remove the composite directory if it still exists
+        if composite_path.exists():
+            import shutil
+            shutil.rmtree(composite_path, ignore_errors=True)
+            logger.info(f"Removed composite directory {composite_path}")
+
+    # ------------------------------------------------------------------
+    # Query helpers
+    # ------------------------------------------------------------------
+
+    def list_active(self) -> list[str]:
+        """List task IDs that have active composite directories."""
+        if not self._composite_dir.exists():
+            return []
+        return [d.name for d in self._composite_dir.iterdir() if d.is_dir()]
+
+    def get_repo_branches(self, repo_path: str) -> list[str]:
+        """Get the list of local branch names for a repository.
+
+        Args:
+            repo_path: Relative path of the repository from workspace root.
+
+        Returns:
+            List of branch names (without leading whitespace or ``*`` marker).
+        """
+        repo_dir = self._repo_dir(repo_path)
+        result = self._run(
+            ["git", "branch", "--format=%(refname:short)"],
+            cwd=repo_dir, check=False,
+        )
+        if result.returncode != 0:
+            return []
+        return [b.strip() for b in result.stdout.strip().splitlines() if b.strip()]
+
+    def get_repo_worktrees(self, repo_path: str) -> list[dict]:
+        """Get the list of worktrees for a repository.
+
+        Args:
+            repo_path: Relative path of the repository from workspace root.
+
+        Returns:
+            List of dicts with keys ``path``, ``branch``, ``head``.
+        """
+        repo_dir = self._repo_dir(repo_path)
+        result = self._run(
+            ["git", "worktree", "list", "--porcelain"],
+            cwd=repo_dir, check=False,
+        )
+        if result.returncode != 0:
+            return []
+
+        worktrees: list[dict] = []
+        current: dict = {}
+
+        for line in result.stdout.splitlines():
+            if line.startswith("worktree "):
+                if current:
+                    worktrees.append(current)
+                current = {"path": line.split(" ", 1)[1]}
+            elif line.startswith("HEAD "):
+                current["head"] = line.split(" ", 1)[1]
+            elif line.startswith("branch "):
+                ref = line.split(" ", 1)[1]
+                # Strip refs/heads/ prefix
+                if ref.startswith("refs/heads/"):
+                    ref = ref[len("refs/heads/"):]
+                current["branch"] = ref
+
+        if current:
+            worktrees.append(current)
+
+        return worktrees
+
+    def get_repo_status(self, repo_path: str) -> dict:
+        """Get the current status of a repository.
+
+        Args:
+            repo_path: Relative path of the repository from workspace root.
+
+        Returns:
+            Dict with keys ``current_branch``, ``has_changes``, ``remote_url``.
+        """
+        repo_dir = self._repo_dir(repo_path)
+
+        # Current branch
+        branch_result = self._run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=repo_dir, check=False,
+        )
+        current_branch = branch_result.stdout.strip() if branch_result.returncode == 0 else ""
+
+        # Has changes
+        status_result = self._run(
+            ["git", "status", "--porcelain"],
+            cwd=repo_dir, check=False,
+        )
+        has_changes = bool(status_result.stdout.strip())
+
+        # Remote URL
+        remote_result = self._run(
+            ["git", "remote", "get-url", "origin"],
+            cwd=repo_dir, check=False,
+        )
+        remote_url = remote_result.stdout.strip() if remote_result.returncode == 0 else ""
+
+        return {
+            "current_branch": current_branch,
+            "has_changes": has_changes,
+            "remote_url": remote_url,
+        }
+
+    # ------------------------------------------------------------------
+    # Push
+    # ------------------------------------------------------------------
+
+    def push_repos(self, task_id: str, repos: list[str]) -> dict[str, bool]:
+        """Push merged branches to remote for repos with auto_push enabled.
+
+        Args:
+            task_id: Task identifier (for logging).
+            repos: List of repo paths to consider.
+
+        Returns:
+            Mapping of repo path to push success.  Repos without auto_push
+            are not included.
+        """
+        results: dict[str, bool] = {}
+
+        for repo_path in repos:
+            repo_cfg = self._repos.get(repo_path)
+            if not repo_cfg or not repo_cfg.auto_push:
+                continue
+
+            repo_dir = self._repo_dir(repo_path)
+
+            # Check if remote exists
+            remote_result = self._run(
+                ["git", "remote"], cwd=repo_dir, check=False,
+            )
+            if "origin" not in remote_result.stdout.split():
+                logger.debug(f"No remote 'origin' for {repo_path}, skipping push")
+                results[repo_path] = False
+                continue
+
+            # Get current branch to push
+            branch_result = self._run(
+                ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+                cwd=repo_dir, check=False,
+            )
+            branch = branch_result.stdout.strip()
+            if not branch:
+                results[repo_path] = False
+                continue
+
+            push_result = self._run(
+                ["git", "push", "origin", branch],
+                cwd=repo_dir, check=False, timeout=NETWORK_TIMEOUT,
+            )
+            if push_result.returncode != 0:
+                logger.warning(f"Push failed for {repo_path}: {push_result.stderr}")
+                results[repo_path] = False
+            else:
+                logger.info(f"Pushed {branch} for {repo_path}")
+                results[repo_path] = True
+
+        return results
