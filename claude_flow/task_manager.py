@@ -290,6 +290,18 @@ class TaskManager:
             return None
         return self._with_lock(_do)
 
+    def clear_branch(self, task_id: str) -> Optional[Task]:
+        """Clear the branch field for a task (after worktree cleanup)."""
+        def _do():
+            tasks = self._load()
+            for t in tasks:
+                if t.id == task_id:
+                    t.branch = None
+                    self._save(tasks)
+                    return t
+            return None
+        return self._with_lock(_do)
+
     def add_from_file(self, filepath: Path) -> List[Task]:
         added = []
         for line in filepath.read_text().strip().splitlines():

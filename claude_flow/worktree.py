@@ -228,6 +228,17 @@ class WorktreeManager:
 
         wt_path = self._wt_dir / task_id
         wt_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Defensive cleanup: remove stale worktree/branch from a previous failed run
+        if wt_path.exists():
+            logger.warning(f"Worktree path {wt_path} already exists, removing stale worktree")
+            self._run(["git", "worktree", "remove", str(wt_path), "--force"], check=False)
+        # Check if branch already exists and delete it
+        branch_check = self._run(["git", "branch", "--list", branch], check=False)
+        if branch_check.stdout.strip():
+            logger.warning(f"Branch {branch} already exists, deleting stale branch")
+            self._run(["git", "branch", "-D", branch], check=False)
+
         self._run(["git", "worktree", "add", "-b", branch, str(wt_path)])
 
         # Set up symlinks if config is provided

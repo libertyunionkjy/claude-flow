@@ -4129,6 +4129,42 @@
             if (task.error) {
                 detailHtml += '<p><span class="label">Error: </span><span class="error-text">' + escapeHtml(task.error) + '</span></p>';
             }
+            // Conflict analysis section
+            if (task.status === 'failed' && task.error === 'CONFLICT') {
+                var ca = conflictAnalysisCache[task.id];
+                if (ca) {
+                    detailHtml += '<div class="conflict-analysis" style="margin-top:8px;padding:8px 12px;background:#2d1b1b;border:1px solid #633;border-radius:6px;font-size:0.9em;">';
+                    detailHtml += '<p style="color:#f99;font-weight:600;margin-bottom:4px;">Merge Conflict Analysis</p>';
+                    if (ca.conflict_files && ca.conflict_files.length > 0) {
+                        detailHtml += '<p><span class="label">Conflict files: </span>';
+                        detailHtml += ca.conflict_files.map(function(f) {
+                            return '<span style="display:inline-block;background:#4a2020;padding:1px 6px;border-radius:3px;margin:2px 3px 2px 0;font-size:0.9em;color:#faa;">' + escapeHtml(f) + '</span>';
+                        }).join('');
+                        detailHtml += '</p>';
+                    }
+                    if (ca.diff_stat) {
+                        detailHtml += '<p><span class="label">Changes: </span><span style="color:#ccc;">' + escapeHtml(ca.diff_stat.split('\n').pop()) + '</span></p>';
+                    }
+                    if (ca.ai_analysis) {
+                        var ai = ca.ai_analysis;
+                        var confColor = ai.confidence === 'high' ? '#6f6' : ai.confidence === 'medium' ? '#ff6' : '#f99';
+                        detailHtml += '<p><span class="label">AI Assessment: </span>';
+                        if (ai.resolvable !== null && ai.resolvable !== undefined) {
+                            detailHtml += '<span style="color:' + (ai.resolvable ? '#6f6' : '#f66') + ';">' + (ai.resolvable ? 'Auto-resolvable' : 'Manual intervention needed') + '</span>';
+                            detailHtml += ' <span style="color:' + confColor + ';">(' + (ai.confidence || 'unknown') + ' confidence)</span>';
+                        }
+                        if (ai.summary) {
+                            detailHtml += '<br><span style="color:#ccc;font-size:0.9em;">' + escapeHtml(ai.summary) + '</span>';
+                        }
+                        detailHtml += '</p>';
+                    }
+                    detailHtml += '</div>';
+                } else if (!conflictAnalysisLoading[task.id]) {
+                    // Trigger async analysis
+                    fetchConflictAnalysis(task.id);
+                    detailHtml += '<p style="color:#999;font-size:0.85em;margin-top:6px;">Analyzing conflict...</p>';
+                }
+            }
             if (task.created_at) {
                 detailHtml += '<p><span class="label">Created: </span>' + formatTime(task.created_at) + '</p>';
             }
@@ -4209,6 +4245,9 @@
                     break;
                 case 'failed':
                     btns.push(actionBtn('View Log', 'outline', 'viewLog', id));
+                    if (task.error === 'CONFLICT') {
+                        btns.push(actionBtn('AI Resolve', 'success', 'resolveConflict', id));
+                    }
                     btns.push(actionBtn('Retry', 'warning', 'retryTask', id));
                     btns.push(actionBtn('Reset', 'outline', 'resetTask', id));
                     btns.push(actionBtn('Delete', 'danger', 'deleteTask', id));
@@ -4460,6 +4499,36 @@
             var data = await api('/tasks/' + taskId + '/reset', { method: 'POST' });
             if (data !== null) {
                 showToast('Task ' + taskId + ' reset to pending');
+                fetchTasks();
+            }
+        }
+
+        // -- Conflict Analysis Cache & AI Resolve ----------------------------
+        var conflictAnalysisCache = {};
+        var conflictAnalysisLoading = {};
+
+        async function fetchConflictAnalysis(taskId) {
+            if (conflictAnalysisLoading[taskId]) return;
+            conflictAnalysisLoading[taskId] = true;
+            var data = await api('/tasks/' + taskId + '/conflict-analysis');
+            if (data !== null) {
+                conflictAnalysisCache[taskId] = data;
+                fetchTasks();  // Re-render to show analysis
+            }
+            conflictAnalysisLoading[taskId] = false;
+        }
+
+        async function resolveConflict(event, taskId) {
+            event.stopPropagation();
+            showToast('AI is resolving conflict for ' + taskId + '...');
+            var data = await api('/tasks/' + taskId + '/resolve-conflict', { method: 'POST' });
+            if (data !== null) {
+                if (data.success) {
+                    showToast('Conflict resolved! Task merged successfully.');
+                    delete conflictAnalysisCache[taskId];
+                } else {
+                    showToast('AI could not resolve: ' + (data.reason || 'unknown'), 'error');
+                }
                 fetchTasks();
             }
         }
@@ -5227,6 +5296,9 @@
                     break;
                 case 'failed':
                     btns.push(detailActionBtn('View Log', 'outline', function() { switchDetailTab('log'); }));
+                    if (task.error === 'CONFLICT') {
+                        btns.push(detailActionBtn('AI Resolve', 'success', function() { resolveConflict(new Event('click'), id); }));
+                    }
                     btns.push(detailActionBtn('Retry', 'warning', function() { retryTask(new Event('click'), id); }));
                     btns.push(detailActionBtn('Reset', 'outline', function() { resetTask(new Event('click'), id); }));
                     btns.push(detailActionBtn('Delete', 'danger', function() { deleteTaskDetail(id); }));

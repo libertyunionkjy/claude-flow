@@ -972,6 +972,21 @@ def reset_task(task_id: str):
     if task.status not in (TaskStatus.FAILED, TaskStatus.NEEDS_INPUT):
         return _err(f"任务 {task_id} 当前状态为 {task.status.value}，仅 failed/needs_input/running 可重置")
 
+    # Clean up orphaned worktree and branch before resetting
+    if task.branch:
+        is_git = current_app.config.get("IS_GIT", True)
+        if is_git:
+            root = current_app.config["PROJECT_ROOT"]
+            cfg = current_app.config["CF_CONFIG"]
+            if task.repos:
+                from ..worktree import MultiRepoWorktreeManager
+                mwt = MultiRepoWorktreeManager(root, root / cfg.worktree_dir)
+                mwt.remove_composite(task_id, task.repos)
+            else:
+                wt = WorktreeManager(root, root / cfg.worktree_dir, is_git=is_git)
+                wt.remove(task_id, task.branch)
+        tm.clear_branch(task_id)
+
     # Mini tasks reset to APPROVED (skip planning), normal tasks to PENDING
     reset_target = TaskStatus.APPROVED if task.is_mini else TaskStatus.PENDING
     tm.update_status(task_id, reset_target)
@@ -1015,6 +1030,217 @@ def get_task_log(task_id: str):
     return _ok({"task_id": task_id, "content": content, "exists": True, "structured": False})
 
 
+# -- 冲突分析与解决 -----------------------------------------------------------
+
+@api_bp.route("/tasks/<task_id>/conflict-analysis", methods=["GET"])
+def conflict_analysis(task_id: str):
+    """分析合并冲突，返回冲突文件列表、diff 和 AI 评估。"""
+    tm = current_app.config["TASK_MANAGER"]
+    task = tm.get(task_id)
+
+    if not task:
+        return _err(f"任务 {task_id} 不存在", 404)
+
+    if task.status != TaskStatus.FAILED or task.error != "CONFLICT":
+        return _err(f"任务 {task_id} 不是合并冲突状态 (status={task.status.value}, error={task.error})")
+
+    if not task.branch:
+        return _err(f"任务 {task_id} 没有关联分支")
+
+    is_git = current_app.config.get("IS_GIT", True)
+    if not is_git:
+        return _err("非 git 项目不支持冲突分析")
+
+    root = current_app.config["PROJECT_ROOT"]
+    cfg = current_app.config["CF_CONFIG"]
+    wt = WorktreeManager(root, root / cfg.worktree_dir, is_git=True)
+
+    # Check worktree exists
+    wt_path = root / cfg.worktree_dir / task_id
+    if not wt_path.exists():
+        return _err(f"Worktree {wt_path} 不存在，可能已被清理")
+
+    try:
+        # Get diff stats between main and task branch
+        diff_stat = _sp.run(
+            ["git", "diff", "--stat", f"{cfg.main_branch}...{task.branch}"],
+            cwd=str(root), capture_output=True, text=True, timeout=30,
+        )
+
+        # Get commit log on the task branch
+        log_result = _sp.run(
+            ["git", "log", "--oneline", f"{cfg.main_branch}..{task.branch}"],
+            cwd=str(root), capture_output=True, text=True, timeout=30,
+        )
+
+        # Try a merge dry-run to detect conflict files
+        # Use merge-tree (if available) or simulate in worktree
+        merge_base = _sp.run(
+            ["git", "merge-base", cfg.main_branch, task.branch],
+            cwd=str(root), capture_output=True, text=True, timeout=30,
+        )
+        merge_base_sha = merge_base.stdout.strip()
+
+        conflict_files = []
+        merge_tree_output = ""
+        if merge_base_sha:
+            mt_result = _sp.run(
+                ["git", "merge-tree", merge_base_sha, cfg.main_branch, task.branch],
+                cwd=str(root), capture_output=True, text=True, timeout=30,
+            )
+            merge_tree_output = mt_result.stdout
+            # Parse conflict markers from merge-tree output
+            import re
+            conflict_files = list(set(re.findall(r'changed in both\n\s+base\s+\S+\s+\S+\s+(\S+)', merge_tree_output)))
+            if not conflict_files:
+                # Fallback: look for "<<<" markers in output
+                for line in merge_tree_output.splitlines():
+                    if line.startswith("+<<<<<<<"):
+                        # Try to find filename from preceding diff header
+                        pass
+
+        # Get full diff for analysis
+        diff_result = _sp.run(
+            ["git", "diff", f"{cfg.main_branch}...{task.branch}"],
+            cwd=str(root), capture_output=True, text=True, timeout=30,
+        )
+        diff_text = diff_result.stdout
+        # Truncate if too large
+        if len(diff_text) > 20000:
+            diff_text = diff_text[:20000] + "\n... (truncated)"
+
+        # AI analysis via Claude Code (quick one-shot)
+        ai_analysis = None
+        try:
+            from ..utils import can_skip_permissions
+            skip_ok = can_skip_permissions(cfg.skip_permissions)
+            if skip_ok:
+                prompt = (
+                    f"分析以下 Git 合并冲突，判断是否可以自动解决：\n\n"
+                    f"## 任务: {task.title}\n"
+                    f"## 任务描述: {task.prompt[:500]}\n\n"
+                    f"## 变更统计:\n{diff_stat.stdout[:2000]}\n\n"
+                    f"## 冲突文件: {', '.join(conflict_files) if conflict_files else '(检测中)'}\n\n"
+                    f"## Merge-tree 输出:\n{merge_tree_output[:3000]}\n\n"
+                    f"请用 JSON 格式回复：{{\"resolvable\": true/false, \"confidence\": \"high/medium/low\", "
+                    f"\"summary\": \"简要描述冲突原因和建议\"}}"
+                )
+                ai_result = _sp.run(
+                    ["claude", "-p", prompt, "--output-format", "text"],
+                    capture_output=True, text=True, timeout=60,
+                )
+                if ai_result.returncode == 0:
+                    ai_text = ai_result.stdout.strip()
+                    # Try to parse JSON from response
+                    try:
+                        # Find JSON in response
+                        import re as _re
+                        json_match = _re.search(r'\{[^}]+\}', ai_text, _re.DOTALL)
+                        if json_match:
+                            ai_analysis = json.loads(json_match.group())
+                        else:
+                            ai_analysis = {"summary": ai_text, "resolvable": None, "confidence": "unknown"}
+                    except (json.JSONDecodeError, ValueError):
+                        ai_analysis = {"summary": ai_text, "resolvable": None, "confidence": "unknown"}
+        except Exception:
+            pass  # AI analysis is best-effort
+
+        return _ok({
+            "task_id": task_id,
+            "branch": task.branch,
+            "conflict_files": conflict_files,
+            "diff_stat": diff_stat.stdout.strip(),
+            "commits": log_result.stdout.strip(),
+            "diff": diff_text,
+            "ai_analysis": ai_analysis,
+        })
+
+    except _sp.TimeoutExpired:
+        return _err("分析超时，请稍后重试")
+    except Exception as e:
+        return _err(f"分析失败: {str(e)}")
+
+
+@api_bp.route("/tasks/<task_id>/resolve-conflict", methods=["POST"])
+def resolve_conflict(task_id: str):
+    """AI 执行合并冲突解决。"""
+    tm = current_app.config["TASK_MANAGER"]
+    task = tm.get(task_id)
+
+    if not task:
+        return _err(f"任务 {task_id} 不存在", 404)
+
+    if task.status != TaskStatus.FAILED or task.error != "CONFLICT":
+        return _err(f"任务 {task_id} 不是合并冲突状态 (status={task.status.value}, error={task.error})")
+
+    if not task.branch:
+        return _err(f"任务 {task_id} 没有关联分支")
+
+    is_git = current_app.config.get("IS_GIT", True)
+    if not is_git:
+        return _err("非 git 项目不支持冲突解决")
+
+    root = current_app.config["PROJECT_ROOT"]
+    cfg = current_app.config["CF_CONFIG"]
+    wt = WorktreeManager(root, root / cfg.worktree_dir, is_git=True)
+
+    # Check worktree exists
+    wt_path = root / cfg.worktree_dir / task_id
+    if not wt_path.exists():
+        return _err(f"Worktree {wt_path} 不存在，可能已被清理")
+
+    try:
+        # Update status to MERGING while resolving
+        tm.update_status(task_id, TaskStatus.MERGING)
+
+        # Use rebase_and_merge with aggressive settings
+        merge_mode = getattr(cfg, "merge_mode", "rebase")
+        if merge_mode == "rebase":
+            success = wt.rebase_and_merge(
+                task.branch, cfg.main_branch,
+                max_retries=cfg.max_merge_retries + 2,
+                config=cfg,
+                task_title=task.title,
+                task_prompt=task.prompt,
+                timeout=getattr(cfg, "claude_merge_fallback_timeout", 300),
+            )
+        else:
+            success = wt.merge(
+                task.branch, cfg.main_branch,
+                strategy=cfg.merge_strategy,
+                config=cfg,
+                task_title=task.title,
+                task_prompt=task.prompt,
+            )
+
+        if success:
+            # Clean up worktree and mark as done
+            wt.remove(task_id, task.branch)
+            tm.clear_branch(task_id)
+            tm.update_status(task_id, TaskStatus.DONE)
+
+            # Auto-push if configured
+            if cfg.auto_push:
+                try:
+                    _sp.run(
+                        ["git", "push"], cwd=str(root),
+                        capture_output=True, text=True, timeout=30,
+                    )
+                except Exception:
+                    pass  # best-effort push
+
+            return _ok({"success": True, "task_id": task_id, "message": "冲突已解决，任务已合并"})
+        else:
+            # Revert to FAILED state
+            tm.update_status(task_id, TaskStatus.FAILED, error="CONFLICT")
+            return _ok({"success": False, "task_id": task_id, "reason": "AI 无法自动解决此冲突，请手动介入"})
+
+    except Exception as e:
+        # Revert to FAILED state on error
+        tm.update_status(task_id, TaskStatus.FAILED, error="CONFLICT")
+        return _err(f"冲突解决失败: {str(e)}")
+
+
 # -- 重试所有失败任务 -----------------------------------------------------------
 
 @api_bp.route("/retry-all", methods=["POST"])
@@ -1023,8 +1249,22 @@ def retry_all_tasks():
     tm = current_app.config["TASK_MANAGER"]
     failed = tm.list_tasks(status=TaskStatus.FAILED)
 
+    is_git = current_app.config.get("IS_GIT", True)
+    root = current_app.config["PROJECT_ROOT"]
+    cfg = current_app.config["CF_CONFIG"]
+
     count = 0
     for task in failed:
+        # Clean up orphaned worktree and branch before retrying
+        if task.branch and is_git:
+            if task.repos:
+                from ..worktree import MultiRepoWorktreeManager
+                mwt = MultiRepoWorktreeManager(root, root / cfg.worktree_dir)
+                mwt.remove_composite(task.id, task.repos)
+            else:
+                wt = WorktreeManager(root, root / cfg.worktree_dir, is_git=is_git)
+                wt.remove(task.id, task.branch)
+            tm.clear_branch(task.id)
         tm.update_status(task.id, TaskStatus.APPROVED)
         count += 1
 

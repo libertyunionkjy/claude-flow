@@ -1422,6 +1422,19 @@ def reset(ctx, task_id):
         click.echo(f"Task {task_id} not found")
         return
     if t.status in (TaskStatus.FAILED, TaskStatus.NEEDS_INPUT):
+        # Clean up orphaned worktree and branch before resetting
+        if t.branch:
+            is_git = ctx.obj["is_git"]
+            if is_git:
+                cfg = Config.load(root)
+                if t.repos:
+                    from .worktree import MultiRepoWorktreeManager
+                    mwt = MultiRepoWorktreeManager(root, root / cfg.worktree_dir)
+                    mwt.remove_composite(task_id, t.repos)
+                else:
+                    wt = WorktreeManager(root, root / cfg.worktree_dir, is_git=is_git)
+                    wt.remove(task_id, t.branch)
+            tm.clear_branch(task_id)
         # Mini tasks reset to APPROVED (skip planning), normal tasks to PENDING
         target = TaskStatus.APPROVED if t.is_mini else TaskStatus.PENDING
         tm.update_status(task_id, target)
@@ -1451,7 +1464,19 @@ def retry(ctx):
     root = ctx.obj["root"]
     tm = TaskManager(root)
     failed = tm.list_tasks(status=TaskStatus.FAILED)
+    is_git = ctx.obj["is_git"]
+    cfg = Config.load(root) if is_git else None
     for t in failed:
+        # Clean up orphaned worktree and branch before retrying
+        if t.branch and is_git:
+            if t.repos:
+                from .worktree import MultiRepoWorktreeManager
+                mwt = MultiRepoWorktreeManager(root, root / cfg.worktree_dir)
+                mwt.remove_composite(t.id, t.repos)
+            else:
+                wt = WorktreeManager(root, root / cfg.worktree_dir, is_git=is_git)
+                wt.remove(t.id, t.branch)
+            tm.clear_branch(t.id)
         tm.update_status(t.id, TaskStatus.APPROVED)
         click.echo(f"  {t.id} -> approved")
     click.echo(f"Retrying {len(failed)} tasks")
