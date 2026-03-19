@@ -22,6 +22,7 @@ Inspired by [Yuanming Hu's Claude Code workflow](https://mp.weixin.qq.com/s/exam
 - **Token Usage Stats** -- Track token consumption per task/daily/monthly via ccusage integration
 - **Stream JSON Real-time Monitoring** -- Parse worker output for real-time progress tracking
 - **Web Manager Dashboard** -- Dark-themed dashboard with sidebar navigation, mobile support
+- **Doctor Agent** -- Built-in diagnostic agent for Claude Code, auto-installed on `cf init`, helps troubleshoot task failures, orphaned worktrees, and other issues
 
 ## Installation
 
@@ -81,7 +82,7 @@ cf usage             # Token usage report
 
 | Command | Description |
 |---------|-------------|
-| `cf init` | Initialize `.claude-flow/` directory |
+| `cf init` | Initialize `.claude-flow/` directory and install Doctor agent |
 | `cf task add "title"` | Add task (`-p` prompt, `-f` batch import, `-P` priority) |
 | `cf task mini "prompt"` | Add mini task (skip planning, `--run` to execute immediately) |
 | `cf task list` | List all tasks (sorted by priority) |
@@ -171,6 +172,82 @@ claude_flow/
 ```bash
 pytest -v
 ```
+
+## Troubleshooting
+
+### Task failed
+
+```bash
+cf task show <id>              # Check the error message
+cf log <id>                    # Full execution log
+cf reset <id>                  # Reset to pending and retry
+cf retry                       # Retry ALL failed tasks
+```
+
+### Task stuck in `running` (zombie)
+
+No worker is actually running, but the task is still marked `running`.
+
+```bash
+cf reset <id>                  # Resets to pending, cleans up worktree
+```
+
+### Orphaned worktrees
+
+Worktrees left behind after a crash or interrupted task.
+
+```bash
+cf clean                       # Remove worktrees for non-running tasks
+git worktree list              # Verify cleanup
+```
+
+### Lock file stuck
+
+`cf` commands hang because `tasks.lock` was not released after a crash.
+
+```bash
+ps aux | grep "cf "            # Check if any cf process is running
+rm .claude-flow/tasks.lock     # Safe to remove if no cf process is active
+```
+
+### Merge conflict
+
+Worker fails during the merge step.
+
+```bash
+cf log <id>                    # Check conflict details
+cf reset <id>                  # Reset task
+# The next run will create a fresh worktree and retry
+```
+
+### Mini Task interrupted
+
+Server restart marks running Mini Tasks as `interrupted`.
+
+```bash
+cf task list                   # Find interrupted tasks
+ls .claude-flow/worktrees/<id> # Worktree may still contain useful work
+cf reset <id>                  # Reset to approved for re-execution
+```
+
+### Corrupted `tasks.json`
+
+```bash
+python3 -c "import json; json.load(open('.claude-flow/tasks.json'))"  # Validate
+git log --oneline -5 -- .claude-flow/tasks.json                       # Check history
+```
+
+### Doctor Agent
+
+For complex issues, use the built-in diagnostic agent. `cf init` automatically installs it at `.claude/agents/claude-flow-doctor.md`. Open Claude Code in your project and run:
+
+```
+/agent claude-flow-doctor task-a1b2c3 failed, help me diagnose
+/agent claude-flow-doctor check for orphaned worktrees
+/agent claude-flow-doctor tasks.json seems corrupted
+```
+
+The agent reads `.claude-flow/` data, logs, and worktree status to pinpoint root causes and suggest fixes.
 
 ## License
 

@@ -1,7 +1,7 @@
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 from click.testing import CliRunner
-from claude_flow.cli import main
+from claude_flow.cli import main, DOCTOR_AGENT_FILENAME
 from claude_flow.task_manager import TaskManager
 from claude_flow.models import TaskStatus
 from claude_flow.chat import ChatManager
@@ -15,6 +15,59 @@ class TestCLI:
         assert result.exit_code == 0
         assert (git_repo / ".claude-flow").is_dir()
         assert (git_repo / ".claude-flow" / "config.json").exists()
+
+    def test_init_creates_doctor_agent(self, git_repo):
+        """cf init should create the Claude Flow Doctor agent file."""
+        runner = CliRunner()
+        result = runner.invoke(main, ["init"], catch_exceptions=False, env={"CF_PROJECT_ROOT": str(git_repo)})
+        assert result.exit_code == 0
+
+        agent_file = git_repo / ".claude" / "agents" / DOCTOR_AGENT_FILENAME
+        assert agent_file.exists(), "Doctor agent file should be created"
+
+        content = agent_file.read_text()
+        # Verify key diagnostic content is present
+        assert "Claude Flow Doctor" in content
+        assert "tasks.json" in content
+        assert "pending" in content
+        assert "cf reset" in content
+        assert "worktree" in content
+
+        # Verify init output mentions the agent
+        assert "Doctor agent" in result.output
+
+    def test_init_overwrites_existing_doctor_agent(self, git_repo):
+        """Repeated cf init should overwrite the doctor agent with latest content."""
+        agent_dir = git_repo / ".claude" / "agents"
+        agent_dir.mkdir(parents=True)
+        agent_file = agent_dir / DOCTOR_AGENT_FILENAME
+        agent_file.write_text("old content")
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["init"], catch_exceptions=False, env={"CF_PROJECT_ROOT": str(git_repo)})
+        assert result.exit_code == 0
+
+        content = agent_file.read_text()
+        assert content != "old content"
+        assert "Claude Flow Doctor" in content
+
+    def test_init_preserves_existing_agents(self, git_repo):
+        """cf init should not affect other agent files in .claude/agents/."""
+        agent_dir = git_repo / ".claude" / "agents"
+        agent_dir.mkdir(parents=True)
+        other_agent = agent_dir / "my-custom-agent.md"
+        other_agent.write_text("# My Custom Agent\nDo custom things.")
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["init"], catch_exceptions=False, env={"CF_PROJECT_ROOT": str(git_repo)})
+        assert result.exit_code == 0
+
+        # Custom agent should be untouched
+        assert other_agent.exists()
+        assert other_agent.read_text() == "# My Custom Agent\nDo custom things."
+
+        # Doctor agent should also exist
+        assert (agent_dir / DOCTOR_AGENT_FILENAME).exists()
 
     def test_task_add(self, git_repo):
         (git_repo / ".claude-flow").mkdir()
